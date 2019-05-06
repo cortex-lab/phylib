@@ -31,8 +31,10 @@ from .._misc import (_git_version,
 #------------------------------------------------------------------------------
 
 def test_qbytearray(tempdir):
-
-    from phy.gui.qt import QByteArray
+    try:
+        from PyQt5.QtCore import QByteArray
+    except ImportError:  # pragma: no cover
+        return
     arr = QByteArray()
     arr.append('1')
     arr.append('2')

@@ -31,9 +31,12 @@ def _encode_qbytearray(arr):
 
 
 def _decode_qbytearray(data_b64):
-    from phy.gui.qt import QByteArray
     encoded = base64.b64decode(data_b64)
-    out = QByteArray.fromBase64(encoded)
+    try:
+        from PyQt5.QtCore import QByteArray
+        out = QByteArray.fromBase64(encoded)
+    except ImportError:  # pragma: no cover
+        pass
     return out
 
 
