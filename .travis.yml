@@ -15,7 +15,7 @@ install:
   - conda info -a
   # Create the environment.
   - conda install pyyaml
-  - conda env create python=$TRAVIS_PYTHON_VERSION
+  - conda env create python
   - source activate phylib
   # Dev requirements
   - pip install -r requirements-dev.txt
