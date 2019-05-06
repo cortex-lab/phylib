@@ -25,7 +25,7 @@ def test_captured_output():
 
 
 def test_captured_logging():
-    logger = logging.getLogger()
+    logger = logging.getLogger('phylib')
     handlers = logger.handlers
     with captured_logging() as buf:
         logger.debug('Hello world!')

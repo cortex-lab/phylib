@@ -22,7 +22,7 @@ from phylib.utils.tempdir import TemporaryDirectory
 # Common fixtures
 #------------------------------------------------------------------------------
 
-logging.getLogger().setLevel(10)
+logging.getLogger('phylib').setLevel(10)
 add_default_handler(5)
 
 # Fix the random seed in the tests.
@@ -37,12 +37,3 @@ warnings.filterwarnings("ignore", message="numpy.ufunc size changed")
 def tempdir():
     with TemporaryDirectory() as tempdir:
         yield tempdir
-
-
-@yield_fixture
-def chdir_tempdir():
-    curdir = os.getcwd()
-    with TemporaryDirectory() as tempdir:
-        os.chdir(tempdir)
-        yield tempdir
-    os.chdir(curdir)
