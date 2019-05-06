@@ -1,0 +1,11 @@
+name: phylib
+dependencies:
+  - python
+  - numpy
+  - matplotlib
+  - scipy
+  - pip:
+    - requests
+    - tqdm
+    - six
+    - joblib
