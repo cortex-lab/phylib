@@ -1,8 +1,8 @@
 name: phylib
 dependencies:
   - python
+  - pip
   - numpy
-  - matplotlib
   - scipy
   - pip:
     - requests
