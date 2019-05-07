@@ -21,6 +21,8 @@ from .._misc import (_git_version,
                      _read_python,
                      _read_text,
                      _write_text,
+                     _read_tsv,
+                     _write_tsv,
                      _encode_qbytearray, _decode_qbytearray,
                      _fullname,
                      )
@@ -102,6 +104,16 @@ def test_write_text(tempdir):
                  ):
         _write_text(path, 'hello world')
         assert _read_text(path) == 'hello world'
+
+
+def test_write_tsv(tempdir):
+    path = op.join(tempdir, 'test.tsv')
+    assert _read_tsv(path) == {}
+
+    data = {2: '20', 3: '30', 5: '50'}
+    _write_tsv(path, 'myfield', data)
+
+    assert _read_tsv(path) == ('myfield', data)
 
 
 def test_git_version():

@@ -8,10 +8,12 @@
 #------------------------------------------------------------------------------
 
 import base64
+import csv
 import json
 import os.path as op
 import os
 import subprocess
+import sys
 from textwrap import dedent
 
 import numpy as np
@@ -150,6 +152,47 @@ def _write_text(path, contents):
     assert not op.exists(path)
     with open(path, 'w') as f:
         f.write(contents)
+
+
+def _read_tsv(filename):
+    """Read a CSV/TSV file with only two columns: cluster_id and <field>.
+
+    Return (field_name, dictionary {cluster_id: value}).
+
+    """
+    data = {}
+    if not op.exists(filename):
+        return data
+    # Find whether the delimiter is tab or comma.
+    with open(filename, 'r') as f:
+        delimiter = '\t' if '\t' in f.readline() else ','
+    with open(filename, 'r') as f:
+        reader = csv.reader(f, delimiter=delimiter)
+        # Skip the header.
+        _, field_name = next(reader)
+        for row in reader:
+            cluster_id, value = row
+            cluster_id = int(cluster_id)
+            data[cluster_id] = value
+    return field_name, data
+
+
+def _write_tsv(filename, field_name, data):
+    """Write a CSV/TSV file with two columns: cluster_id and <field>.
+
+    data is a dictionary {cluster_id: value}.
+
+    """
+    if sys.version_info[0] < 3:  # pragma: no cover
+        file = open(filename, 'wb')
+    else:
+        file = open(filename, 'w', newline='')
+    delimiter = '\t' if filename.endswith('.tsv') else ','
+    with file as f:
+        writer = csv.writer(f, delimiter=delimiter)
+        writer.writerow(['cluster_id', field_name])
+        writer.writerows([(cluster_id, data[cluster_id])
+                          for cluster_id in sorted(data)])
 
 
 def _git_version():
