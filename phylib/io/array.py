@@ -515,7 +515,6 @@ def grouped_mean(arr, spike_clusters):
     """
     arr = np.asarray(arr)
     spike_clusters = np.asarray(spike_clusters)
-    assert arr.ndim == 1
     assert arr.shape[0] == len(spike_clusters)
     cluster_ids = _unique(spike_clusters)
     spike_clusters_rel = _index_of(spike_clusters, cluster_ids)

@@ -403,8 +403,8 @@ def test_flatten_per_cluster():
 
 def test_grouped_mean():
     spike_clusters = np.array([2, 3, 2, 2, 5])
-    arr = spike_clusters * 10
-    ae(grouped_mean(arr, spike_clusters), [20, 30, 50])
+    arr = [9, -3, 10, 11, -5]
+    ae(grouped_mean(arr, spike_clusters), [10, -3, -5])
 
 
 def test_select_spikes_1():
