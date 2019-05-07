@@ -10,6 +10,7 @@
 import base64
 import csv
 import json
+import logging
 import os.path as op
 import os
 import subprocess
@@ -20,6 +21,8 @@ import numpy as np
 from six import string_types, exec_
 
 from ._types import _is_integer
+
+logger = logging.getLogger(__name__)
 
 
 #------------------------------------------------------------------------------
@@ -160,8 +163,10 @@ def _read_tsv(filename):
     Return (field_name, dictionary {cluster_id: value}).
 
     """
+    filename = str(filename)
     data = {}
     if not op.exists(filename):
+        logger.warning("%s does not exist, skipping.", filename)
         return data
     # Find whether the delimiter is tab or comma.
     with open(filename, 'r') as f:
@@ -174,6 +179,7 @@ def _read_tsv(filename):
             cluster_id, value = row
             cluster_id = int(cluster_id)
             data[cluster_id] = value
+    logger.info("Read %s.", filename)
     return field_name, data
 
 
@@ -183,6 +189,7 @@ def _write_tsv(filename, field_name, data):
     data is a dictionary {cluster_id: value}.
 
     """
+    filename = str(filename)
     if sys.version_info[0] < 3:  # pragma: no cover
         file = open(filename, 'wb')
     else:
@@ -193,6 +200,7 @@ def _write_tsv(filename, field_name, data):
         writer.writerow(['cluster_id', field_name])
         writer.writerows([(cluster_id, data[cluster_id])
                           for cluster_id in sorted(data)])
+    logger.info("Wrote %s.", filename)
 
 
 def _git_version():
