@@ -237,7 +237,11 @@ class TemplateModel(object):
                                                         self.n_channels_loc)
 
         # Whitening.
-        self.wm = self._load_wm()
+        try:
+            self.wm = self._load_wm()
+        except IOError:
+            logger.warning("Whitening matrix is not available.")
+            self.wm = np.eye(nc)
         assert self.wm.shape == (nc, nc)
         try:
             self.wmi = self._load_wmi()
@@ -246,8 +250,7 @@ class TemplateModel(object):
         assert self.wmi.shape == (nc, nc)
 
         self.similar_templates = self._load_similar_templates()
-        assert self.similar_templates.shape == (self.n_templates,
-                                                self.n_templates)
+        assert self.similar_templates.shape == (self.n_templates, self.n_templates)
 
         self.traces = self._load_traces(self.channel_mapping)
         if self.traces is not None:

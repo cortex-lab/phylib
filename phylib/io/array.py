@@ -520,10 +520,10 @@ def grouped_mean(arr, spike_clusters):
     spike_clusters_rel = _index_of(spike_clusters, cluster_ids)
     spike_counts = np.bincount(spike_clusters_rel)
     assert len(spike_counts) == len(cluster_ids)
-    t = np.zeros(len(cluster_ids))
+    t = np.zeros((len(cluster_ids),) + arr.shape[1:])
     # Compute the sum with possible repetitions.
     np.add.at(t, spike_clusters_rel, arr)
-    return t / spike_counts
+    return t / spike_counts.reshape((-1,) + (1,) * (arr.ndim - 1))
 
 
 def regular_subset(spikes, n_spikes_max=None, offset=0):
