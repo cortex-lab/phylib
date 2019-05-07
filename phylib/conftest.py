@@ -7,10 +7,11 @@
 #------------------------------------------------------------------------------
 
 import logging
-import numpy as np
+import os
 import warnings
 
 import matplotlib
+import numpy as np
 from pytest import yield_fixture
 
 from phylib import add_default_handler
@@ -36,3 +37,12 @@ warnings.filterwarnings("ignore", message="numpy.ufunc size changed")
 def tempdir():
     with TemporaryDirectory() as tempdir:
         yield tempdir
+
+
+@yield_fixture
+def chdir_tempdir():
+    curdir = os.getcwd()
+    with TemporaryDirectory() as tempdir:
+        os.chdir(tempdir)
+        yield tempdir
+    os.chdir(curdir)
