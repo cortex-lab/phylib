@@ -84,9 +84,11 @@ def load_raw_data(path=None, n_channels_dat=None, dtype=None, offset=None):
     if not path:
         return
     if not op.exists(path):
-        logger.warning("Error while loading data: File `%s` not found.",
-                       path)
-        return None
+        path = op.join(op.dirname(path), 'ephys.raw' + op.splitext(path)[1])
+        if not op.exists(path):
+            logger.warning("Error while loading data: File `%s` not found.",
+                           path)
+            return None
     assert op.exists(path)
     logger.debug("Loading traces at `%s`.", path)
     return _dat_to_traces(path,
@@ -155,6 +157,12 @@ def from_sparse(data, cols, channel_ids):
     # channels.
     out = out[:, :-1, ...]
     return out
+
+
+def _find_first_existing_path(*paths):
+    for path in paths:
+        if op.exists(path):
+            return path
 
 
 #------------------------------------------------------------------------------
@@ -295,15 +303,16 @@ class TemplateModel(object):
                                   sample_rate=self.sample_rate,
                                   )
 
-    def _get_array_path(self, name):
-        return op.join(self.dir_path, name + '.npy')
+    def _find_path(self, *names):
+        return _find_first_existing_path(*(op.join(self.dir_path, name) for name in names))
 
-    def _read_array(self, name):
-        path = self._get_array_path(name)
+    def _read_array(self, path):
+        if not path:
+            raise IOError(path)
         return read_array(path).squeeze()
 
-    def _write_array(self, name, arr):
-        return write_array(self._get_array_path(name), arr)
+    def _write_array(self, path, arr):
+        return write_array(path, arr)
 
     def _load_metadata(self):
         """Load cluster metadata from all CSV files in the data directory."""
@@ -329,7 +338,7 @@ class TemplateModel(object):
     def save_metadata(self, name, values):
         """Save a dictionary {cluster_id: value} with cluster metadata in
         a TSV file."""
-        path = op.join(self.dir_path, 'cluster_%s.tsv' % name)
+        path = op.join(self.dir_path, 'clusters.%s.tsv' % name)
         logger.debug("Save cluster metadata to `%s`.", path)
         # Remove empty values.
         save_metadata(path, name,
@@ -337,13 +346,13 @@ class TemplateModel(object):
 
     def save_spike_clusters(self, spike_clusters):
         """Save the spike clusters."""
-        path = self._get_array_path('spike_clusters')
+        path = self._find_path('spike_clusters.npy', 'spikes.clusters.npy')
         logger.debug("Save spike clusters to `%s`.", path)
         np.save(path, spike_clusters)
 
     def save_mean_waveforms(self, mean_waveforms):
         """Save the mean waveforms as a single array."""
-        path = self._get_array_path('mean_waveforms')
+        path = op.join(self.dir_path, 'clusters.meanWaveforms.npy')
         n_clusters = len(mean_waveforms)
         out = np.zeros((n_clusters, self.n_samples_templates, self.n_channels))
         for i, cluster_id in enumerate(sorted(mean_waveforms)):
@@ -353,62 +362,74 @@ class TemplateModel(object):
         np.save(path, out)
 
     def _load_channel_map(self):
-        out = self._read_array('channel_map')
+        path = self._find_path('channel_map.npy', 'channels.rawRow.npy')
+        out = self._read_array(path)
         assert out.dtype in (np.uint32, np.int32, np.int64)
         return out
 
     def _load_channel_positions(self):
-        return self._read_array('channel_positions')
+        path = self._find_path('channel_positions.npy', 'channels.sitePositions.npy')
+        return self._read_array(path)
 
     def _load_traces(self, channel_map=None):
-        traces = load_raw_data(self.dat_path,
-                               n_channels_dat=self.n_channels_dat,
-                               dtype=self.dtype,
-                               offset=self.offset,
-                               )
+        traces = load_raw_data(
+            self.dat_path,
+            n_channels_dat=self.n_channels_dat,
+            dtype=self.dtype,
+            offset=self.offset,
+        )
         if traces is not None:
             # Find the scaling factor for the traces.
-            traces = _concatenate_virtual_arrays([traces],
-                                                 channel_map,
-                                                 )
+            traces = _concatenate_virtual_arrays(
+                [traces], channel_map)
         return traces
 
     def _load_amplitudes(self):
-        return self._read_array('amplitudes')
+        return self._read_array(self._find_path('amplitudes.npy', 'spikes.amps.npy'))
 
     def _load_spike_templates(self):
-        out = self._read_array('spike_templates')
+        path = self._find_path('spike_templates.npy', 'ks2/spikes.clusters.npy')
+        out = self._read_array(path)
         if out.dtype in (np.float32, np.float64):
             out = out.astype(np.int32)
         assert out.dtype in (np.uint32, np.int32, np.int64)
         return out
 
     def _load_spike_clusters(self):
-        sc_path = self._get_array_path('spike_clusters')
-        # Create spike_clusters file if it doesn't exist.
-        if not op.exists(sc_path):
-            st_path = self._get_array_path('spike_templates')
-            shutil.copy(st_path, sc_path)
+        path = self._find_path('spike_clusters.npy', 'spikes.clusters.npy')
+        if path is None:
+            # Create spike_clusters file if it doesn't exist.
+            tmp_path = self._find_path('spike_templates.npy', 'ks2/spikes.clusters.npy')
+            shutil.copy(tmp_path, path)
         logger.debug("Loading spike clusters.")
         # NOTE: we make a copy in memory so that we can update this array
         # during manual clustering.
-        out = self._read_array('spike_clusters').astype(np.int32)
+        out = self._read_array(path).astype(np.int32)
         return out
 
     def _load_spike_samples(self):
         # WARNING: "spike_times.npy" is in units of samples. Need to
         # divide by the sampling rate to get spike times in seconds.
-        return self._read_array('spike_times')
+        path = op.join(self.dir_path, 'spike_times.npy')
+        if op.exists(path):
+            return self._read_array(path)
+        else:
+            # WARNING: spikes.times.npy is in seconds, not samples !
+            path = op.join(self.dir_path, 'spikes.times.npy')
+            logger.info("Loading spikes.times.npy in seconds, converting to samples.")
+            spike_times = self._read_array(path)
+            return (spike_times * self.sample_rate).astype(np.uint64)
 
     def _load_similar_templates(self):
-        return self._read_array('similar_templates')
+        return self._read_array(self._find_path('similar_templates.npy'))
 
     def _load_templates(self):
         logger.debug("Loading templates.")
 
         # Sparse structure: regular array with col indices.
         try:
-            data = self._read_array('templates')
+            path = self._find_path('templates.npy', 'clusters.templateWaveforms.npy')
+            data = self._read_array(path)
             assert data.ndim == 3
             assert data.dtype in (np.float32, np.float64)
             n_templates, n_samples, n_channels_loc = data.shape
@@ -416,7 +437,7 @@ class TemplateModel(object):
             return
 
         try:
-            cols = self._read_array('template_ind')
+            cols = self._read_array(self._find_path('template_ind.npy'))
             logger.debug("Templates are sparse.")
             assert cols.shape == (n_templates, n_channels_loc)
         except IOError:
@@ -426,16 +447,16 @@ class TemplateModel(object):
 
     def _load_wm(self):
         logger.debug("Loading the whitening matrix.")
-        return self._read_array('whitening_mat')
+        return self._read_array(self._find_path('whitening_mat.npy'))
 
     def _load_wmi(self):
         logger.debug("Loading the inverse of the whitening matrix.")
-        return self._read_array('whitening_mat_inv')
+        return self._read_array(self._find_path('whitening_mat_inv.npy'))
 
     def _compute_wmi(self, wm):
         logger.debug("Inversing the whitening matrix %s.", wm.shape)
         wmi = np.linalg.inv(wm)
-        self._write_array('whitening_mat_inv', wmi)
+        self._write_array(op.join(self.dir_path, 'whitening_mat_inv.npy'), wmi)
         return wmi
 
     def _unwhiten(self, x, channel_ids=None):
@@ -451,7 +472,7 @@ class TemplateModel(object):
 
         # Sparse structure: regular array with row and col indices.
         try:
-            data = self._read_array('pc_features').transpose((0, 2, 1))
+            data = self._read_array(self._find_path('pc_features.npy')).transpose((0, 2, 1))
             assert data.ndim == 3
             assert data.dtype in (np.float32, np.float64)
             n_spikes, n_channels_loc, n_pcs = data.shape
@@ -459,13 +480,13 @@ class TemplateModel(object):
             return
 
         try:
-            cols = self._read_array('pc_feature_ind')
+            cols = self._read_array(self._find_path('pc_feature_ind.npy'))
             assert cols.shape == (self.n_templates, n_channels_loc)
         except IOError:
             cols = None
 
         try:
-            rows = self._read_array('pc_feature_spike_ids')
+            rows = self._read_array(self._find_path('pc_feature_spike_ids.npy'))
             assert rows.shape == (n_spikes,)
         except IOError:
             rows = None
@@ -476,7 +497,7 @@ class TemplateModel(object):
 
         # Sparse structure: regular array with row and col indices.
         try:
-            data = self._read_array('template_features')
+            data = self._read_array(self._find_path('template_features.npy'))
             assert data.dtype in (np.float32, np.float64)
             assert data.ndim == 2
             n_spikes, n_channels_loc = data.shape
@@ -484,13 +505,13 @@ class TemplateModel(object):
             return
 
         try:
-            cols = self._read_array('template_feature_ind')
+            cols = self._read_array(self._find_path('template_feature_ind.npy'))
             assert cols.shape == (self.n_templates, n_channels_loc)
         except IOError:
             cols = None
 
         try:
-            rows = self._read_array('template_feature_spike_ids')
+            rows = self._read_array(self._find_path('template_feature_spike_ids.npy'))
             assert rows.shape == (n_spikes,)
         except IOError:
             rows = None
