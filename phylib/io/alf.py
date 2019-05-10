@@ -176,7 +176,8 @@ class EphysAlfCreator(object):
 
     def symlink_lfp_data(self):
         # LFP data file.
-        lfp_path = _find_file_with_ext(self.dir_path, '.lf.*')
+        # TODO: support for different file extensions?
+        lfp_path = _find_file_with_ext(self.dir_path, '.lf.bin')
         if not lfp_path:
             logger.info("No LFP file, skipping symlinking.")
             return
@@ -187,7 +188,7 @@ class EphysAlfCreator(object):
     # -------------------------------------------------------------------------
 
     def _save_npy(self, filename, arr):
-        np.save(self.dir_path / filename, arr)
+        np.save(self.out_path / filename, arr)
 
     def make_spike_times(self):
         """We cannot just rename/copy spike_times.npy because it is in unit of
@@ -221,19 +222,17 @@ class EphysAlfCreator(object):
 
     def make_depths(self):
         """Make spikes.depths.npy and clusters.depths.npy."""
-        p = self.dir_path
-
         channel_positions = self.model.channel_positions
         assert channel_positions.ndim == 2
-
-        cluster_channels = np.load(p / 'clusters.peakChannel.npy')
-        assert cluster_channels.ndim == 1
-        n_clusters = cluster_channels.shape[0]
 
         spike_clusters = self.model.spike_clusters
         assert spike_clusters.ndim == 1
         n_spikes = spike_clusters.shape[0]
         self.cluster_ids = _unique(self.model.spike_clusters)
+
+        cluster_channels = np.load(self.out_path / 'clusters.peakChannel.npy')
+        assert cluster_channels.ndim == 1
+        n_clusters = cluster_channels.shape[0]
 
         clusters_depths = channel_positions[cluster_channels, 1]
         assert clusters_depths.shape == (n_clusters,)
