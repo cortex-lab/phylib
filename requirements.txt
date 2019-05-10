@@ -1,6 +1,7 @@
 numpy
 scipy
 matplotlib
+colorcet
 requests
 tqdm
 six
