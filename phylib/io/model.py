@@ -174,8 +174,8 @@ class TemplateModel(object):
 
     def __init__(self, dat_path=None, **kwargs):
         dat_path = dat_path or ''
-        dir_path = (op.dirname(op.abspath(op.expanduser(dat_path)))
-                    if dat_path else os.getcwd())
+        dat_path = op.abspath(op.expanduser(dat_path))
+        dir_path = (op.dirname(dat_path) if dat_path else os.getcwd())
         self.dat_path = dat_path
         self.dir_path = dir_path
         self.__dict__.update(kwargs)
