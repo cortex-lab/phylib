@@ -25,6 +25,7 @@ from .._misc import (_git_version,
                      _write_tsv,
                      _encode_qbytearray, _decode_qbytearray,
                      _fullname,
+                     _load_from_fullname,
                      )
 
 
@@ -131,8 +132,11 @@ def test_git_version():
         assert v == ""
 
 
-def test_fullname():
-    def myfunction(x):
-        return
+def _myfunction(x):
+    return
 
-    assert _fullname(myfunction) == 'phylib.utils.tests.test_misc.myfunction'
+
+def test_fullname():
+    assert _fullname(_myfunction) == 'phylib.utils.tests.test_misc._myfunction'
+
+    assert _load_from_fullname(_fullname(_myfunction)) == _myfunction

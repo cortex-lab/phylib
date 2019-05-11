@@ -9,6 +9,7 @@
 
 import base64
 import csv
+from importlib import import_module
 import json
 import logging
 import os.path as op
@@ -128,6 +129,11 @@ def _save_pickle(path, data):
 def _fullname(o):
     """Return the fully-qualified name of a function."""
     return o.__module__ + "." + o.__name__ if o.__module__ else o.__name__
+
+
+def _load_from_fullname(name):
+    parts = name.rsplit('.', 1)
+    return getattr(import_module(parts[0]), parts[1])
 
 
 def _read_python(path):
