@@ -22,8 +22,9 @@ from phylib.utils.tempdir import TemporaryDirectory
 # Common fixtures
 #------------------------------------------------------------------------------
 
-logging.getLogger('phylib').setLevel(10)
-add_default_handler(5)
+logger = logging.getLogger('phylib')
+logger.setLevel(10)
+add_default_handler(5, logger=logger)
 
 # Fix the random seed in the tests.
 np.random.seed(2015)
