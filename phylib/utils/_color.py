@@ -63,7 +63,9 @@ def _hex_to_triplet(h):
 # Default color map for the selected clusters.
 # see https://colorcet.pyviz.org/user_guide/Categorical.html
 _COLORMAP = np.array([_hex_to_triplet(h) for h in cc.glasbey_light])
-_COLORMAP[[0, 1, 2, 3, 4]] = _COLORMAP[[3, 0, 4, 1, 2]]
+_COLORMAP[[0, 1, 2, 3, 4, 5]] = _COLORMAP[[3, 0, 4, 5, 2, 1]]
+_COLORMAP[0] = [8, 146, 252]
+_COLORMAP[1] = [255, 2, 2]
 
 
 def _apply_color_masks(color, masks=None, alpha=None):
