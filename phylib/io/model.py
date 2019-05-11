@@ -159,10 +159,16 @@ def from_sparse(data, cols, channel_ids):
     return out
 
 
-def _find_first_existing_path(*paths):
+def _find_first_existing_path(*paths, multiple_ok=True):
+    out = None
     for path in paths:
         if op.exists(path):
-            return path
+            if out is not None and not multiple_ok:
+                raise IOError("Multiple conflicting files exist: %s." % ', '.join((out, path)))
+            out = path
+        if multiple_ok:
+            break
+    return out
 
 
 #------------------------------------------------------------------------------
@@ -303,8 +309,9 @@ class TemplateModel(object):
                                   sample_rate=self.sample_rate,
                                   )
 
-    def _find_path(self, *names):
-        return _find_first_existing_path(*(op.join(self.dir_path, name) for name in names))
+    def _find_path(self, *names, multiple_ok=True):
+        return _find_first_existing_path(
+            *(op.join(self.dir_path, name) for name in names), multiple_ok=multiple_ok)
 
     def _read_array(self, path):
         if not path:
@@ -321,7 +328,11 @@ class TemplateModel(object):
         metadata = {}
         for filename in files:
             logger.debug("Load `{}`.".format(filename))
-            field_name, values = load_metadata(filename)
+            try:
+                field_name, values = load_metadata(filename)
+            except Exception as e:
+                logger.warning("Could not load %s: %s.", filename, str(e))
+                continue
             metadata[field_name] = values
         return metadata
 
@@ -338,7 +349,7 @@ class TemplateModel(object):
     def save_metadata(self, name, values):
         """Save a dictionary {cluster_id: value} with cluster metadata in
         a TSV file."""
-        path = op.join(self.dir_path, 'clusters.%s.tsv' % name)
+        path = op.join(self.dir_path, 'cluster_%s.tsv' % name)
         logger.debug("Save cluster metadata to `%s`.", path)
         # Remove empty values.
         save_metadata(path, name,
@@ -346,7 +357,7 @@ class TemplateModel(object):
 
     def save_spike_clusters(self, spike_clusters):
         """Save the spike clusters."""
-        path = self._find_path('spike_clusters.npy', 'spikes.clusters.npy')
+        path = self._find_path('spike_clusters.npy', 'spikes.clusters.npy', multiple_ok=False)
         logger.debug("Save spike clusters to `%s`.", path)
         np.save(path, spike_clusters)
 
@@ -396,7 +407,7 @@ class TemplateModel(object):
         return out
 
     def _load_spike_clusters(self):
-        path = self._find_path('spike_clusters.npy', 'spikes.clusters.npy')
+        path = self._find_path('spike_clusters.npy', 'spikes.clusters.npy', multiple_ok=False)
         if path is None:
             # Create spike_clusters file if it doesn't exist.
             tmp_path = self._find_path('spike_templates.npy', 'ks2/spikes.clusters.npy')

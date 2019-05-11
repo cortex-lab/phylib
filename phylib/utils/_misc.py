@@ -132,6 +132,8 @@ def _fullname(o):
 
 
 def _load_from_fullname(name):
+    if not isinstance(name, str):
+        return name
     parts = name.rsplit('.', 1)
     return getattr(import_module(parts[0]), parts[1])
 

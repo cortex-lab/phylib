@@ -139,4 +139,5 @@ def _myfunction(x):
 def test_fullname():
     assert _fullname(_myfunction) == 'phylib.utils.tests.test_misc._myfunction'
 
+    assert _load_from_fullname(_myfunction) == _myfunction
     assert _load_from_fullname(_fullname(_myfunction)) == _myfunction
