@@ -73,8 +73,8 @@ def test_json_simple(tempdir):
 
 @mark.parametrize('kind', ['json', 'pickle'])
 def test_json_numpy(tempdir, kind):
-    arr = np.arange(10).reshape((2, 5)).astype(np.float32)
-    d = {'a': arr, 'b': arr.ravel()[0]}
+    arr = np.arange(20).reshape((2, -1)).astype(np.float32)
+    d = {'a': arr, 'b': arr.ravel()[:10], 'c': arr[0, 0]}
 
     path = op.join(tempdir, 'test')
     f = _save_json if kind == 'json' else _save_pickle
@@ -88,7 +88,8 @@ def test_json_numpy(tempdir, kind):
     assert arr_bis.shape == arr.shape
     ae(arr_bis, arr)
 
-    assert d['b'] == d_bis['b']
+    ae(d['b'], d_bis['b'])
+    ae(d['c'], d_bis['c'])
 
 
 def test_read_python(tempdir):

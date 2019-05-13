@@ -48,7 +48,10 @@ def _decode_qbytearray(data_b64):
 
 class _CustomEncoder(json.JSONEncoder):
     def default(self, obj):
-        if isinstance(obj, np.ndarray):
+        if isinstance(obj, np.ndarray) and obj.ndim == 1 and obj.shape[0] <= 10:
+            # Serialize small arrays in clear text (lists of numbers).
+            return obj.tolist()
+        elif isinstance(obj, np.ndarray):
             obj_contiguous = np.ascontiguousarray(obj)
             data_b64 = base64.b64encode(obj_contiguous.data).decode('utf8')
             return dict(__ndarray__=data_b64,
