@@ -177,6 +177,7 @@ def _find_first_existing_path(*paths, multiple_ok=True):
 
 class TemplateModel(object):
     n_closest_channels = 16
+    amplitude_threshold = .25
 
     def __init__(self, dat_path=None, **kwargs):
         dat_path = dat_path or ''
@@ -557,11 +558,18 @@ class TemplateModel(object):
         template_w = self.sparse_templates.data[template_id, ...]
         template = self._unwhiten(template_w).astype(np.float32)
         assert template.ndim == 2
+        # Compute the template amplitude on each channel.
         amplitude = template.max(axis=0) - template.min(axis=0)
+        # Find the peak channel.
         best_channel = np.argmax(amplitude)
-        channel_ids = get_closest_channels(self.channel_positions,
-                                           best_channel,
-                                           self.n_closest_channels)
+        max_amp = amplitude[best_channel]
+        # Find the channels X% peak.
+        peak_channels = np.nonzero(amplitude > self.amplitude_threshold * max_amp)[0]
+        # Find N closest channels.
+        close_channels = get_closest_channels(
+            self.channel_positions, best_channel, self.n_closest_channels)
+        # Keep the intersection.
+        channel_ids = np.intersect1d(peak_channels, close_channels)
         template = template[:, channel_ids]
         assert template.ndim == 2
         assert template.shape[1] == channel_ids.shape[0]
