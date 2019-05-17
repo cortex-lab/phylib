@@ -8,8 +8,7 @@
 
 import hashlib
 import logging
-import os
-import os.path as op
+from pathlib import Path
 
 from phylib.utils._misc import _ensure_dir_exists, phy_config_dir
 from phylib.utils.event import ProgressReporter
@@ -37,7 +36,7 @@ def _save_stream(r, path):
     size = _remote_file_size(r.url)
     pr = ProgressReporter()
     pr.value_max = size or 1
-    pr.set_progress_message('Downloading `' + path + '`: {progress:.1f}%.')
+    pr.set_progress_message('Downloading `' + str(path) + '`: {progress:.1f}%.')
     pr.set_complete_message('Download complete.')
     downloaded = 0
     with open(path, 'wb') as f:
@@ -91,17 +90,6 @@ def _check_md5_of_url(output_path, url):
             return _check_md5(output_path, checksum)
 
 
-def _validate_output_dir(output_dir):
-    if output_dir is None:
-        output_dir = '.'
-    if not output_dir.endswith('/'):
-        output_dir = output_dir + '/'
-    output_dir = op.realpath(op.dirname(output_dir))
-    if not op.exists(output_dir):
-        os.makedirs(output_dir)
-    return output_dir
-
-
 def download_file(url, output_path):
     """Download a binary file from an URL.
 
@@ -117,16 +105,14 @@ def download_file(url, output_path):
         The path where the file is to be saved.
 
     """
-    output_path = op.realpath(output_path)
-    assert output_path is not None
-    if op.exists(output_path):
+    path = Path(output_path)
+    if path.exists():
         checked = _check_md5_of_url(output_path, url)
         if checked is False:
-            logger.debug("The file `%s` already exists "
-                         "but is invalid: redownloading.", output_path)
+            logger.debug(
+                "The file `%s` already exists but is invalid: redownloading.", output_path)
         elif checked is True:
-            logger.debug("The file `%s` already exists: skipping.",
-                         output_path)
+            logger.debug("The file `%s` already exists: skipping.", output_path)
             return output_path
     r = _download(url, stream=True)
     _save_stream(r, output_path)
@@ -145,10 +131,11 @@ _BASE_URL = 'https://raw.githubusercontent.com/kwikteam/phy-data/master/'
 
 def download_test_file(name, config_dir=None, force=False):
     """Download a test file."""
-    config_dir = config_dir or phy_config_dir()
-    path = op.join(config_dir, 'test_data', name)
-    _ensure_dir_exists(op.dirname(path))
-    if not force and op.exists(path):
+    config_dir = Path(config_dir or phy_config_dir())
+    path = config_dir / 'test_data' / name
+    # Ensure the directory exists.
+    _ensure_dir_exists(path.parent)
+    if not force and path.exists():
         return path
     url = _BASE_URL + name
     download_file(url, output_path=path)

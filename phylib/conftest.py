@@ -8,11 +8,12 @@
 
 import logging
 import os
+from pathlib import Path
 import warnings
 
 import matplotlib
 import numpy as np
-from pytest import yield_fixture
+from pytest import fixture
 
 from phylib import add_default_handler
 from phylib.utils.tempdir import TemporaryDirectory
@@ -34,16 +35,16 @@ warnings.filterwarnings("ignore", message="numpy.dtype size changed")
 warnings.filterwarnings("ignore", message="numpy.ufunc size changed")
 
 
-@yield_fixture
+@fixture
 def tempdir():
     with TemporaryDirectory() as tempdir:
-        yield tempdir
+        yield Path(tempdir)
 
 
-@yield_fixture
+@fixture
 def chdir_tempdir():
     curdir = os.getcwd()
     with TemporaryDirectory() as tempdir:
         os.chdir(tempdir)
-        yield tempdir
+        yield Path(tempdir)
     os.chdir(curdir)

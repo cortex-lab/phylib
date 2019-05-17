@@ -11,7 +11,7 @@ import logging
 import math
 from math import floor, exp
 from operator import itemgetter
-import os.path as op
+from pathlib import Path
 
 import numpy as np
 
@@ -218,20 +218,21 @@ def get_closest_clusters(cluster_id, cluster_ids, sim_func, max_n=None):
 
 def read_array(path, mmap_mode=None):
     """Read a .npy array."""
-    file_ext = op.splitext(path)[1]
+    path = Path(path)
+    file_ext = path.suffix
     if file_ext == '.npy':
-        return np.load(path, mmap_mode=mmap_mode)
+        return np.load(str(path), mmap_mode=mmap_mode)
     raise NotImplementedError("The file extension `{}` ".format(file_ext) +
                               "is not currently supported.")
 
 
 def write_array(path, arr):
     """Write an array to a .npy file."""
-    file_ext = op.splitext(path)[1]
+    path = Path(path)
+    file_ext = path.suffix
     if file_ext == '.npy':
-        return np.save(path, arr)
-    raise NotImplementedError("The file extension `{}` ".format(file_ext) +
-                              "is not currently supported.")
+        return np.save(str(path), arr)
+    raise NotImplementedError("The file extension `{}` is not currently supported." % file_ext)
 
 
 # -----------------------------------------------------------------------------

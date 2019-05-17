@@ -10,6 +10,7 @@
 
 import os
 import os.path as op
+from pathlib import Path
 import re
 
 from setuptools import setup
@@ -27,14 +28,11 @@ def _package_tree(pkgroot):
     return subdirs
 
 
-curdir = op.dirname(op.realpath(__file__))
-with open(op.join(curdir, 'README.md')) as f:
-    readme = f.read()
+readme = (Path(__file__).parent / 'README.md').read_text()
 
 
 # Find version number from `__init__.py` without executing it.
-filename = op.join(curdir, 'phylib/__init__.py')
-with open(filename, 'r') as f:
+with (Path(__file__).parent / 'phylib/__init__.py').open('r') as f:
     version = re.search(r"__version__ = '([^']+)'", f.read()).group(1)
 
 
@@ -50,8 +48,9 @@ setup(
     packages=_package_tree('phylib'),
     package_dir={'phylib': 'phylib'},
     package_data={
-        'phylib': ['*.vert', '*.frag', '*.glsl', '*.npy', '*.gz', '*.txt',
-                '*.html', '*.css', '*.js', '*.prb'],
+        'phylib': [
+            '*.vert', '*.frag', '*.glsl', '*.npy', '*.gz', '*.txt',
+            '*.html', '*.css', '*.js', '*.prb'],
     },
     include_package_data=True,
     keywords='phy,data analysis,electrophysiology,neuroscience',
@@ -61,9 +60,7 @@ setup(
         'License :: OSI Approved :: BSD License',
         'Natural Language :: English',
         "Framework :: IPython",
-        "Programming Language :: Python :: 2",
-        'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.5',
+        'Programming Language :: Python :: 3.7',
     ],
 )

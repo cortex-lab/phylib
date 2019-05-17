@@ -7,7 +7,7 @@
 #------------------------------------------------------------------------------
 
 import logging
-import os.path as op
+from pathlib import Path
 from itertools import product
 
 import numpy as np
@@ -18,7 +18,6 @@ from pytest import raises, yield_fixture
 from ..datasets import (download_file,
                         download_test_file,
                         _check_md5_of_url,
-                        _validate_output_dir,
                         )
 from phylib.utils.testing import captured_logging
 
@@ -48,7 +47,7 @@ def _add_mock_response(url, body, file_type='binary'):
 @yield_fixture
 def mock_url():
     _add_mock_response(_URL, _DATA.tostring())
-    _add_mock_response(_URL + '.md5', _CHECKSUM + '  ' + op.basename(_URL))
+    _add_mock_response(_URL + '.md5', _CHECKSUM + '  ' + Path(_URL).name)
     yield _URL
     responses.reset()
 
@@ -95,15 +94,9 @@ def _check(data):
 # Test utility functions
 #------------------------------------------------------------------------------
 
-def test_validate_output_dir(chdir_tempdir):
-    _validate_output_dir(None)
-    _validate_output_dir(op.join(chdir_tempdir, 'a/b/c'))
-    assert op.exists(op.join(chdir_tempdir, 'a/b/c/'))
-
-
 @responses.activate
 def test_check_md5_of_url(tempdir, mock_url):
-    output_path = op.join(tempdir, 'data')
+    output_path = Path(tempdir) / 'data'
     download_file(_URL, output_path)
     assert _check_md5_of_url(output_path, _URL)
 
@@ -114,7 +107,7 @@ def test_check_md5_of_url(tempdir, mock_url):
 
 @responses.activate
 def test_download_not_found(tempdir):
-    path = op.join(tempdir, 'test')
+    path = Path(tempdir) / 'test'
     with raises(Exception):
         download_file(_URL + '_notfound', path)
 
@@ -122,7 +115,7 @@ def test_download_not_found(tempdir):
 @responses.activate
 def test_download_already_exists_invalid(tempdir, mock_url):
     with captured_logging() as buf:
-        path = op.join(tempdir, 'test')
+        path = Path(tempdir) / 'test'
         # Create empty file.
         open(path, 'a').close()
         _check(_dl(path))
@@ -132,7 +125,7 @@ def test_download_already_exists_invalid(tempdir, mock_url):
 @responses.activate
 def test_download_already_exists_valid(tempdir, mock_url):
     with captured_logging() as buf:
-        path = op.join(tempdir, 'test')
+        path = Path(tempdir) / 'test'
         # Create valid file.
         with open(path, 'ab') as f:
             f.write(_DATA.tostring())
@@ -142,7 +135,7 @@ def test_download_already_exists_valid(tempdir, mock_url):
 
 @responses.activate
 def test_download_file(tempdir, mock_urls):
-    path = op.join(tempdir, 'test')
+    path = Path(tempdir) / 'test'
     param, url_data, url_checksum = mock_urls
     data_here, data_valid, checksum_here, checksum_valid = param
 
@@ -166,6 +159,6 @@ def test_download_file(tempdir, mock_urls):
 def test_download_test_file(tempdir):
     name = 'test/test-4ch-1s.dat'
     path = download_test_file(name, config_dir=tempdir)
-    assert op.exists(path)
-    assert op.getsize(path) == 160000
+    assert path.exists()
+    assert path.stat().st_size == 160000
     path = download_test_file(name, config_dir=tempdir)

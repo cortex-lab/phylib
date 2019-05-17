@@ -7,10 +7,10 @@
 # Imports
 #------------------------------------------------------------------------------
 
-import glob
 import logging
 import os
 import os.path as op
+from pathlib import Path
 import shutil
 
 import numpy as np
@@ -34,7 +34,9 @@ logger = logging.getLogger(__name__)
 #------------------------------------------------------------------------------
 
 def read_array(path):
-    arr_name, ext = op.splitext(path)
+    path = Path(path)
+    arr_name = path.name
+    ext = path.suffix
     if ext == '.mat':
         return sio.loadmat(path)[arr_name]
     elif ext == '.npy':
@@ -71,31 +73,26 @@ def _dat_n_samples(filename, dtype=None, n_channels=None, offset=None):
 def _dat_to_traces(dat_path, n_channels=None, dtype=None, offset=None):
     assert dtype is not None
     assert n_channels is not None
-    n_samples = _dat_n_samples(dat_path,
-                               n_channels=n_channels,
-                               dtype=dtype,
-                               offset=offset,
-                               )
-    return np.memmap(dat_path, dtype=dtype, shape=(n_samples, n_channels),
-                     offset=offset)
+    n_samples = _dat_n_samples(
+        dat_path, n_channels=n_channels, dtype=dtype, offset=offset)
+    return np.memmap(
+        dat_path, dtype=dtype, shape=(n_samples, n_channels), offset=offset)
 
 
 def load_raw_data(path=None, n_channels_dat=None, dtype=None, offset=None):
     if not path:
         return
-    if not op.exists(path):
-        path = op.join(op.dirname(path), 'ephys.raw' + op.splitext(path)[1])
-        if not op.exists(path):
-            logger.warning("Error while loading data: File `%s` not found.",
-                           path)
+    path = Path(path)
+    if not path.exists():
+        path = path.parent / ('ephys.raw' + path.suffix)
+        if not path.exists():
+            logger.warning(
+                "Error while loading data: File `%s` not found.", path)
             return None
-    assert op.exists(path)
+    assert path.exists()
     logger.debug("Loading traces at `%s`.", path)
-    return _dat_to_traces(path,
-                          n_channels=n_channels_dat,
-                          dtype=dtype if dtype is not None else np.int16,
-                          offset=offset,
-                          )
+    dtype = dtype if dtype is not None else np.int16
+    return _dat_to_traces(path, n_channels=n_channels_dat, dtype=dtype, offset=offset)
 
 
 def get_closest_channels(channel_positions, channel_index, n=None):
@@ -162,7 +159,8 @@ def from_sparse(data, cols, channel_ids):
 def _find_first_existing_path(*paths, multiple_ok=True):
     out = None
     for path in paths:
-        if op.exists(path):
+        path = Path(path)
+        if path.exists():
             if out is not None and not multiple_ok:
                 raise IOError("Multiple conflicting files exist: %s." % ', '.join((out, path)))
             out = path
@@ -181,8 +179,8 @@ class TemplateModel(object):
 
     def __init__(self, dat_path=None, **kwargs):
         dat_path = dat_path or ''
-        dat_path = op.abspath(op.expanduser(dat_path))
-        dir_path = (op.dirname(dat_path) if dat_path else os.getcwd())
+        dat_path = Path(dat_path).expanduser().resolve()
+        dir_path = dat_path.parent if dat_path else os.getcwd()
         self.dat_path = dat_path
         self.dir_path = dir_path
         self.__dict__.update(kwargs)
@@ -312,7 +310,7 @@ class TemplateModel(object):
 
     def _find_path(self, *names, multiple_ok=True):
         return _find_first_existing_path(
-            *(op.join(self.dir_path, name) for name in names), multiple_ok=multiple_ok)
+            *(self.dir_path / name for name in names), multiple_ok=multiple_ok)
 
     def _read_array(self, path):
         if not path:
@@ -323,12 +321,12 @@ class TemplateModel(object):
         return write_array(path, arr)
 
     def _load_metadata(self):
-        """Load cluster metadata from all CSV files in the data directory."""
-        files = glob.glob(op.join(self.dir_path, '*.csv'))
-        files.extend(glob.glob(op.join(self.dir_path, '*.tsv')))
+        """Load cluster metadata from all CSV/TSV files in the data directory."""
+        files = list(self.dir_path.glob('*.csv'))
+        files.extend(self.dir_path.glob('*.tsv'))
         metadata = {}
         for filename in files:
-            logger.debug("Load `{}`.".format(filename))
+            logger.debug("Load `%s`.", filename)
             try:
                 field_name, values = load_metadata(filename)
             except Exception as e:
@@ -350,11 +348,11 @@ class TemplateModel(object):
     def save_metadata(self, name, values):
         """Save a dictionary {cluster_id: value} with cluster metadata in
         a TSV file."""
-        path = op.join(self.dir_path, 'cluster_%s.tsv' % name)
+        path = self.dir_path / ('cluster_%s.tsv' % name)
         logger.debug("Save cluster metadata to `%s`.", path)
         # Remove empty values.
-        save_metadata(path, name,
-                      {c: v for c, v in values.items() if v is not None})
+        save_metadata(
+            path, name, {c: v for c, v in values.items() if v is not None})
 
     def save_spike_clusters(self, spike_clusters):
         """Save the spike clusters."""
@@ -364,7 +362,7 @@ class TemplateModel(object):
 
     def save_mean_waveforms(self, mean_waveforms):
         """Save the mean waveforms as a single array."""
-        path = op.join(self.dir_path, 'clusters.meanWaveforms.npy')
+        path = self.dir_path / 'clusters.meanWaveforms.npy'
         n_clusters = len(mean_waveforms)
         out = np.zeros((n_clusters, self.n_samples_templates, self.n_channels))
         for i, cluster_id in enumerate(sorted(mean_waveforms)):
@@ -422,12 +420,12 @@ class TemplateModel(object):
     def _load_spike_samples(self):
         # WARNING: "spike_times.npy" is in units of samples. Need to
         # divide by the sampling rate to get spike times in seconds.
-        path = op.join(self.dir_path, 'spike_times.npy')
-        if op.exists(path):
+        path = self.dir_path / 'spike_times.npy'
+        if path.exists():
             return self._read_array(path)
         else:
             # WARNING: spikes.times.npy is in seconds, not samples !
-            path = op.join(self.dir_path, 'spikes.times.npy')
+            path = self.dir_path / 'spikes.times.npy'
             logger.info("Loading spikes.times.npy in seconds, converting to samples.")
             spike_times = self._read_array(path)
             return (spike_times * self.sample_rate).astype(np.uint64)
@@ -468,7 +466,7 @@ class TemplateModel(object):
     def _compute_wmi(self, wm):
         logger.debug("Inversing the whitening matrix %s.", wm.shape)
         wmi = np.linalg.inv(wm)
-        self._write_array(op.join(self.dir_path, 'whitening_mat_inv.npy'), wmi)
+        self._write_array(self.dir_path / 'whitening_mat_inv.npy', wmi)
         return wmi
 
     def _unwhiten(self, x, channel_ids=None):

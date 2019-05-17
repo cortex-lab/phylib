@@ -7,9 +7,8 @@
 # Imports
 #------------------------------------------------------------------------------
 
-import os
-import os.path as op
 import itertools
+from pathlib import Path
 
 import numpy as np
 
@@ -81,25 +80,21 @@ def _channels_per_group(probe):
             for group in groups}
 
 
-def load_probe(name):
+def load_probe(name_or_path):
     """Load one of the built-in probes."""
-    if op.exists(name):
-        # The argument can be either a path to a PRB file.
-        path = name
-    else:
-        # Or the name of a built-in probe.
-        curdir = op.realpath(op.dirname(__file__))
-        path = op.join(curdir, 'probes/{}.prb'.format(name))
-    if not op.exists(path):
-        raise IOError("The probe `{}` cannot be found.".format(name))
+    path = Path(name_or_path)
+    # The argument can be either a path to a PRB file or the name of a built-in probe..
+    if not path.exists():
+        path = Path(__file__).parent / ('probes/%s.prb' % name_or_path)
+    if not path.exists():
+        raise IOError("The probe `{}` cannot be found.".format(name_or_path))
     return MEA(probe=_read_python(path))
 
 
 def list_probes():
     """Return the list of built-in probes."""
-    curdir = op.realpath(op.dirname(__file__))
-    return [op.splitext(fn)[0] for fn in os.listdir(op.join(curdir, 'probes'))
-            if fn.endswith('.prb')]
+    path = Path(__file__).parent / 'probes'
+    return [fn.stem for fn in path.glob('*.prb')]
 
 
 #------------------------------------------------------------------------------

@@ -8,7 +8,6 @@
 
 import logging
 import os
-import os.path as op
 import shutil
 
 from pytest import fixture
@@ -57,24 +56,24 @@ def template_path(tempdir):
     paths = list(map(download_test_file, _FILES))
     # Copy the dataset to a temporary directory.
     for path in paths:
-        to_path = op.join(tempdir, op.basename(path))
+        to_path = tempdir / path.name
         logger.debug("Copying file to %s.", to_path)
         shutil.copy(path, to_path)
-    template_path = op.join(tempdir, op.basename(paths[0]))
+    template_path = tempdir / paths[0].name
     return template_path
 
 
 @fixture
 def template_model(template_path):
     params = _read_python(template_path)
-    params['dat_path'] = op.join(op.dirname(template_path), params['dat_path'])
-    params['dir_path'] = op.dirname(template_path)
+    params['dat_path'] = template_path.parent / params['dat_path']
+    params['dir_path'] = template_path.parent
     model = TemplateModel(**params)
     return model
 
 
 @fixture
 def template_model_clean(template_path):
-    os.remove(op.join(op.dirname(template_path), 'spike_clusters.npy'))
-    os.remove(op.join(op.dirname(template_path), 'cluster_group.tsv'))
+    os.remove(template_path.parent / 'spike_clusters.npy')
+    os.remove(template_path.parent / 'cluster_group.tsv')
     return template_model(template_path)

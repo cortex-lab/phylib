@@ -12,10 +12,9 @@ import csv
 from importlib import import_module
 import json
 import logging
-import os.path as op
 import os
+from pathlib import Path
 import subprocess
-import sys
 from textwrap import dedent
 
 import numpy as np
@@ -94,11 +93,10 @@ def _stringify_keys(d):
 
 
 def _load_json(path):
-    path = op.realpath(op.expanduser(path))
-    if not op.exists(path):
+    path = Path(path)
+    if not path.exists():
         raise IOError("The JSON file `{}` doesn't exist.".format(path))
-    with open(path, 'r') as f:
-        contents = f.read()
+    contents = path.read_text()
     if not contents:
         return {}
     out = json.loads(contents, object_hook=_json_custom_hook)
@@ -108,8 +106,9 @@ def _load_json(path):
 def _save_json(path, data):
     assert isinstance(data, dict)
     data = _stringify_keys(data)
-    path = op.realpath(op.expanduser(path))
-    with open(path, 'w') as f:
+    path = Path(path)
+    _ensure_dir_exists(path.parent)
+    with path.open('w') as f:
         json.dump(data, f, cls=_CustomEncoder, indent=2, sort_keys=True)
 
 
@@ -142,10 +141,10 @@ def _load_from_fullname(name):
 
 
 def _read_python(path):
-    path = op.realpath(op.expanduser(path))
-    assert op.exists(path)
-    with open(path, 'r') as f:
-        contents = f.read()
+    path = Path(path)
+    if not path.exists():  # pragma: no cover
+        raise IOError("Path %s does not exist.", path)
+    contents = path.read_text()
     metadata = {}
     exec_(contents, {}, metadata)
     metadata = {k.lower(): v for (k, v) in metadata.items()}
@@ -153,36 +152,32 @@ def _read_python(path):
 
 
 def _read_text(path):
-    with open(path, 'r') as f:
-        return f.read()
+    path = Path(path)
+    return path.read_text()
 
 
 def _write_text(path, contents):
     contents = dedent(contents)
-    dir_path = op.dirname(path)
-    if not op.exists(dir_path):
-        os.mkdir(dir_path)
-    assert op.isdir(dir_path)
-    assert not op.exists(path)
-    with open(path, 'w') as f:
-        f.write(contents)
+    path = Path(path)
+    _ensure_dir_exists(path.parent)
+    path.write_text(contents)
 
 
-def _read_tsv(filename):
+def _read_tsv(path):
     """Read a CSV/TSV file with only two columns: cluster_id and <field>.
 
     Return (field_name, dictionary {cluster_id: value}).
 
     """
-    filename = str(filename)
+    path = Path(path)
     data = {}
-    if not op.exists(filename):
-        logger.warning("%s does not exist, skipping.", filename)
+    if not path.exists():
+        logger.warning("%s does not exist, skipping.", path)
         return data
     # Find whether the delimiter is tab or comma.
-    with open(filename, 'r') as f:
+    with path.open('r') as f:
         delimiter = '\t' if '\t' in f.readline() else ','
-    with open(filename, 'r') as f:
+    with path.open('r') as f:
         reader = csv.reader(f, delimiter=delimiter)
         # Skip the header.
         _, field_name = next(reader)
@@ -190,34 +185,29 @@ def _read_tsv(filename):
             cluster_id, value = row
             cluster_id = int(cluster_id)
             data[cluster_id] = value
-    logger.info("Read %s.", filename)
+    logger.info("Read %s.", path)
     return field_name, data
 
 
-def _write_tsv(filename, field_name, data):
+def _write_tsv(path, field_name, data):
     """Write a CSV/TSV file with two columns: cluster_id and <field>.
 
     data is a dictionary {cluster_id: value}.
 
     """
-    filename = str(filename)
-    if sys.version_info[0] < 3:  # pragma: no cover
-        file = open(filename, 'wb')
-    else:
-        file = open(filename, 'w', newline='')
-    delimiter = '\t' if filename.endswith('.tsv') else ','
-    with file as f:
+    path = Path(path)
+    _ensure_dir_exists(path.parent)
+    delimiter = '\t' if path.suffix == '.tsv' else ','
+    with path.open('w', newline='') as f:
         writer = csv.writer(f, delimiter=delimiter)
         writer.writerow(['cluster_id', field_name])
-        writer.writerows([(cluster_id, data[cluster_id])
-                          for cluster_id in sorted(data)])
-    logger.info("Wrote %s.", filename)
+        writer.writerows([(cluster_id, data[cluster_id]) for cluster_id in sorted(data)])
+    logger.info("Wrote %s.", path)
 
 
 def _git_version():
     curdir = os.getcwd()
-    filedir, _ = op.split(__file__)
-    os.chdir(filedir)
+    os.chdir(Path(__file__).parent)
     try:
         with open(os.devnull, 'w') as fnull:
             version = ('-git-' + subprocess.check_output(
@@ -233,12 +223,14 @@ def _git_version():
 
 def phy_config_dir():
     """Return the absolute path to the phy user directory."""
-    home = op.realpath(op.expanduser('~'))
-    return op.join(home, '.phy')
+    return Path.home() / '.phy'
 
 
 def _ensure_dir_exists(path):
     """Ensure a directory exists."""
-    if not op.exists(path):
-        os.makedirs(path)
-    assert op.exists(path) and op.isdir(path)
+    path = Path(path)
+    if path.exists():
+        assert path.is_dir()
+    else:
+        path.mkdir(exist_ok=True, parents=True)
+    assert path.exists() and path.is_dir()

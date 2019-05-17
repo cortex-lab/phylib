@@ -6,7 +6,7 @@
 # Imports
 #------------------------------------------------------------------------------
 
-import os.path as op
+from pathlib import Path
 
 import numpy as np
 from pytest import raises
@@ -230,7 +230,7 @@ def test_get_closest_clusters():
 def test_read_write(tempdir):
     arr = np.arange(10).astype(np.float32)
 
-    path = op.join(tempdir, 'test.npy')
+    path = Path(tempdir) / 'test.npy'
 
     write_array(path, arr)
     ae(read_array(path), arr)

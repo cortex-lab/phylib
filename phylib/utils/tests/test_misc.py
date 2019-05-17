@@ -6,10 +6,6 @@
 # Imports
 #------------------------------------------------------------------------------
 
-import os
-import os.path as op
-import subprocess
-
 import numpy as np
 from numpy.testing import assert_array_equal as ae
 from pytest import raises, mark
@@ -50,7 +46,7 @@ def test_qbytearray(tempdir):
 
     # Test JSON serialization of QByteArray.
     d = {'arr': arr}
-    path = op.join(tempdir, 'test')
+    path = tempdir / 'test'
     _save_json(path, d)
     d_bis = _load_json(path)
     assert d == d_bis
@@ -59,16 +55,15 @@ def test_qbytearray(tempdir):
 def test_json_simple(tempdir):
     d = {'a': 1, 'b': 'bb', 3: '33', 'mock': {'mock': True}}
 
-    path = op.join(tempdir, 'test')
+    path = tempdir / 'test_dir/test'
     _save_json(path, d)
     d_bis = _load_json(path)
     assert d == d_bis
 
-    with open(path, 'w') as f:
-        f.write('')
+    path.write_text('')
     assert _load_json(path) == {}
     with raises(IOError):
-        _load_json(path + '_bis')
+        _load_json('%s_bis' % path)
 
 
 @mark.parametrize('kind', ['json', 'pickle'])
@@ -76,7 +71,7 @@ def test_json_numpy(tempdir, kind):
     arr = np.arange(20).reshape((2, -1)).astype(np.float32)
     d = {'a': arr, 'b': arr.ravel()[:10], 'c': arr[0, 0]}
 
-    path = op.join(tempdir, 'test')
+    path = tempdir / 'test'
     f = _save_json if kind == 'json' else _save_pickle
     f(path, d)
 
@@ -93,7 +88,7 @@ def test_json_numpy(tempdir, kind):
 
 
 def test_read_python(tempdir):
-    path = op.join(tempdir, 'mock.py')
+    path = tempdir / 'mock.py'
     with open(path, 'w') as f:
         f.write("""a = {'b': 1}""")
 
@@ -101,15 +96,15 @@ def test_read_python(tempdir):
 
 
 def test_write_text(tempdir):
-    for path in (op.join(tempdir, 'test_1'),
-                 op.join(tempdir, 'test_dir/test_2.txt'),
+    for path in (tempdir / 'test_1',
+                 tempdir / 'test_dir/test_2.txt',
                  ):
         _write_text(path, 'hello world')
         assert _read_text(path) == 'hello world'
 
 
 def test_write_tsv(tempdir):
-    path = op.join(tempdir, 'test.tsv')
+    path = tempdir / 'test.tsv'
     assert _read_tsv(path) == {}
 
     data = {2: '20', 3: '30', 5: '50'}
@@ -120,17 +115,7 @@ def test_write_tsv(tempdir):
 
 def test_git_version():
     v = _git_version()
-
-    # If this test file is tracked by git, then _git_version() should succeed
-    filedir, _ = op.split(__file__)
-    try:
-        with open(os.devnull, 'w') as fnull:
-            subprocess.check_output(['git', '-C', filedir, 'status'],
-                                    stderr=fnull)
-            assert v != "", "git_version failed to return"
-            assert v[:5] == "-git-", "Git version does not begin in -git-"
-    except (OSError, subprocess.CalledProcessError):  # pragma: no cover
-        assert v == ""
+    assert v
 
 
 def _myfunction(x):

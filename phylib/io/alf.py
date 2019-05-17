@@ -11,13 +11,12 @@ import csv
 import logging
 from pathlib import Path
 import os
-import os.path as op
 import shutil
 import sys
 
 import numpy as np
 
-from phylib.utils._misc import _read_tsv
+from phylib.utils._misc import _read_tsv, _ensure_dir_exists
 from phylib.io.array import _spikes_per_cluster, select_spikes, _unique, grouped_mean, _index_of
 
 logger = logging.getLogger(__name__)
@@ -63,7 +62,7 @@ def _create_if_possible(path, new_path):
     if Path(new_path).exists():
         logger.warning("Path %s already exists, skipping.", new_path)
         return False
-    new_path.parent.mkdir(parents=True, exist_ok=True)
+    _ensure_dir_exists(new_path.parent)
     return True
 
 
@@ -124,16 +123,11 @@ def _write_lines_tsv(path, lines_tsv):
 
 
 def _read_lines_tsv(path):
-    path = str(path)
-    if not op.exists(path):
+    path = Path(path)
+    if not path.exists():
         return
-    if sys.version_info[0] < 3:  # pragma: no cover
-        file = open(path, 'rb')
-    else:
-        file = open(path, 'r', newline='')
-    with file as f:
-        reader = csv.reader(f, delimiter='\t')
-        return list(reader)
+    with Path.open('r', newline='') as f:
+        return list(csv.reader(f, delimiter='\t'))
 
 
 #------------------------------------------------------------------------------
@@ -149,7 +143,7 @@ class EphysAlfCreator(object):
     def convert(self, out_path):
         """Convert from phy/KS format to ALF."""
         logger.info("Converting dataset to ALF.")
-        self.out_path = Path(op.realpath(out_path))
+        self.out_path = Path(out_path)
         if self.out_path == self.dir_path:
             raise IOError("The source and target directories cannot be the same.")
 

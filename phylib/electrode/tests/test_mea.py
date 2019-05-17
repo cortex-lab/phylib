@@ -6,7 +6,7 @@
 # Imports
 #------------------------------------------------------------------------------
 
-import os.path as op
+from pathlib import Path
 
 from pytest import raises
 import numpy as np
@@ -97,7 +97,7 @@ def test_library(tempdir):
     assert probe
     assert probe.channels == list(range(32))
 
-    path = op.join(tempdir, 'test.prb')
+    path = Path(tempdir) / 'test.prb'
     with raises(IOError):
         load_probe(path)
 
