@@ -410,7 +410,10 @@ class TemplateModel(object):
         if path is None:
             # Create spike_clusters file if it doesn't exist.
             tmp_path = self._find_path('spike_templates.npy', 'ks2/spikes.clusters.npy')
+            path = self.dir_path / 'spike_clusters.npy'
+            logger.debug("Copying from %s to %s.", tmp_path, path)
             shutil.copy(tmp_path, path)
+        assert path.exists()
         logger.debug("Loading spike clusters.")
         # NOTE: we make a copy in memory so that we can update this array
         # during manual clustering.
