@@ -365,7 +365,8 @@ class TemplateModel(object):
         out = np.zeros((n_clusters, self.n_samples_templates, self.n_channels))
         for i, cluster_id in enumerate(sorted(mean_waveforms)):
             b = mean_waveforms[cluster_id]
-            out[i, :, b.channel_ids] = b.data[0, ...].T
+            if b.data is not None:
+                out[i, :, b.channel_ids] = b.data[0, ...].T
         logger.debug("Save mean waveforms to `%s`.", path)
         np.save(path, out)
 
