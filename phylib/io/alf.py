@@ -7,12 +7,10 @@
 # Imports
 #------------------------------------------------------------------------------
 
-import csv
 import logging
 from pathlib import Path
 import os
 import shutil
-import sys
 
 import numpy as np
 
@@ -59,7 +57,7 @@ def _create_if_possible(path, new_path):
     if not Path(path).exists():
         logger.warning("Path %s does not exist, skipping.", path)
         return False
-    if Path(new_path).exists():
+    if Path(new_path).exists():  # pragma: no cover
         logger.warning("Path %s already exists, skipping.", new_path)
         return False
     _ensure_dir_exists(new_path.parent)
@@ -75,7 +73,7 @@ def _copy_if_possible(path, new_path):
 
 
 def _symlink_if_possible(path, new_path):
-    if not _create_if_possible(path, new_path):
+    if not _create_if_possible(path, new_path):  # pragma: no cover
         return False
     logger.info("Symlinking %s to %s.", path, new_path)
     os.symlink(path, new_path)
@@ -97,7 +95,7 @@ def _find_file_with_ext(path, ext):
     raise RuntimeError(
         "%d files with the extension %s were found in %s.",
         len(files), ext, path
-    )
+    )  # pragma: no cover
 
 
 def _load(path):
@@ -109,25 +107,6 @@ def _load(path):
     elif path.endswith('.bin'):
         # TODO: configurable dtype
         return np.fromfile(path, np.int16)
-
-
-def _write_lines_tsv(path, lines_tsv):
-    path = str(path)
-    if sys.version_info[0] < 3:  # pragma: no cover
-        file = open(path, 'wb')
-    else:
-        file = open(path, 'w', newline='')
-    with file as f:
-        writer = csv.writer(f, delimiter='\t')
-        writer.writerows(lines_tsv)
-
-
-def _read_lines_tsv(path):
-    path = Path(path)
-    if not path.exists():
-        return
-    with Path.open('r', newline='') as f:
-        return list(csv.reader(f, delimiter='\t'))
 
 
 #------------------------------------------------------------------------------
@@ -172,7 +151,7 @@ class EphysAlfCreator(object):
         # LFP data file.
         # TODO: support for different file extensions?
         lfp_path = _find_file_with_ext(self.dir_path, '.lf.bin')
-        if not lfp_path:
+        if not lfp_path:  # pragma: no cover
             logger.info("No LFP file, skipping symlinking.")
             return
         dst_path = self.out_path / ('lfp.raw' + lfp_path.suffix)
@@ -204,7 +183,7 @@ class EphysAlfCreator(object):
             template_peak_channels = np.argmax(tmp.max(axis=1) - tmp.min(axis=1), axis=1)
             assert template_peak_channels.shape == (n_templates,)
             self._save_npy(peak_channel_path.name, template_peak_channels)
-        else:
+        else:  # pragma: no cover
             template_peak_channels = np.load(peak_channel_path)
 
         waveform_duration_path = p / 'clusters.waveformDuration.npy'
@@ -249,5 +228,5 @@ class EphysAlfCreator(object):
         try:
             mean_waveforms = grouped_mean(waveforms, self.model.spike_clusters[spike_ids])
             self._save_npy('clusters.meanWaveforms.npy', mean_waveforms)
-        except IndexError as e:
+        except IndexError as e:  # pragma: no cover
             logger.warning("Failed to create the mean waveforms file: %s.", e)

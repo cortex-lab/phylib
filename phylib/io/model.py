@@ -37,7 +37,7 @@ def read_array(path):
     path = Path(path)
     arr_name = path.name
     ext = path.suffix
-    if ext == '.mat':
+    if ext == '.mat':  # pragma: no cover
         return sio.loadmat(path)[arr_name]
     elif ext == '.npy':
         return np.load(path, mmap_mode='r')
@@ -161,7 +161,7 @@ def _find_first_existing_path(*paths, multiple_ok=True):
     for path in paths:
         path = Path(path)
         if path.exists():
-            if out is not None and not multiple_ok:
+            if out is not None and not multiple_ok:  # pragma: no cover
                 raise IOError("Multiple conflicting files exist: %s." % ', '.join((out, path)))
             out = path
         if multiple_ok:
@@ -270,12 +270,10 @@ class TemplateModel(object):
             self.duration = self.traces.shape[0] / float(self.sample_rate)
         else:
             self.duration = self.spike_times[-1]
-        if self.spike_times[-1] > self.duration:
-            logger.debug("There are %d/%d spikes after the end of "
-                         "the recording.",
-                         np.sum(self.spike_times > self.duration),
-                         self.n_spikes,
-                         )
+        if self.spike_times[-1] > self.duration:  # pragma: no cover
+            logger.debug(
+                "There are %d/%d spikes after the end of the recording.",
+                np.sum(self.spike_times > self.duration), self.n_spikes)
 
         # Features.
         f = self._load_features()
@@ -400,7 +398,7 @@ class TemplateModel(object):
     def _load_spike_templates(self):
         path = self._find_path('spike_templates.npy', 'ks2/spikes.clusters.npy')
         out = self._read_array(path)
-        if out.dtype in (np.float32, np.float64):
+        if out.dtype in (np.float32, np.float64):  # pragma: no cover
             out = out.astype(np.int32)
         assert out.dtype in (np.uint32, np.int32, np.int64)
         return out
@@ -454,6 +452,7 @@ class TemplateModel(object):
             logger.debug("Templates are sparse.")
             assert cols.shape == (n_templates, n_channels_loc)
         except IOError:
+            logger.debug("Templates are dense.")
             cols = None
 
         return Bunch(data=data, cols=cols)
@@ -485,6 +484,7 @@ class TemplateModel(object):
 
         # Sparse structure: regular array with row and col indices.
         try:
+            logger.debug("Loading features.")
             data = self._read_array(self._find_path('pc_features.npy')).transpose((0, 2, 1))
             assert data.ndim == 3
             assert data.dtype in (np.float32, np.float64)
@@ -494,8 +494,10 @@ class TemplateModel(object):
 
         try:
             cols = self._read_array(self._find_path('pc_feature_ind.npy'))
+            logger.debug("Features are sparse.")
             assert cols.shape == (self.n_templates, n_channels_loc)
         except IOError:
+            logger.debug("Features are dense.")
             cols = None
 
         try:
@@ -510,6 +512,7 @@ class TemplateModel(object):
 
         # Sparse structure: regular array with row and col indices.
         try:
+            logger.debug("Loading template features.")
             data = self._read_array(self._find_path('template_features.npy'))
             assert data.dtype in (np.float32, np.float64)
             assert data.ndim == 2
@@ -519,9 +522,11 @@ class TemplateModel(object):
 
         try:
             cols = self._read_array(self._find_path('template_feature_ind.npy'))
+            logger.debug("Template features are sparse.")
             assert cols.shape == (self.n_templates, n_channels_loc)
         except IOError:
             cols = None
+            logger.debug("Template features are dense.")
 
         try:
             rows = self._read_array(self._find_path('template_feature_spike_ids.npy'))
@@ -600,6 +605,8 @@ class TemplateModel(object):
     def get_features(self, spike_ids, channel_ids):
         """Return sparse features for given spikes."""
         data = self.features
+        if data is None:
+            return
         _, n_channels_loc, n_pcs = data.shape
         ns = len(spike_ids)
         nc = len(channel_ids)
@@ -625,7 +632,9 @@ class TemplateModel(object):
         if self.features_cols is not None:
             assert self.features_cols.shape[1] == n_channels_loc
             cols = self.features_cols[self.spike_templates[spike_ids]]
-            features = from_sparse(features, cols, channel_ids)
+        else:
+            cols = np.tile(np.arange(n_channels_loc), (ns, 1))
+        features = from_sparse(features, cols, channel_ids)
 
         assert features.shape == (ns, nc, n_pcs)
         return features
@@ -633,6 +642,8 @@ class TemplateModel(object):
     def get_template_features(self, spike_ids):
         """Return sparse template features for given spikes."""
         data = self.template_features
+        if data is None:
+            return
         _, n_templates_loc = data.shape
         ns = len(spike_ids)
 
@@ -649,9 +660,9 @@ class TemplateModel(object):
         if self.template_features_cols is not None:
             assert self.template_features_cols.shape[1] == n_templates_loc
             cols = self.template_features_cols[self.spike_templates[spike_ids]]
-            template_features = from_sparse(template_features,
-                                            cols,
-                                            np.arange(self.n_templates),
-                                            )
+        else:
+            cols = np.tile(np.arange(n_templates_loc), (len(spike_ids), 1))
+        template_features = from_sparse(template_features, cols, np.arange(self.n_templates))
+
         assert template_features.shape[0] == ns
         return template_features

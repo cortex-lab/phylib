@@ -10,7 +10,7 @@
 import os
 from pathlib import Path
 import shutil
-from pytest import fixture
+from pytest import fixture, raises
 
 import numpy as np
 import numpy.random as nr
@@ -85,6 +85,8 @@ def test_creator(dataset):
         dataset.dat_path, sample_rate=2000, n_channels_dat=dataset.ncd)
 
     c = EphysAlfCreator(model)
+    with raises(IOError):
+        c.convert(dataset.tmp_dir)
     c.convert(out_path)
 
     # Check that the raw data has been renamed.

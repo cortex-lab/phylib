@@ -12,6 +12,7 @@ import numpy as np
 from numpy.testing import assert_equal as ae
 from pytest import raises
 
+from phylib.utils import Bunch
 from phylib.utils.testing import captured_output
 from ..model import from_sparse
 
@@ -50,7 +51,8 @@ def test_model_1(template_model):
     out = stdout.getvalue()
     print(out)
     assert 'sim_binary.dat' in out
-    assert '(300000, 32)' in out
+    if '(300000, 32)' not in out:
+        assert 'Data shape              None' in out
     assert '64' in out
 
 
@@ -61,17 +63,28 @@ def test_model_2(template_model):
     spike_ids = m.spikes_in_template(3)
 
     w = m.get_waveforms(spike_ids, channel_ids)
-    assert w.shape == (len(spike_ids), tmp.template.shape[0], len(channel_ids))
+    assert w is None or w.shape == (len(spike_ids), tmp.template.shape[0], len(channel_ids))
 
     f = m.get_features(spike_ids, channel_ids)
-    assert f.shape == (len(spike_ids), len(channel_ids), 3)
+    assert f is None or f.shape == (len(spike_ids), len(channel_ids), 3)
 
     tf = m.get_template_features(spike_ids)
-    assert tf.shape == (len(spike_ids), m.n_templates)
+    assert tf is None or tf.shape == (len(spike_ids), m.n_templates)
+
+
+def test_model_save(template_model):
+    m = template_model
+    m.save_metadata('test', {1: 1})
+    m.save_spike_clusters(m.spike_clusters)
+    m.save_mean_waveforms({1: Bunch(
+        channel_ids=np.arange(m.n_channels),
+        data=np.zeros((1, m.n_samples_templates, m.n_channels)))})
 
 
 def test_model_metadata(template_model):
     m = template_model
+    assert m.metadata_fields
+
     assert m.get_metadata('group').get(4, None) == 'good'
     assert m.get_metadata('unknown').get(4, None) is None
 
