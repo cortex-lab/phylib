@@ -9,7 +9,6 @@
 import numpy as np
 from numpy.testing import assert_array_equal as ae
 from pytest import raises, mark
-from six import string_types
 
 from .._misc import (_git_version,
                      _load_json, _save_json,
@@ -40,7 +39,7 @@ def test_qbytearray(tempdir):
     arr.append('3')
 
     encoded = _encode_qbytearray(arr)
-    assert isinstance(encoded, string_types)
+    assert isinstance(encoded, str)
     decoded = _decode_qbytearray(encoded)
     assert arr == decoded
 

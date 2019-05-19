@@ -4,5 +4,4 @@ matplotlib
 colorcet
 requests
 tqdm
-six
 joblib

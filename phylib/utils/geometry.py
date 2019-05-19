@@ -10,7 +10,6 @@
 import logging
 
 import numpy as np
-from six import string_types
 
 logger = logging.getLogger(__name__)
 
@@ -164,7 +163,7 @@ def _check_data_bounds(data_bounds):
 
 def _get_data_bounds(data_bounds, pos=None, length=None):
     """"Prepare data bounds, possibly using min/max of the data."""
-    if data_bounds is None or (isinstance(data_bounds, string_types) and
+    if data_bounds is None or (isinstance(data_bounds, str) and
                                data_bounds == 'auto'):
         if pos is not None and len(pos):
             m, M = pos.min(axis=0), pos.max(axis=0)

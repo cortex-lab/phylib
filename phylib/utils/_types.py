@@ -8,7 +8,6 @@
 #------------------------------------------------------------------------------
 
 import numpy as np
-from six import string_types, integer_types
 
 
 #------------------------------------------------------------------------------
@@ -57,7 +56,7 @@ def _as_scalars(arr):
 
 
 def _is_integer(x):
-    return isinstance(x, integer_types + (np.generic,))
+    return isinstance(x, (int, np.generic))
 
 
 def _is_float(x):
@@ -68,7 +67,7 @@ def _as_list(obj):
     """Ensure an object is a list."""
     if obj is None:
         return None
-    elif isinstance(obj, string_types):
+    elif isinstance(obj, str):
         return [obj]
     elif isinstance(obj, tuple):
         return list(obj)
@@ -92,7 +91,7 @@ def _as_array(arr, dtype=None):
         return None
     if isinstance(arr, np.ndarray) and dtype is None:
         return arr
-    if isinstance(arr, integer_types + (float,)):
+    if isinstance(arr, (int, float)):
         arr = [arr]
     out = np.asarray(arr)
     if dtype is not None:

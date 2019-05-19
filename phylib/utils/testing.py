@@ -7,13 +7,13 @@
 #------------------------------------------------------------------------------
 
 from contextlib import contextmanager
+from io import StringIO
 import logging
 import os
 import sys
 
 from numpy.testing import assert_array_equal as ae
 from numpy.testing import assert_allclose as ac
-from six import StringIO
 
 from ._types import _is_array_like
 

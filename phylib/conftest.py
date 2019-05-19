@@ -9,6 +9,7 @@
 import logging
 import os
 from pathlib import Path
+from tempfile import TemporaryDirectory
 import warnings
 
 import matplotlib
@@ -16,7 +17,6 @@ import numpy as np
 from pytest import fixture
 
 from phylib import add_default_handler
-from phylib.utils.tempdir import TemporaryDirectory
 
 
 #------------------------------------------------------------------------------

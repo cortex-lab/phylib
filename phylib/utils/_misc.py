@@ -18,7 +18,6 @@ import subprocess
 from textwrap import dedent
 
 import numpy as np
-from six import string_types, exec_
 
 from ._types import _is_integer
 
@@ -76,7 +75,7 @@ def _intify_keys(d):
     assert isinstance(d, dict)
     out = {}
     for k, v in d.items():
-        if isinstance(k, string_types) and k.isdigit():
+        if isinstance(k, str) and k.isdigit():
             k = int(k)
         out[k] = v
     return out
@@ -146,7 +145,7 @@ def _read_python(path):
         raise IOError("Path %s does not exist.", path)
     contents = path.read_text()
     metadata = {}
-    exec_(contents, {}, metadata)
+    exec(contents, {}, metadata)
     metadata = {k.lower(): v for (k, v) in metadata.items()}
     return metadata
 

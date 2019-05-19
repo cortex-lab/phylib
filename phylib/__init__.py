@@ -9,11 +9,10 @@
 #------------------------------------------------------------------------------
 
 import atexit
+from io import StringIO
 import logging
 import os.path as op
 import sys
-
-from six import StringIO
 
 from .utils._misc import _git_version
 from .utils.event import connect, unconnect, emit

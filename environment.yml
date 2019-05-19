@@ -8,5 +8,4 @@ dependencies:
     - colorcet
     - requests
     - tqdm
-    - six
     - joblib
