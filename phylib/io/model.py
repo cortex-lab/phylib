@@ -73,10 +73,8 @@ def _dat_n_samples(filename, dtype=None, n_channels=None, offset=None):
 def _dat_to_traces(dat_path, n_channels=None, dtype=None, offset=None):
     assert dtype is not None
     assert n_channels is not None
-    n_samples = _dat_n_samples(
-        dat_path, n_channels=n_channels, dtype=dtype, offset=offset)
-    return np.memmap(
-        dat_path, dtype=dtype, shape=(n_samples, n_channels), offset=offset)
+    n_samples = _dat_n_samples(dat_path, n_channels=n_channels, dtype=dtype, offset=offset)
+    return np.memmap(dat_path, dtype=dtype, shape=(n_samples, n_channels), offset=offset)
 
 
 def load_raw_data(path=None, n_channels_dat=None, dtype=None, offset=None):
@@ -388,9 +386,12 @@ class TemplateModel(object):
             offset=self.offset,
         )
         if traces is not None:
+            if self.dtype == np.int16:
+                scaling = 1. / 255
+            else:
+                scaling = None
             # Find the scaling factor for the traces.
-            traces = _concatenate_virtual_arrays(
-                [traces], channel_map)
+            traces = _concatenate_virtual_arrays([traces], channel_map, scaling=scaling)
         return traces
 
     def _load_amplitudes(self):
@@ -560,11 +561,7 @@ class TemplateModel(object):
                   )
         return b
 
-    def _get_template_dense(self, template_id):
-        """Return data for one template."""
-        template_w = self.sparse_templates.data[template_id, ...]
-        template = self._unwhiten(template_w).astype(np.float32)
-        assert template.ndim == 2
+    def _find_best_channels(self, template):
         # Compute the template amplitude on each channel.
         amplitude = template.max(axis=0) - template.min(axis=0)
         # Find the peak channel.
@@ -577,6 +574,15 @@ class TemplateModel(object):
             self.channel_positions, best_channel, self.n_closest_channels)
         # Keep the intersection.
         channel_ids = np.intersect1d(peak_channels, close_channels)
+        return channel_ids, amplitude, best_channel
+
+    def _get_template_dense(self, template_id, channel_ids=None):
+        """Return data for one template."""
+        template_w = self.sparse_templates.data[template_id, ...]
+        template = self._unwhiten(template_w).astype(np.float32)
+        assert template.ndim == 2
+        channel_ids_, amplitude, best_channel = self._find_best_channels(template)
+        channel_ids = channel_ids if channel_ids is not None else channel_ids_
         template = template[:, channel_ids]
         assert template.ndim == 2
         assert template.shape[1] == channel_ids.shape[0]
@@ -587,11 +593,11 @@ class TemplateModel(object):
                   )
         return b
 
-    def get_template(self, template_id):
+    def get_template(self, template_id, channel_ids=None):
         if self.sparse_templates.cols is not None:
             return self._get_template_sparse(template_id)
         else:
-            return self._get_template_dense(template_id)
+            return self._get_template_dense(template_id, channel_ids=channel_ids)
 
     def get_waveforms(self, spike_ids, channel_ids):
         """Return several waveforms on specified channels."""

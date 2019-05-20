@@ -222,8 +222,7 @@ def read_array(path, mmap_mode=None):
     file_ext = path.suffix
     if file_ext == '.npy':
         return np.load(str(path), mmap_mode=mmap_mode)
-    raise NotImplementedError("The file extension `{}` ".format(file_ext) +
-                              "is not currently supported.")
+    raise NotImplementedError("The file extension `{}` is not currently supported." % file_ext)
 
 
 def write_array(path, arr):
@@ -281,9 +280,7 @@ class ConcatenatedArrays(object):
         self.arrs = arrs
         # Reordering of the columns.
         self.cols = cols
-        self.offsets = np.concatenate([[0], np.cumsum([arr.shape[0]
-                                                       for arr in arrs])],
-                                      axis=0)
+        self.offsets = np.concatenate([[0], np.cumsum([arr.shape[0] for arr in arrs])], axis=0)
         self.dtype = arrs[0].dtype if arrs else None
         self.scaling = scaling
 
@@ -341,8 +338,7 @@ class ConcatenatedArrays(object):
             logger.warning(
                 "Loading a full virtual array: this might be slow and "
                 "something might be wrong.")
-            l += [self.arrs[r][...] for r in range(rec_start + 1,
-                                                   rec_stop)]
+            l += [self.arrs[r][...] for r in range(rec_start + 1, rec_stop)]
         l += [chunk_stop]
         # Apply the rest of the index.
         return _fill_index(np.concatenate(l, axis=0), item)[..., cols]
@@ -360,8 +356,7 @@ class ConcatenatedArrays(object):
 
 def _concatenate_virtual_arrays(arrs, cols=None, scaling=None):
     """Return a virtual concatenate of several NumPy arrays."""
-    return None if not len(arrs) else ConcatenatedArrays(arrs, cols,
-                                                         scaling=scaling)
+    return None if not len(arrs) else ConcatenatedArrays(arrs, cols, scaling=scaling)
 
 
 # -----------------------------------------------------------------------------
@@ -416,9 +411,7 @@ def chunk_bounds(n_samples, chunk_size, overlap=0):
 def excerpts(n_samples, n_excerpts=None, excerpt_size=None):
     """Yield (start, end) where start is included and end is excluded."""
     assert n_excerpts >= 2
-    step = _excerpt_step(n_samples,
-                         n_excerpts=n_excerpts,
-                         excerpt_size=excerpt_size)
+    step = _excerpt_step(n_samples, n_excerpts=n_excerpts, excerpt_size=excerpt_size)
     for i in range(n_excerpts):
         start = i * step
         if start >= n_samples:
@@ -438,8 +431,7 @@ def data_chunk(data, chunk, with_overlap=False):
         else:
             i, j = chunk[2:]
     else:
-        raise ValueError("'chunk' should have 2 or 4 elements, "
-                         "not {0:d}".format(len(chunk)))
+        raise ValueError("'chunk' should have 2 or 4 elements, not {0:d}".format(len(chunk)))
     return data[i:j, ...]
 
 
@@ -452,10 +444,9 @@ def get_excerpts(data, n_excerpts=None, excerpt_size=None):
         return data[:0]
     elif n_excerpts == 1:
         return data[:excerpt_size]
-    out = np.concatenate([data_chunk(data, chunk)
-                          for chunk in excerpts(len(data),
-                                                n_excerpts=n_excerpts,
-                                                excerpt_size=excerpt_size)])
+    out = np.concatenate([
+        data_chunk(data, chunk)
+        for chunk in excerpts(len(data), n_excerpts=n_excerpts, excerpt_size=excerpt_size)])
     assert len(out) <= n_excerpts * excerpt_size
     return out
 
@@ -493,8 +484,8 @@ def _spikes_per_cluster(spike_clusters, spike_ids=None):
 
     # NOTE: we don't have to sort abs_spikes[...] here because the argsort
     # using 'mergesort' above is stable.
-    spikes_in_clusters = {clusters[i]: abs_spikes[idx[i]:idx[i + 1]]
-                          for i in range(len(clusters) - 1)}
+    spikes_in_clusters = {
+        clusters[i]: abs_spikes[idx[i]:idx[i + 1]] for i in range(len(clusters) - 1)}
     spikes_in_clusters[clusters[-1]] = abs_spikes[idx[-1]:]
 
     return spikes_in_clusters
@@ -572,9 +563,7 @@ def select_spikes(cluster_ids=None,
                     spike_ids = regular_subset(spike_ids, n_spikes_max=n)
                 else:
                     # Batch selections of spikes.
-                    spike_ids = get_excerpts(spike_ids,
-                                             n // batch_size,
-                                             batch_size)
+                    spike_ids = get_excerpts(spike_ids, n // batch_size, batch_size)
             elif subset == 'random' and len(spike_ids) > n:
                 # Random subselection.
                 spike_ids = np.random.choice(spike_ids, n, replace=False)
