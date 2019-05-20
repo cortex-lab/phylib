@@ -7,9 +7,15 @@
 #------------------------------------------------------------------------------
 
 import colorcet as cc
+import logging
+
+from phylib.io.array import _index_of
+
 import numpy as np
 from numpy.random import uniform
 from matplotlib.colors import rgb_to_hsv, hsv_to_rgb
+
+logger = logging.getLogger(__name__)
 
 
 #------------------------------------------------------------------------------
@@ -101,29 +107,130 @@ def _spike_colors(spike_clusters=None, masks=None, alpha=None):
     return c
 
 
-class ColorSelector(object):
-    """Return the color of a cluster.
+def _validate_colormap(colormap):
+    assert colormap.ndim == 2
+    n = colormap.shape[0]
+    if colormap.shape[1] == 3:
+        colormap = np.c_[colormap, np.ones((n, 1))]
+    assert colormap.shape[1] == 4
+    return colormap
 
-    If the cluster belongs to the selection, returns the colormap color.
 
-    Otherwise, return a random color and remember this color.
+def _continuous_colormap(colormap, values, vmin=None, vmax=None):
+    colormap = _validate_colormap(colormap)
+    n = colormap.shape[0]
+    vmin = vmin if vmin is not None else values.min()
+    vmax = vmax if vmax is not None else values.max()
+    assert vmin is not None
+    assert vmax is not None
+    denom = vmax - vmin
+    denom = denom if denom != 0 else 1
+    i = np.round((n - 1) * (values - vmin) / denom).astype(np.int32)
+    return colormap[i, :]
 
-    """
-    def __init__(self):
-        self._colors = {}
 
-    def get(self, clu, cluster_ids=None, cluster_group=None, alpha=None):
-        alpha = alpha or .5
-        if cluster_group in ('noise', 'mua'):
-            color = (.5,) * 4
-        elif cluster_ids and clu in cluster_ids:
-            i = cluster_ids.index(clu)
-            color = _colormap(i, alpha)
-        else:
-            if clu in self._colors:
-                return self._colors[clu]
-            color = _random_color(v_range=(.5, .75))
-            color = tuple(color) + (alpha,)
-            self._colors[clu] = color
-        assert len(color) == 4
-        return color
+def _categorical_colormap(colormap, values, vmin=None, vmax=None):
+    colormap = _validate_colormap(colormap)
+    n = colormap.shape[0]
+    if vmin is None and vmax is None:
+        # Find unique values and keep the order.
+        _, idx = np.unique(values, return_index=True)
+        lookup = values[np.sort(idx)]
+        x = _index_of(values, lookup)
+    else:
+        x = values
+    return colormap[x % n, :]
+
+
+def _make_colorcet_colormap(name, categorical=False):
+    f = _continuous_colormap if not categorical else _categorical_colormap
+
+    def _colormap(values, vmin=None, vmax=None):
+        colormap = np.array(getattr(cc, name))
+        return f(colormap, values, vmin=vmin, vmax=vmax)
+
+    return _colormap
+
+
+# Built-in colormaps.
+rainbow = _make_colorcet_colormap('rainbow_bgyr_35_85_c73', False)
+linear = _make_colorcet_colormap('linear_wyor_100_45_c55', False)
+diverging = _make_colorcet_colormap('diverging_linear_bjy_30_90_c45', False)
+categorical = _make_colorcet_colormap('glasbey_bw_minc_20_minl_30', True)
+
+
+def get_colormap(colormap):
+    """Get a colormap as a function values => (n, 4) RGBA array."""
+    if isinstance(colormap, str):
+        return globals().get(colormap, _make_colorcet_colormap(colormap))
+    return colormap
+
+
+class ClusterColorSelector(object):
+    """Assign a color to clusters depending on cluster labels or metrics."""
+    color_field = 'cluster'
+    _colormap = 'categorical'
+
+    def __init__(
+            self, cluster_labels=None, cluster_metrics=None,
+            field=None, colormap=None, cluster_ids=None):
+        self.cluster_ids = None
+        self.cluster_labels = cluster_labels or {}
+        self.cluster_metrics = cluster_metrics or {}
+        # Used to initialize the value range for the clusters.
+        assert cluster_ids is not None
+        self.cluster_ids = cluster_ids
+        self.set_color_field(field=field, colormap=colormap)
+
+    def set_color_field(self, field=None, colormap=None):
+        """Set the field used to choose the cluster colors, and the associated colormap."""
+        self._colormap = get_colormap(colormap or self._colormap)  # self.colormap is a function
+        self.color_field = field or self.color_field
+        # Recompute the value range.
+        self.set_cluster_ids(self.cluster_ids)
+
+    def set_cluster_ids(self, cluster_ids):
+        """Precompute the value range for all clusters."""
+        self.cluster_ids = cluster_ids
+        values = self.get_values(self.cluster_ids)
+        self.vmin, self.vmax = values.min(), values.max()
+
+    def colormap(self, values):
+        return self._colormap(values, vmin=self.vmin, vmax=self.vmax)
+
+    def _get_cluster_value(self, cluster_id):
+        """Return the field value for a given cluster."""
+        field = self.color_field
+        if field == 'cluster':
+            return cluster_id
+        elif field in self.cluster_labels:
+            return self.cluster_labels.get(field, {}).get(cluster_id, None)
+        elif field in self.cluster_metrics:
+            return self.cluster_metrics.get(field, lambda cl: None)(cluster_id)
+        logger.warning("The field %s is not an existing cluster label or metrics.", field)
+        return 0
+
+    def get(self, cluster_id, alpha=None):
+        """Return the color of a given cluster."""
+        assert self.cluster_ids is not None
+        assert self._colormap is not None
+        val = self._get_cluster_value(cluster_id)
+        col = self.colormap(np.array([val]))[0].tolist()
+        if alpha is not None:
+            col[3] = alpha
+        return tuple(col)
+
+    def get_values(self, cluster_ids):
+        return np.array([self._get_cluster_value(cluster_id) for cluster_id in cluster_ids])
+
+    def get_colors(self, cluster_ids):
+        """Return cluster colors using a given field ('cluster', label, or metrics).
+
+        colormap is a function values => colors
+
+        """
+        # TODO: categorical values as strings
+        values = self.get_values(cluster_ids)
+        colors = self.colormap(values)
+        assert colors.shape == (len(values), 4)
+        return colors
