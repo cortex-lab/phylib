@@ -13,7 +13,7 @@ import numpy as np
 
 from phylib.io.array import _flatten
 from phylib.utils.geometry import _get_boxes, range_transform
-from phylib.utils._color import _COLORMAP
+from phylib.utils._color import selected_cluster_color
 
 
 #------------------------------------------------------------------------------
@@ -56,7 +56,7 @@ def _iter_disks(positions, cluster_channels=None):
     """
 
     color_masked = _rgba((128,) * 3, 1.)
-    color_umasked = lambda clu: _rgba(_COLORMAP[clu % len(_COLORMAP)], 1)
+    color_umasked = lambda clu: _rgba(selected_cluster_color(clu)[:3], 1)
 
     size_masked = 5
     size_unmasked = 7

@@ -36,5 +36,5 @@ def test_captured_logging():
 def test_assert_equal():
     d = {'a': {'b': np.random.rand(5), 3: 'c'}, 'b': 2.}
     d_bis = deepcopy(d)
-    d_bis['a']['b'] = d_bis['a']['b'] + 1e-10
+    d_bis['a']['b'] = d_bis['a']['b'] + 1e-16
     _assert_equal(d, d_bis)
