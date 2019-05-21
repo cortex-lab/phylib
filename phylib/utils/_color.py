@@ -99,7 +99,10 @@ def _continuous_colormap(colormap, values, vmin=None, vmax=None):
     assert vmax is not None
     denom = vmax - vmin
     denom = denom if denom != 0 else 1
-    i = np.round((n - 1) * (values - vmin) / denom).astype(np.int32)
+    # NOTE: clipping is necessary when a view using color selector (like the raster view)
+    # is updated right after a clustering update, but before the vmax had a chance to
+    # be updated.
+    i = np.clip(np.round((n - 1) * (values - vmin) / denom).astype(np.int32), 0, n - 1)
     return colormap[i, :]
 
 
