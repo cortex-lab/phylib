@@ -14,7 +14,7 @@ from phylib.utils import Bunch
 from .._color import (_is_bright, _random_bright_color, _spike_colors, add_alpha,
                       selected_cluster_color, _hex_to_triplet,
                       _continuous_colormap, _categorical_colormap,
-                      ClusterColorSelector,
+                      ClusterColorSelector, colormaps,
                       )
 
 
@@ -78,11 +78,28 @@ def test_cluster_color_selector():
     ae(c.get_values([None, 0]), np.arange(2))
 
     for field, colormap in (
-            ('label', 'linear'), ('quality', 'rainbow'),
-            ('cluster', 'categorical'), ('nonexisting', 'diverging')):
+            ('label', 'linear'),
+            ('quality', 'rainbow'),
+            ('cluster', 'categorical'),
+            ('nonexisting', 'diverging')):
         c.set_color_mapping(field=field, colormap=colormap)
         colors = c.get_colors(cluster_ids)
         assert colors.shape == (3, 4)
+
+    # Get the state.
+    assert c.state == {'color_field': 'nonexisting', 'colormap': 'diverging', 'categorical': True}
+
+    # Set the state.
+    state = Bunch(c.state)
+    state.color_field = 'label'
+    state.colormap = colormaps.rainbow
+    state.categorical = False
+    c.set_state(state)
+
+    # Check that the state was correctly set.
+    assert c._color_field == 'label'
+    ae(c._colormap, colormaps.rainbow)
+    assert c._categorical is False
 
 
 def test_cluster_color_group():

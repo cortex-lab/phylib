@@ -191,6 +191,24 @@ class ClusterColorSelector(object):
         # self._colormap = colormap if colormap is not None else self._colormap
         self.set_color_mapping(field=field, colormap=colormap, categorical=categorical)
 
+    @property
+    def state(self):
+        colormap_name = None
+        # Find the colormap name from the colormap array.
+        for cname, arr in colormaps.items():
+            if self._colormap.shape == arr.shape and np.allclose(self._colormap, arr):
+                colormap_name = cname
+                break
+        return Bunch(
+            color_field=self._color_field,
+            colormap=colormap_name,
+            categorical=self._categorical,
+        )
+
+    def set_state(self, state):
+        self.set_color_mapping(
+            field=state.color_field, colormap=state.colormap, categorical=state.categorical)
+
     def set_color_mapping(self, field=None, colormap=None, categorical=True):
         """Set the field used to choose the cluster colors, and the associated colormap."""
         if isinstance(colormap, str):
