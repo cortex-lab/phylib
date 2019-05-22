@@ -16,8 +16,8 @@ import numpy as np
 import numpy.random as nr
 
 from phylib.utils._misc import _write_tsv
-from ..alf import _FILE_RENAMES, _load, EphysAlfCreator
-from ..model import TemplateModel
+from phylib.io.alf import _FILE_RENAMES, _load, EphysAlfCreator
+from phylib.io.model import TemplateModel
 
 
 #------------------------------------------------------------------------------
@@ -43,9 +43,10 @@ class Dataset(object):
         _write_tsv(p / 'cluster_group.tsv', 'group', {2: 'good', 3: 'mua', 5: 'noise'})
 
         # Raw data
-        self.dat_path = p / 'rawdata.npy'
-        np.save(self.dat_path, np.random.normal(size=(self.ncd, self.nc)))
-
+        self.dat_path = p / 'mydata.ap.bin'
+        apdata = np.random.normal(size=(self.ncd, self.nc)).astype(np.int16)
+        with self.dat_path.open('wb') as f:
+            apdata.tofile(f)
         # LFP data.
         lfdata = (100 * np.random.normal(size=(1000, self.nc))).astype(np.int16)
         with (p / 'mydata.lf.bin').open('wb') as f:
@@ -73,7 +74,7 @@ def test_ephys_1(dataset):
     assert dataset._load('channel_map.npy').shape == (dataset.nc, 1)
     assert len(dataset._load('cluster_group.tsv')) == 3
 
-    assert dataset._load('rawdata.npy').shape == (1000, dataset.nc)
+    assert dataset._load('mydata.ap.bin').shape == (1000 * dataset.nc,)
     assert dataset._load('mydata.lf.bin').shape == (1000 * dataset.nc,)
 
 
@@ -90,7 +91,7 @@ def test_creator(dataset):
     c.convert(out_path)
 
     # Check that the raw data has been renamed.
-    assert (out_path / 'ephys.raw.npy').exists()
+    assert (out_path / 'ephys.raw.bin').exists()
     assert (out_path / 'lfp.raw.bin').exists()
 
     # Check all renames.
