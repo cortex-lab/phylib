@@ -152,18 +152,25 @@ class EphysAlfCreator(object):
             path = Path(path)
             dst_path = self.out_path / ('ephys.raw' + path.suffix)
             _symlink_if_possible(path, dst_path)
+            # Meta file attached to raw data can be copied as it's small
+            meta_file = path.parent / (path.stem + '.meta')
+            if meta_file.exists():
+                shutil.copyfile(meta_file, self.out_path / 'ephys.raw.meta')
 
     def symlink_lfp_data(self):
         """Symlink the LFP data file."""
         # LFP data file.
         # TODO: support for different file extensions?
-        lfp_path = _find_file_with_ext(self.dir_path, '.lf.bin')
-        if not lfp_path:  # pragma: no cover
+        lfp_path = Path(str(self.model.dat_path).replace('.ap.bin', '.lf.bin'))
+        if not lfp_path.exists():  # pragma: no cover
             logger.info("No LFP file, skipping symlinking.")
             return
         dst_path = self.out_path / ('lfp.raw' + lfp_path.suffix)
         _symlink_if_possible(lfp_path, dst_path)
-
+        # Meta file attached to raw data can be copied
+        meta_file = lfp_path .parent / (lfp_path.stem + '.meta')
+        if meta_file.exists():
+            shutil.copyfile(meta_file, self.out_path / 'lfp.raw.meta')
     # File creation
     # -------------------------------------------------------------------------
 
