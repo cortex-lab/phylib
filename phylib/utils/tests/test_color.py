@@ -11,11 +11,10 @@ import numpy as np
 from numpy.testing import assert_almost_equal as ae
 
 from phylib.utils import Bunch
-from .._color import (_is_bright, _random_bright_color, _spike_colors, add_alpha,
-                      selected_cluster_color, _hex_to_triplet,
-                      _continuous_colormap, _categorical_colormap,
-                      ClusterColorSelector, colormaps,
-                      )
+from .._color import (
+    _is_bright, _random_bright_color, _spike_colors, add_alpha, selected_cluster_color,
+    _hex_to_triplet, _continuous_colormap, _categorical_colormap, ClusterColorSelector,
+    colormaps, _add_selected_clusters_colors)
 
 
 #------------------------------------------------------------------------------
@@ -114,3 +113,14 @@ def test_cluster_color_group():
     c.set_color_mapping(field='group', colormap='cluster_group')
     colors = c.get_colors(cluster_ids)
     assert colors.shape == (3, 4)
+
+
+def test_add_selected_clusters_colors():
+    cluster_colors = np.tile(np.c_[np.arange(3)], (1, 3))
+    cluster_colors = add_alpha(cluster_colors)
+    cluster_colors_sel = _add_selected_clusters_colors([1], [0, 1, 3], cluster_colors)
+    ae(cluster_colors_sel[[0]], add_alpha(np.zeros((1, 3))))
+    ae(cluster_colors_sel[[2]], add_alpha(2 * np.ones((1, 3))))
+    # Cluster at index 0 is selected, should be in blue.
+    r, g, b, _ = cluster_colors_sel[1]
+    assert b > g > r

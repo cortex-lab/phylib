@@ -161,6 +161,17 @@ def selected_cluster_color(i, alpha=1.):
     return add_alpha(tuple(colormaps.default[i % len(colormaps.default)]), alpha=alpha)
 
 
+def _add_selected_clusters_colors(selected_clusters, cluster_ids, cluster_colors):
+    """Take an array with colors of clusters as input, and add colors of selected clusters."""
+    # Find the index of the selected clusters within the self.cluster_ids.
+    clu_idx = _index_of(selected_clusters, cluster_ids)
+    # Get the colors of the selected clusters.
+    colormap = _categorical_colormap(colormaps.default, clu_idx)
+    # Inject those colors in cluster_colors.
+    cluster_colors[clu_idx] = add_alpha(colormap, 1)
+    return cluster_colors
+
+
 #------------------------------------------------------------------------------
 # Cluster color selector
 #------------------------------------------------------------------------------
