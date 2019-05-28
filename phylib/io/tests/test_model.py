@@ -81,7 +81,7 @@ def test_model_save(template_model):
         data=np.zeros((1, m.n_samples_templates, m.n_channels)))})
 
 
-def test_model_metadata(template_model):
+def test_model_metadata_1(template_model):
     m = template_model
     assert m.metadata_fields
 
@@ -92,3 +92,13 @@ def test_model_metadata(template_model):
     m.save_metadata('quality', {6: 3})
     m.metadata = m._load_metadata()
     assert m.get_metadata('quality').get(6, None) == '3'
+
+
+def test_model_metadata_2(template_model):
+    m = template_model
+    assert m.metadata_fields
+
+    m.save_metadata('quality', {0: None, 1: 1})
+    m.metadata = m._load_metadata()
+    assert m.get_metadata('quality').get(0, None) is None
+    assert m.get_metadata('quality').get(1, None) == '1'
