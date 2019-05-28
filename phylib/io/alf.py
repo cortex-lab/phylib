@@ -42,11 +42,16 @@ _FILE_RENAMES = [
     ('amplitudes.npy', 'spikes.amps.npy'),
     ('channel_positions.npy', 'channels.sitePositions.npy'),
     ('templates.npy', 'clusters.templateWaveforms.npy'),
+    ('cluster_Amplitude.tsv', 'clusters.amps.tsv'),
     ('channel_map.npy', 'channels.rawRow.npy'),
     ('spike_templates.npy', 'ks2/spikes.clusters.npy'),
     ('cluster_ContamPct.tsv', 'ks2/clusters.ContamPct.tsv'),
     ('cluster_group.tsv', 'ks2/clusters.phyAnnotation.tsv'),
     ('cluster_KSLabel.tsv', 'ks2/clusters.group.tsv'),
+]
+
+FILE_DELETES = [
+    'temp_wh.dat',  # potentially large file that will clog the servers
 ]
 
 
@@ -135,14 +140,22 @@ class EphysAlfCreator(object):
         # New files.
         self.make_spike_times()
         self.make_cluster_waveforms()
-        self.make_cluster_amps()
         self.make_depths()
         self.make_mean_waveforms()
+
+        # Clean up
+        self.rm_files()
 
     def copy_files(self):
         """Make the file renames (actually copies into a new directory)."""
         for fn0, fn1 in _FILE_RENAMES:
             _copy_if_possible(self.dir_path / fn0, self.out_path / fn1)
+
+    def rm_files(self):
+        for fn0 in FILE_DELETES:
+            fn = self.dir_path.joinpath(fn0)
+            if fn.exists():
+                fn.unlink()
 
     def symlink_raw_data(self):
         """Symlink the raw data files."""
@@ -183,15 +196,6 @@ class EphysAlfCreator(object):
         *samples*, and not in seconds."""
         self._save_npy('spikes.times.npy', self.model.spike_times)
 
-    def make_cluster_amps(self):
-        """ Ks2 saves cluster amplitudes in tsv, convert to npy """
-        tsv_file = self.dir_path / 'cluster_Amplitude.tsv'
-        pass
-        # data = np.genfromtxt(fname=tsv_file, delimiter="\t", skip_header=1)
-        # assert(data[0, 0] == 0)
-        # assert(data[-1, 0] == data.shape[0]
-        # np.save(self.out_path / 'clusters.amps.tsv', data[:, 1].astype('float32'))
-        
     def make_cluster_waveforms(self):
         """Return the channel index with the highest template amplitude, for
         every template."""
@@ -249,28 +253,9 @@ class EphysAlfCreator(object):
             max_n_spikes_per_cluster=100,
             spikes_per_cluster=lambda clu: self.spc[clu],
             subset='random')
-        waveforms = self.model.get_waveforms(spike_ids[0:1], np.arange(self.model.n_channels))
+        waveforms = self.model.get_waveforms(spike_ids, np.arange(self.model.n_channels))
         try:
             mean_waveforms = grouped_mean(waveforms, self.model.spike_clusters[spike_ids])
             self._save_npy('clusters.meanWaveforms.npy', mean_waveforms)
         except IndexError as e:  # pragma: no cover
             logger.warning("Failed to create the mean waveforms file: %s.", e)
-
-
-        self.model.spike_clusters
-
-        ##
-        
-        # initialize the mean_waveform array: [nc, nsw, nch]
-        mean_waveforms = np.zeros((np.max(self.model.spike_clusters) + 1,
-                                   self.model.n_samples_templates,
-                                   self.model.n_channels))
-        
-        is_ = np.argsort(self.model.spike_times).astype('int32')
-        st = np.round(self.model.spike_times[is_] * self.model.sample_rate).astype('int32')
-        
-        # an issue here is that it won't work if data is in several files
-        self.model.traces.arrs[0]
-        
-        
-        
