@@ -282,6 +282,8 @@ class TemplateModel(object):
             self.features_rows = f.rows
         else:
             self.features = None
+            self.features_cols = None
+            self.features_rows = None
 
         tf = self._load_template_features()
         if tf is not None:
