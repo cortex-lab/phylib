@@ -381,19 +381,20 @@ class TemplateModel(object):
         return self._read_array(path)
 
     def _load_traces(self, channel_map=None):
-        traces = load_raw_data(
-            self.dat_path,
-            n_channels_dat=self.n_channels_dat,
-            dtype=self.dtype,
-            offset=self.offset,
-        )
-        if traces is not None:
-            if self.dtype == np.int16:
-                scaling = 1. / 255
-            else:
-                scaling = None
-            # Find the scaling factor for the traces.
-            traces = _concatenate_virtual_arrays([traces], channel_map, scaling=scaling)
+        if not self.dat_path:
+            return
+        paths = self.dat_path
+        # Make sure we have a list of paths (virtually-concatenated).
+        if not isinstance(paths, list):
+            paths = [paths]
+        n = self.n_channels_dat
+        # Memmap all dat files and concatenate them virtually.
+        traces = [
+            load_raw_data(path, n_channels_dat=n, dtype=self.dtype, offset=self.offset)
+            for path in paths]
+        traces = [_ for _ in traces if _ is not None]
+        scaling = 1. / 255 if self.dtype == np.int16 else None
+        traces = _concatenate_virtual_arrays(traces, channel_map, scaling=scaling)
         return traces
 
     def _load_amplitudes(self):
