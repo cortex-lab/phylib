@@ -15,7 +15,6 @@ import numpy.random as nr
 #------------------------------------------------------------------------------
 
 def artificial_waveforms(n_spikes=None, n_samples=None, n_channels=None):
-    # TODO: more realistic waveforms.
     return .25 * nr.normal(size=(n_spikes, n_samples, n_channels))
 
 
@@ -30,7 +29,6 @@ def artificial_masks(n_spikes=None, n_channels=None):
 
 
 def artificial_traces(n_samples, n_channels):
-    # TODO: more realistic traces.
     return .25 * nr.normal(size=(n_samples, n_channels))
 
 
