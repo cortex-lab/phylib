@@ -206,7 +206,7 @@ def _write_tsv(path, field_name, data):
 
 def _git_version():
     curdir = os.getcwd()
-    os.chdir(Path(__file__).parent)
+    os.chdir(str(Path(__file__).parent))
     try:
         with open(os.devnull, 'w') as fnull:
             version = ('-git-' + subprocess.check_output(
