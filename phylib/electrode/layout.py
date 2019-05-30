@@ -13,7 +13,7 @@ import numpy as np
 
 from phylib.io.array import _flatten
 from phylib.utils.geometry import _get_boxes, range_transform
-from phylib.utils._color import selected_cluster_color
+from phylib.utils.color import selected_cluster_color
 
 
 #------------------------------------------------------------------------------
