@@ -33,14 +33,14 @@ logger = logging.getLogger(__name__)
 # Utility functions
 #------------------------------------------------------------------------------
 
-def read_array(path):
+def read_array(path, mmap_mode=None):
     path = Path(path)
     arr_name = path.name
     ext = path.suffix
     if ext == '.mat':  # pragma: no cover
         return sio.loadmat(path)[arr_name]
     elif ext == '.npy':
-        return np.load(path, mmap_mode='r')
+        return np.load(path, mmap_mode=mmap_mode)
 
 
 def write_array(name, arr):
@@ -293,6 +293,8 @@ class TemplateModel(object):
         else:
             self.template_features = None
 
+        self.spike_attributes = self._load_spike_attributes()
+
         self.metadata = self._load_metadata()
 
     def _create_waveform_loader(self):
@@ -310,10 +312,10 @@ class TemplateModel(object):
         return _find_first_existing_path(
             *(self.dir_path / name for name in names), multiple_ok=multiple_ok)
 
-    def _read_array(self, path):
+    def _read_array(self, path, mmap_mode=None):
         if not path:
             raise IOError(path)
-        return read_array(path).squeeze()
+        return read_array(path, mmap_mode=mmap_mode).squeeze()
 
     def _write_array(self, path, arr):
         return write_array(path, arr)
@@ -332,6 +334,25 @@ class TemplateModel(object):
                 continue
             metadata[field_name] = values
         return metadata
+
+    def _load_spike_attributes(self):
+        files = list(self.dir_path.glob('spike_*.npy'))
+        spike_attributes = Bunch()
+        for filename in files:
+            # The part after spike_***
+            n = filename.stem[6:]
+            # Skip known files.
+            if n in ('clusters', 'templates', 'samples', 'times'):
+                continue
+            try:
+                arr = self._read_array(filename)
+                assert arr.shape == (self.n_spikes,)
+                logger.debug("Load %s.", filename)
+            except (IOError, AssertionError) as e:
+                logger.warning("Unable to open %s: %s.", filename, str(e))
+                continue
+            spike_attributes[n] = arr
+        return spike_attributes
 
     @property
     def metadata_fields(self):
