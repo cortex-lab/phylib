@@ -136,7 +136,7 @@ def _load_from_fullname(name):
     if not isinstance(name, str):
         return name
     parts = name.rsplit('.', 1)
-    return getattr(import_module(parts[0]), parts[1])
+    return getattr(import_module(parts[0]), parts[1], parts[1])
 
 
 def _read_python(path):

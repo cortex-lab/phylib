@@ -13,9 +13,8 @@ from numpy.testing import assert_equal as ae
 from pytest import raises
 
 from phylib.utils import Bunch
-from phylib.utils._misc import _read_python
 from phylib.utils.testing import captured_output
-from ..model import from_sparse, write_array, TemplateModel
+from ..model import from_sparse
 
 logger = logging.getLogger(__name__)
 
@@ -105,14 +104,7 @@ def test_model_metadata_2(template_model):
     assert m.get_metadata('quality').get(1, None) == '1'
 
 
-def test_model_spike_attributes(tempdir, template_path):
-    params = _read_python(template_path)
-    params['dat_path'] = template_path.parent / params['dat_path']
-    params['dir_path'] = template_path.parent
-
-    write_array(tempdir / 'spike_fail.npy', np.random.rand(10))  # wrong number of spikes
-    write_array(tempdir / 'spike_works.npy', np.random.rand(314))
-
-    model = TemplateModel(**params)
-    assert list(model.spike_attributes.keys()) == ['works']
-    assert model.spike_attributes.works.shape == (model.n_spikes,)
+def test_model_spike_attributes(template_model):
+    assert list(template_model.spike_attributes.keys()) == ['randn', 'works']
+    assert template_model.spike_attributes.works.shape == (template_model.n_spikes,)
+    assert template_model.spike_attributes.randn.shape == (template_model.n_spikes, 2)

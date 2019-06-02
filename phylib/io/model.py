@@ -346,10 +346,10 @@ class TemplateModel(object):
                 continue
             try:
                 arr = self._read_array(filename)
-                assert arr.shape == (self.n_spikes,)
+                assert arr.shape[0] == self.n_spikes
                 logger.debug("Load %s.", filename)
             except (IOError, AssertionError) as e:
-                logger.warning("Unable to open %s: %s.", filename, str(e))
+                logger.warning("Unable to open %s: %s.", filename, e)
                 continue
             spike_attributes[n] = arr
         return spike_attributes

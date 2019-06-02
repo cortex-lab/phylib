@@ -13,7 +13,7 @@ import numpy as np
 from pytest import fixture
 
 from phylib.utils._misc import _read_python, _write_text
-from ..model import TemplateModel
+from ..model import TemplateModel, write_array
 from phylib.io.datasets import download_test_file
 
 logger = logging.getLogger(__name__)
@@ -86,6 +86,11 @@ def template_path(tempdir, request):
         _remove(tempdir / 'template_features.npy')
         _remove(tempdir / 'pc_features.npy')
         _remove(tempdir / 'sim_binary.dat')
+
+    # Spike attributes.
+    write_array(tempdir / 'spike_fail.npy', np.random.rand(10))  # wrong number of spikes
+    write_array(tempdir / 'spike_works.npy', np.random.rand(314))
+    write_array(tempdir / 'spike_randn.npy', np.random.randn(314, 2))
 
     template_path = tempdir / paths[0].name
     return template_path
