@@ -105,6 +105,6 @@ def test_model_metadata_2(template_model):
 
 
 def test_model_spike_attributes(template_model):
-    assert list(template_model.spike_attributes.keys()) == ['randn', 'works']
+    assert set(template_model.spike_attributes.keys()) == set(('randn', 'works'))
     assert template_model.spike_attributes.works.shape == (template_model.n_spikes,)
     assert template_model.spike_attributes.randn.shape == (template_model.n_spikes, 2)
