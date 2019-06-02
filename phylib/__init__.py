@@ -34,7 +34,7 @@ logger.setLevel(logging.DEBUG)
 logger.addHandler(logging.NullHandler())
 
 
-_logger_fmt = '%(asctime)s [%(levelname)s] %(caller)s %(message)s'
+_logger_fmt = '%(asctime)s.%(msecs)03d [%(levelname)s] %(caller)s %(message)s'
 _logger_date_fmt = '%H:%M:%S'
 
 
@@ -54,8 +54,7 @@ def add_default_handler(level='INFO', logger=logger):
     handler = logging.StreamHandler()
     handler.setLevel(level)
 
-    formatter = _Formatter(fmt=_logger_fmt,
-                           datefmt=_logger_date_fmt)
+    formatter = _Formatter(fmt=_logger_fmt, datefmt=_logger_date_fmt)
     handler.setFormatter(formatter)
 
     logger.addHandler(handler)

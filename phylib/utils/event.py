@@ -118,8 +118,9 @@ class EventEmitter(object):
         """
         if self._is_silent:
             return
+        sender_name = sender.__class__.__name__
         logger.log(
-            5, "Emit %s.%s(%s, %s)", sender.__class__.__name__, event,
+            5, "Emit %s.%s(%s, %s)", sender_name, event,
             ', '.join(map(str, args)), ', '.join('%s=%s' % (k, v) for k, v in kwargs.items()))
         # Call the last callback if this is a single event.
         single = kwargs.pop('single', None)
