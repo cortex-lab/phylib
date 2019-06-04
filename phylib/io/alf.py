@@ -123,7 +123,7 @@ class EphysAlfCreator(object):
         """Convert from phy/KS format to ALF."""
         logger.info("Converting dataset to ALF.")
         self.out_path = Path(out_path)
-        if self.out_path == self.dir_path:
+        if self.out_path.resolve() == self.dir_path.resolve():
             raise IOError("The source and target directories cannot be the same.")
 
         # Copy and symlink files.
