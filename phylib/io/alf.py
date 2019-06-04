@@ -142,10 +142,12 @@ class EphysAlfCreator(object):
             _copy_if_possible(self.dir_path / fn0, self.out_path / fn1)
 
     def symlink_raw_data(self):
-        # Raw data file.
-        path = Path(self.model.dat_path)
-        dst_path = self.out_path / ('ephys.raw' + path.suffix)
-        _symlink_if_possible(path, dst_path)
+        # Raw data files.
+        assert isinstance(self.model.dat_path, (list, tuple))
+        for path in self.model.dat_path:
+            path = Path(path)
+            dst_path = self.out_path / ('ephys.raw' + path.suffix)
+            _symlink_if_possible(path, dst_path)
 
     def symlink_lfp_data(self):
         # LFP data file.

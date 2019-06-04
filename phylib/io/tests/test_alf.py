@@ -61,7 +61,7 @@ class Dataset(object):
 @fixture
 def dataset(tempdir):
     d = Dataset(tempdir)
-    yield d
+    return d
 
 
 def test_ephys_1(dataset):

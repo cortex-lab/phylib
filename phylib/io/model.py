@@ -8,7 +8,6 @@
 #------------------------------------------------------------------------------
 
 import logging
-import os
 import os.path as op
 from pathlib import Path
 import shutil
@@ -176,12 +175,19 @@ class TemplateModel(object):
     amplitude_threshold = .25
 
     def __init__(self, dat_path=None, **kwargs):
-        dat_path = dat_path or ''
-        dat_path = Path(dat_path).expanduser().resolve()
-        dir_path = dat_path.parent if dat_path else os.getcwd()
-        self.dat_path = dat_path
-        self.dir_path = dir_path
+        if not dat_path:  # pragma: no cover
+            self.dat_path = None
+            self.dir_path = Path.cwd()
+        else:
+            if not isinstance(dat_path, (list, tuple)):
+                dat_path = [dat_path]
+            assert isinstance(dat_path, (list, tuple))
+            dat_path = [Path(_).resolve() for _ in dat_path]
+            self.dir_path = dat_path[0].parent
+            self.dat_path = dat_path
         self.__dict__.update(kwargs)
+        self.dir_path = Path(self.dir_path).resolve()
+        assert isinstance(self.dir_path, Path)
 
         self.dtype = getattr(self, 'dtype', np.int16)
         self.sample_rate = float(self.sample_rate)
@@ -197,15 +203,15 @@ class TemplateModel(object):
         def _print(name, value):
             print("{0: <24}{1}".format(name, value))
 
-        _print('Data file', self.dat_path)
-        _print('Data shape',
-               'None' if self.traces is None else str(self.traces.shape))
-        _print('Number of channels', self.n_channels)
+        _print('Data files', ', '.join(map(str, self.dat_path)))
+        # _print('Data shape',
+        #        'None' if self.traces is None else str(self.traces.shape))
         _print('Duration', '{:.1f}s'.format(self.duration))
-        _print('Number of spikes', self.n_spikes)
+        _print('Number of channels', self.n_channels)
         _print('Number of templates', self.n_templates)
-        _print('Features shape',
-               'None' if self.features is None else str(self.features.shape))
+        _print('Number of spikes', "{:,}".format(self.n_spikes))
+        # _print('Features shape',
+        #        'None' if self.features is None else str(self.features.shape))
 
     def spikes_in_template(self, template_id):
         return _spikes_in_clusters(self.spike_templates, [template_id])
@@ -406,8 +412,7 @@ class TemplateModel(object):
             return
         paths = self.dat_path
         # Make sure we have a list of paths (virtually-concatenated).
-        if not isinstance(paths, list):
-            paths = [paths]
+        assert isinstance(paths, (list, tuple))
         n = self.n_channels_dat
         # Memmap all dat files and concatenate them virtually.
         traces = [

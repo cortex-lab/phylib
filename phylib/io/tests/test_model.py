@@ -49,10 +49,7 @@ def test_model_1(template_model):
     with captured_output() as (stdout, stderr):
         template_model.describe()
     out = stdout.getvalue()
-    print(out)
     assert 'sim_binary.dat' in out
-    if '(300000, 32)' not in out:
-        assert 'Data shape              None' in out
     assert '64' in out
 
 
