@@ -35,16 +35,19 @@ warnings.filterwarnings("ignore", message="numpy.dtype size changed")
 warnings.filterwarnings("ignore", message="numpy.ufunc size changed")
 
 
+class TemporaryDirectory_(TemporaryDirectory):
+    """HACK: fix on Windows with permission errors when deleting temporary directories."""
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        try:
+            return super(TemporaryDirectory_, self).__exit__(exc_type, exc_val, exc_tb)
+        except PermissionError as e:
+            logger.warning("Permission error while deleting the temporary directory: %s", str(e))
+
+
 @fixture
 def tempdir():
-    with TemporaryDirectory() as tempdir:
-        yield Path(tempdir)
-
-
-@fixture
-def chdir_tempdir():
     curdir = os.getcwd()
-    with TemporaryDirectory() as tempdir:
+    with TemporaryDirectory_() as tempdir:
         os.chdir(tempdir)
         yield Path(tempdir)
-    os.chdir(curdir)
+        os.chdir(curdir)

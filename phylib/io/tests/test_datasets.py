@@ -156,8 +156,7 @@ def test_download_file(tempdir, mock_urls):
         _check(data)
 
 
-def test_download_test_file(chdir_tempdir):
-    tempdir = chdir_tempdir
+def test_download_test_file(tempdir):
     name = 'test/test-4ch-1s.dat'
     path = download_test_file(name, config_dir=tempdir)
     assert path.exists()
