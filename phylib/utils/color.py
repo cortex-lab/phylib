@@ -191,10 +191,11 @@ class ClusterColorSelector(object):
     _color_field = 'cluster'
     _colormap = colormaps.categorical
     _categorical = True
+    _logarithmic = False
 
     def __init__(
-            self, cluster_meta=None, cluster_metrics=None,
-            field=None, colormap=None, categorical=True, cluster_ids=None):
+            self, cluster_meta=None, cluster_metrics=None, field=None,
+            colormap=None, categorical=None, logarithmic=None, cluster_ids=None):
         self.cluster_ids = None
         self.cluster_meta = cluster_meta or None
         self.cluster_meta_fields = cluster_meta.fields if cluster_meta else ()
@@ -203,7 +204,8 @@ class ClusterColorSelector(object):
         assert cluster_ids is not None
         self.cluster_ids = cluster_ids
         # self._colormap = colormap if colormap is not None else self._colormap
-        self.set_color_mapping(field=field, colormap=colormap, categorical=categorical)
+        self.set_color_mapping(
+            field=field, colormap=colormap, categorical=categorical, logarithmic=logarithmic)
 
     @property
     def state(self):
@@ -217,19 +219,22 @@ class ClusterColorSelector(object):
             color_field=self._color_field,
             colormap=colormap_name,
             categorical=self._categorical,
+            logarithmic=self._logarithmic,
         )
 
     def set_state(self, state):
         self.set_color_mapping(
-            field=state.color_field, colormap=state.colormap, categorical=state.categorical)
+            field=state.color_field, colormap=state.colormap,
+            categorical=state.categorical, logarithmic=state.logarithmic)
 
-    def set_color_mapping(self, field=None, colormap=None, categorical=True):
+    def set_color_mapping(self, field=None, colormap=None, categorical=None, logarithmic=None):
         """Set the field used to choose the cluster colors, and the associated colormap."""
         if isinstance(colormap, str):
             colormap = colormaps[colormap]
         self._colormap = colormap if colormap is not None else self._colormap
         self._color_field = field or self._color_field
-        self._categorical = categorical
+        self._categorical = categorical if categorical is not None else self._categorical
+        self._logarithmic = logarithmic if logarithmic is not None else self._logarithmic
         # Recompute the value range.
         self.set_cluster_ids(self.cluster_ids)
 
@@ -241,12 +246,17 @@ class ClusterColorSelector(object):
             self.vmin, self.vmax = values.min(), values.max()
 
     def map(self, values):
-        # Use categorical or continuous colormap depending on the data type of the values.
+        if self._logarithmic:
+            assert np.all(values > 0)
+            values = np.log(values)
+            vmin, vmax = np.log(self.vmin), np.log(self.vmax)
+        else:
+            vmin, vmax = self.vmin, self.vmax
+        # Use categorical or continuous colormap depending on the categorical option.
         f = (_categorical_colormap
              if self._categorical and np.issubdtype(values.dtype, np.integer)
              else _continuous_colormap)
-        return f(self._colormap, values, vmin=self.vmin, vmax=self.vmax)
-        raise ValueError("Values is neither integer or float datatype.")
+        return f(self._colormap, values, vmin=vmin, vmax=vmax)
 
     def _get_cluster_value(self, cluster_id):
         """Return the field value for a given cluster."""

@@ -184,7 +184,7 @@ def _read_tsv(path):
             cluster_id, value = row
             cluster_id = int(cluster_id)
             data[cluster_id] = value
-    logger.info("Read %s.", path)
+    logger.debug("Read %s.", path)
     return field_name, data
 
 
@@ -201,7 +201,7 @@ def _write_tsv(path, field_name, data):
         writer = csv.writer(f, delimiter=delimiter)
         writer.writerow(['cluster_id', field_name])
         writer.writerows([(cluster_id, data[cluster_id]) for cluster_id in sorted(data)])
-    logger.info("Wrote %s.", path)
+    logger.debug("Wrote %s.", path)
 
 
 def _git_version():

@@ -86,7 +86,9 @@ def test_cluster_color_selector():
         assert colors.shape == (3, 4)
 
     # Get the state.
-    assert c.state == {'color_field': 'nonexisting', 'colormap': 'diverging', 'categorical': True}
+    assert c.state == {
+        'color_field': 'nonexisting', 'colormap': 'diverging',
+        'categorical': True, 'logarithmic': False}
 
     # Set the state.
     state = Bunch(c.state)
@@ -111,6 +113,17 @@ def test_cluster_color_group():
     )
 
     c.set_color_mapping(field='group', colormap='cluster_group')
+    colors = c.get_colors(cluster_ids)
+    assert colors.shape == (3, 4)
+
+
+def test_cluster_color_log():
+    cluster_ids = [1, 2, 3]
+    c = ClusterColorSelector(
+        cluster_ids=cluster_ids,
+    )
+
+    c.set_color_mapping(logarithmic=True)
     colors = c.get_colors(cluster_ids)
     assert colors.shape == (3, 4)
 
