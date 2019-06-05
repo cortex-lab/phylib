@@ -40,7 +40,7 @@ class TemporaryDirectory_(TemporaryDirectory):
     def __exit__(self, exc_type, exc_val, exc_tb):
         try:
             return super(TemporaryDirectory_, self).__exit__(exc_type, exc_val, exc_tb)
-        except PermissionError as e:
+        except PermissionError as e:  # pragma: no cover
             logger.warning("Permission error while deleting the temporary directory: %s", str(e))
 
 
