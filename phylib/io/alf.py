@@ -11,6 +11,7 @@ import logging
 from pathlib import Path
 import os
 import shutil
+import ast
 
 import numpy as np
 
@@ -53,6 +54,16 @@ _FILE_RENAMES = [
 FILE_DELETES = [
     'temp_wh.dat',  # potentially large file that will clog the servers
 ]
+
+
+def _read_npy_header(filename):
+    d = {}
+    with open(filename, 'rb') as fid:
+        d['magic_string'] = fid.read(6)
+        d['version'] = fid.read(2)
+        d['len'] = int.from_bytes(fid.read(2), byteorder='little')
+        d = {**d, **ast.literal_eval(fid.read(d['len']).decode())}
+    return d
 
 
 def _create_if_possible(path, new_path):
@@ -149,6 +160,14 @@ class EphysAlfCreator(object):
     def copy_files(self):
         """Make the file renames (actually copies into a new directory)."""
         for fn0, fn1 in _FILE_RENAMES:
+            if (self.dir_path / fn0).suffix == '.npy':
+                h = _read_npy_header(self.dir_path / fn0)
+                # ks2 outputs vectors as multidimensional arrays. If there is no distinction
+                # for Matlab, there is one in Numpy
+                if len(h['shape']) == 2 and h['shape'][-1] == 1:
+                    d = np.load(self.dir_path / fn0)
+                    np.save(self.out_path / fn1, d.squeeze())
+                    continue
             _copy_if_possible(self.dir_path / fn0, self.out_path / fn1)
 
     def rm_files(self):
