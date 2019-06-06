@@ -44,7 +44,7 @@ def _disk(x, y, r, c, t=0):
 
 def _rgba(rgb, a=1.):
     r, g, b = rgb
-    return 'rgba(%d, %d, %d, %.3f)' % (r, g, b, a)
+    return 'rgba(%d, %d, %d, %.3f)' % (255 * r, 255 * g, 255 * b, a)
 
 
 def _iter_disks(positions, cluster_channels=None):
@@ -55,7 +55,7 @@ def _iter_disks(positions, cluster_channels=None):
 
     """
 
-    color_masked = _rgba((128,) * 3, 1.)
+    color_masked = _rgba((.5, .5, .5), 1.)
     color_umasked = lambda clu: _rgba(selected_cluster_color(clu)[:3], 1)
 
     size_masked = 5
