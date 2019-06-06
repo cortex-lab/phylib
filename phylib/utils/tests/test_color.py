@@ -76,12 +76,12 @@ def test_cluster_color_selector():
     assert len(c.get(1, alpha=.5)) == 4
     ae(c.get_values([None, 0]), np.arange(2))
 
-    for field, colormap in (
+    for color_field, colormap in (
             ('label', 'linear'),
             ('quality', 'rainbow'),
             ('cluster', 'categorical'),
             ('nonexisting', 'diverging')):
-        c.set_color_mapping(field=field, colormap=colormap)
+        c.set_color_mapping(color_field=color_field, colormap=colormap)
         colors = c.get_colors(cluster_ids)
         assert colors.shape == (3, 4)
 
@@ -112,7 +112,7 @@ def test_cluster_color_group():
         cluster_ids=cluster_ids,
     )
 
-    c.set_color_mapping(field='group', colormap='cluster_group')
+    c.set_color_mapping(color_field='group', colormap='cluster_group')
     colors = c.get_colors(cluster_ids)
     assert colors.shape == (3, 4)
 

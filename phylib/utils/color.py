@@ -194,7 +194,7 @@ class ClusterColorSelector(object):
     _logarithmic = False
 
     def __init__(
-            self, cluster_meta=None, cluster_metrics=None, field=None,
+            self, cluster_meta=None, cluster_metrics=None, color_field=None,
             colormap=None, categorical=None, logarithmic=None, cluster_ids=None):
         self.cluster_ids = None
         self.cluster_meta = cluster_meta or None
@@ -205,7 +205,8 @@ class ClusterColorSelector(object):
         self.cluster_ids = cluster_ids
         # self._colormap = colormap if colormap is not None else self._colormap
         self.set_color_mapping(
-            field=field, colormap=colormap, categorical=categorical, logarithmic=logarithmic)
+            color_field=color_field, colormap=colormap,
+            categorical=categorical, logarithmic=logarithmic)
 
     @property
     def state(self):
@@ -224,15 +225,16 @@ class ClusterColorSelector(object):
 
     def set_state(self, state):
         self.set_color_mapping(
-            field=state.color_field, colormap=state.colormap,
+            color_field=state.color_field, colormap=state.colormap,
             categorical=state.categorical, logarithmic=state.logarithmic)
 
-    def set_color_mapping(self, field=None, colormap=None, categorical=None, logarithmic=None):
+    def set_color_mapping(
+            self, color_field=None, colormap=None, categorical=None, logarithmic=None):
         """Set the field used to choose the cluster colors, and the associated colormap."""
         if isinstance(colormap, str):
             colormap = colormaps[colormap]
         self._colormap = colormap if colormap is not None else self._colormap
-        self._color_field = field or self._color_field
+        self._color_field = color_field or self._color_field
         self._categorical = categorical if categorical is not None else self._categorical
         self._logarithmic = logarithmic if logarithmic is not None else self._logarithmic
         # Recompute the value range.
