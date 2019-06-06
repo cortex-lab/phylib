@@ -37,9 +37,18 @@ def read_array(path, mmap_mode=None):
     arr_name = path.name
     ext = path.suffix
     if ext == '.mat':  # pragma: no cover
-        return sio.loadmat(path)[arr_name]
+        out = sio.loadmat(path)[arr_name]
     elif ext == '.npy':
-        return np.load(path, mmap_mode=mmap_mode)
+        out = np.load(path, mmap_mode=mmap_mode)
+    # Filter out nan and inf values.
+    for w in ('nan', 'inf'):
+        errors = getattr(np, 'is' + w)(out)
+        if np.any(errors):
+            n = np.sum(errors)
+            n_tot = errors.size
+            logger.warning("%d/%d values are %s in %s, replacing by zero.", n, n_tot, w, path)
+            out[errors] = 0
+    return out
 
 
 def write_array(name, arr):

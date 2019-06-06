@@ -88,7 +88,7 @@ def template_path(tempdir, request):
         _remove(tempdir / 'sim_binary.dat')
 
     # Spike attributes.
-    write_array(tempdir / 'spike_fail.npy', np.random.rand(10))  # wrong number of spikes
+    write_array(tempdir / 'spike_fail.npy', np.full(10, np.nan))  # wrong number of spikes
     write_array(tempdir / 'spike_works.npy', np.random.rand(314))
     write_array(tempdir / 'spike_randn.npy', np.random.randn(314, 2))
 
