@@ -591,7 +591,7 @@ class TemplateModel(object):
         assert template.shape[1] == len(channel_ids)
         # Compute the amplitude and the channel with max amplitude.
         amplitude = template.max(axis=0) - template.min(axis=0)
-        best_channel = np.argmax(amplitude)
+        best_channel = channel_ids[np.argmax(amplitude)]
         b = Bunch(template=template,
                   amplitude=amplitude,
                   best_channel=best_channel,
