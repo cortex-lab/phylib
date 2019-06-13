@@ -44,7 +44,10 @@ class EventEmitter(object):
 
     def __init__(self):
         self.reset()
-        self._is_silent = False
+        self.is_silent = False
+
+    def set_silent(self, silent):
+        self.is_silent = silent
 
     def reset(self):
         """Remove all registered callbacks."""
@@ -65,9 +68,9 @@ class EventEmitter(object):
         """Prevent all callbacks to be called if events are raised
         in the context manager.
         """
-        self._is_silent = not(self._is_silent)
+        self.is_silent = not(self.is_silent)
         yield
-        self._is_silent = not(self._is_silent)
+        self.is_silent = not(self.is_silent)
 
     def connect(self, func=None, event=None, sender=None, **kwargs):
         """Register a callback function to a given event.
@@ -116,7 +119,7 @@ class EventEmitter(object):
         Return the list of callback return results.
 
         """
-        if self._is_silent:
+        if self.is_silent:
             return
         sender_name = sender.__class__.__name__
         logger.log(
@@ -301,4 +304,5 @@ emit = _EVENT.emit
 connect = _EVENT.connect
 unconnect = _EVENT.unconnect
 silent = _EVENT.silent
+set_silent = _EVENT.set_silent
 reset = _EVENT.reset

@@ -55,6 +55,8 @@ def test_event_silent():
         ev.emit('test', ev, 1)
     assert _list == [1]
 
+    ev.set_silent(True)
+
 
 def test_event_single():
     ev = EventEmitter()
