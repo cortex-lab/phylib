@@ -45,7 +45,7 @@ class _Formatter(logging.Formatter):
         filename = op.splitext(op.basename(record.pathname))[0]
         record.caller = '{:s}:{:d}'.format(filename, record.lineno).ljust(20)
         message = super(_Formatter, self).format(record)
-        color_code = {'D': '37', 'I': '0', 'W': '33', 'E': '31'}.get(record.levelname, '7')
+        color_code = {'D': '90', 'I': '0', 'W': '33', 'E': '31'}.get(record.levelname, '7')
         message = '\33[%sm%s\33[0m' % (color_code, message)
         return message
 
