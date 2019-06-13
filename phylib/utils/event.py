@@ -47,6 +47,7 @@ class EventEmitter(object):
         self.is_silent = False
 
     def set_silent(self, silent):
+        """Set whether to silence the events."""
         self.is_silent = silent
 
     def reset(self):
@@ -157,6 +158,7 @@ class PartialFormatter(string.Formatter):
             return None, field_name
 
     def format_field(self, value, spec):
+        """Format a field."""
         if value is None:
             return '?'
         try:

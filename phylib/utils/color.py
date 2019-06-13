@@ -23,10 +23,7 @@ logger = logging.getLogger(__name__)
 # Random colors
 #------------------------------------------------------------------------------
 
-def _random_color(h_range=(0., 1.),
-                  s_range=(.5, 1.),
-                  v_range=(.5, 1.),
-                  ):
+def _random_color(h_range=(0., 1.), s_range=(.5, 1.), v_range=(.5, 1.)):
     """Generate a random RGB color."""
     h, s, v = uniform(*h_range), uniform(*s_range), uniform(*v_range)
     r, g, b = hsv_to_rgb(np.array([[[h, s, v]]])).flat
@@ -57,7 +54,7 @@ def _random_bright_color():
 
 
 def _hex_to_triplet(h):
-    # Convert an hexadecimal color to a triplet of int8 integers.
+    """Convert an hexadecimal color to a triplet of int8 integers."""
     if h.startswith('#'):
         h = h[1:]
     return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
@@ -68,6 +65,7 @@ def _hex_to_triplet(h):
 #------------------------------------------------------------------------------
 
 def _apply_color_masks(color, masks=None, alpha=None):
+    """Apply masks to colors."""
     alpha = alpha or .5
     hsv = rgb_to_hsv(color[:, :3])
     # Change the saturation and value as a function of the mask.
@@ -81,6 +79,7 @@ def _apply_color_masks(color, masks=None, alpha=None):
 
 
 def _spike_colors(spike_clusters=None, masks=None, alpha=None, colormap=None):
+    """Return color of spikes depending on a given colormap."""
     colormap = colormap if colormap is not None else colormaps.default
     n = len(colormap)
     if spike_clusters is not None:
@@ -91,6 +90,7 @@ def _spike_colors(spike_clusters=None, masks=None, alpha=None, colormap=None):
 
 
 def _continuous_colormap(colormap, values, vmin=None, vmax=None):
+    """Convert values into colors given a specified continuous colormap."""
     assert colormap.shape[1] == 3
     n = colormap.shape[0]
     vmin = vmin if vmin is not None else values.min()
@@ -107,6 +107,7 @@ def _continuous_colormap(colormap, values, vmin=None, vmax=None):
 
 
 def _categorical_colormap(colormap, values, vmin=None, vmax=None):
+    """Convert values into colors given a specified categorical colormap."""
     assert np.issubdtype(values.dtype, np.integer)
     assert colormap.shape[1] == 3
     n = colormap.shape[0]
@@ -127,6 +128,7 @@ def _categorical_colormap(colormap, values, vmin=None, vmax=None):
 # Default color map for the selected clusters.
 # see https://colorcet.pyviz.org/user_guide/Categorical.html
 def _make_default_colormap():
+    """Return the default colormap, with custom first colors."""
     colormap = np.array(cc.glasbey_bw_minc_20_minl_30)
     # Reorder first colors.
     colormap[[0, 1, 2, 3, 4, 5]] = colormap[[3, 0, 4, 5, 2, 1]]
@@ -137,6 +139,7 @@ def _make_default_colormap():
 
 
 def _make_cluster_group_colormap():
+    """Return cluster group colormap."""
     # Rows are sorted by increasing alphabetical order (all lowercase).
     return np.array([
         [0.75, 0.75, 0.75],  # '' (None = '' = unsorted)
@@ -158,6 +161,7 @@ colormaps = Bunch(
 
 
 def selected_cluster_color(i, alpha=1.):
+    """Return the color of the i-th selected cluster."""
     return add_alpha(tuple(colormaps.default[i % len(colormaps.default)]), alpha=alpha)
 
 
@@ -177,6 +181,7 @@ def _add_selected_clusters_colors(selected_clusters, cluster_ids, cluster_colors
 #------------------------------------------------------------------------------
 
 def add_alpha(c, alpha=1.):
+    """Add an alpha channel to an RGB color."""
     if isinstance(c, (tuple,)):
         return c + (alpha,)
     elif isinstance(c, np.ndarray):
@@ -210,6 +215,7 @@ class ClusterColorSelector(object):
 
     @property
     def state(self):
+        """Colormap state."""
         colormap_name = None
         # Find the colormap name from the colormap array.
         for cname, arr in colormaps.items():
@@ -224,6 +230,7 @@ class ClusterColorSelector(object):
         )
 
     def set_state(self, state):
+        """Set the colormap state."""
         self.set_color_mapping(
             color_field=state.color_field, colormap=state.colormap,
             categorical=state.categorical, logarithmic=state.logarithmic)
@@ -248,6 +255,7 @@ class ClusterColorSelector(object):
             self.vmin, self.vmax = values.min(), values.max()
 
     def map(self, values):
+        """Convert values to colors using the selected colormap."""
         if self._logarithmic:
             assert np.all(values > 0)
             values = np.log(values)
@@ -281,6 +289,7 @@ class ClusterColorSelector(object):
         return add_alpha(col, alpha=alpha)
 
     def get_values(self, cluster_ids):
+        """Get the values of clusters for the selected color field.."""
         values = [self._get_cluster_value(cluster_id) for cluster_id in cluster_ids]
         # Deal with categorical variables (strings)
         if any(isinstance(v, str) or v is None for v in values):
@@ -291,7 +300,7 @@ class ClusterColorSelector(object):
         return np.array(values)
 
     def get_colors(self, cluster_ids, alpha=1.):
-        """Return cluster colors."""
+        """Return the colors of some clusters."""
         values = self.get_values(cluster_ids)
         assert len(values) == len(cluster_ids)
         return add_alpha(self.map(values), alpha=alpha)

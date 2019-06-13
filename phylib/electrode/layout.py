@@ -21,6 +21,7 @@ from phylib.utils.color import selected_cluster_color
 #------------------------------------------------------------------------------
 
 def _iter_channel(positions):
+    """Iterate through the channel positions."""
     size = 100
     margin = 5
     boxes = _get_boxes(positions, keep_aspect_ratio=False)
@@ -36,6 +37,7 @@ def _iter_channel(positions):
 
 
 def _disk(x, y, r, c, t=0):
+    """Return a SVG disc."""
     return ('<circle cx="%.5f%%" cy="%.5f%%" '
             'r="%d" fill="%s" '
             'transform="translate(%d, 0)"'
@@ -48,7 +50,7 @@ def _rgba(rgb, a=1.):
 
 
 def _iter_disks(positions, cluster_channels=None):
-    """
+    """Iterate through the SVG dics for all channels and clusters.
 
     positions: Nx2 array
     cluster_channels: {cluster: channels}
@@ -87,6 +89,7 @@ def _iter_disks(positions, cluster_channels=None):
 
 
 def probe_layout(positions, cluster_channels):
+    """Return a probe layout in SVG, showing selected clusters on relevant channels."""
     contents = '\n'.join(_iter_disks(positions, cluster_channels))
     return """
     <svg style="background: black; width:100%; height:100%;">

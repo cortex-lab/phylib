@@ -114,13 +114,15 @@ def _load(path):
 #------------------------------------------------------------------------------
 
 class EphysAlfCreator(object):
+    """Class for converting a dataset in KS/phy format into ALF."""
+
     def __init__(self, model):
         self.model = model
         self.dir_path = Path(model.dir_path)
         self.spc = _spikes_per_cluster(model.spike_clusters)
 
     def convert(self, out_path):
-        """Convert from phy/KS format to ALF."""
+        """Convert from KS/phy format to ALF."""
         logger.info("Converting dataset to ALF.")
         self.out_path = Path(out_path)
         if self.out_path.resolve() == self.dir_path.resolve():
@@ -138,10 +140,12 @@ class EphysAlfCreator(object):
         self.make_mean_waveforms()
 
     def copy_files(self):
+        """Make the file renames (actually copies into a new directory)."""
         for fn0, fn1 in _FILE_RENAMES:
             _copy_if_possible(self.dir_path / fn0, self.out_path / fn1)
 
     def symlink_raw_data(self):
+        """Symlink the raw data files."""
         # Raw data files.
         assert isinstance(self.model.dat_path, (list, tuple))
         for path in self.model.dat_path:
@@ -150,6 +154,7 @@ class EphysAlfCreator(object):
             _symlink_if_possible(path, dst_path)
 
     def symlink_lfp_data(self):
+        """Symlink the LFP data file."""
         # LFP data file.
         # TODO: support for different file extensions?
         lfp_path = _find_file_with_ext(self.dir_path, '.lf.bin')
@@ -163,6 +168,7 @@ class EphysAlfCreator(object):
     # -------------------------------------------------------------------------
 
     def _save_npy(self, filename, arr):
+        """Save an array into a .npy file."""
         np.save(self.out_path / filename, arr)
 
     def make_spike_times(self):
@@ -221,6 +227,7 @@ class EphysAlfCreator(object):
         self._save_npy('clusters.depths.npy', clusters_depths)
 
     def make_mean_waveforms(self):
+        """Make the mean waveforms file."""
         spike_ids = select_spikes(
             cluster_ids=self.cluster_ids,
             max_n_spikes_per_cluster=100,

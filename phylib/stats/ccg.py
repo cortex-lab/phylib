@@ -54,10 +54,7 @@ def _symmetrize_correlograms(correlograms):
     return np.dstack((sym, correlograms))
 
 
-def firing_rate(spike_clusters,
-                cluster_ids=None,
-                bin_size=None,
-                duration=None):
+def firing_rate(spike_clusters, cluster_ids=None, bin_size=None, duration=None):
     """Compute the average number of spikes per cluster per bin."""
 
     # Take the cluster order into account.
@@ -75,14 +72,9 @@ def firing_rate(spike_clusters,
     return bc * np.c_[bc] * (bin_size / duration)
 
 
-def correlograms(spike_times,
-                 spike_clusters,
-                 cluster_ids=None,
-                 sample_rate=1.,
-                 bin_size=None,
-                 window_size=None,
-                 symmetrize=True,
-                 ):
+def correlograms(
+        spike_times, spike_clusters, cluster_ids=None, sample_rate=1.,
+        bin_size=None, window_size=None, symmetrize=True):
     """Compute all pairwise cross-correlograms among the clusters appearing
     in `spike_clusters`.
 
@@ -100,13 +92,16 @@ def correlograms(spike_times,
         Size of the bin, in seconds.
     window_size : float
         Size of the window, in seconds.
+    sample_rate : float
+        Sampling rate.
+    symmetrize : boolean (True)
+        Whether the output matrix should be symmetrized or not.
 
     Returns
     -------
 
     correlograms : array
-        A `(n_clusters, n_clusters, winsize_samples)` array with all pairwise
-        CCGs.
+        A `(n_clusters, n_clusters, winsize_samples)` array with all pairwise CCGs.
 
     """
     assert sample_rate > 0.

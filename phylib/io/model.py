@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 #------------------------------------------------------------------------------
 
 def read_array(path, mmap_mode=None):
+    """Read a binary array in npy or mat format, avoiding nan and inf values."""
     path = Path(path)
     arr_name = path.name
     ext = path.suffix
@@ -52,6 +53,7 @@ def read_array(path, mmap_mode=None):
 
 
 def write_array(name, arr):
+    """Save an array to a binary file."""
     np.save(name, arr)
 
 
@@ -70,6 +72,7 @@ def save_metadata(filename, field_name, metadata):
 
 
 def _dat_n_samples(filename, dtype=None, n_channels=None, offset=None):
+    """Get the number of samples from the size of a dat file."""
     assert dtype is not None
     item_size = np.dtype(dtype).itemsize
     offset = offset if offset else 0
@@ -79,6 +82,7 @@ def _dat_n_samples(filename, dtype=None, n_channels=None, offset=None):
 
 
 def _dat_to_traces(dat_path, n_channels=None, dtype=None, offset=None):
+    """Memmap a dat file."""
     assert dtype is not None
     assert n_channels is not None
     n_samples = _dat_n_samples(dat_path, n_channels=n_channels, dtype=dtype, offset=offset)
@@ -86,6 +90,7 @@ def _dat_to_traces(dat_path, n_channels=None, dtype=None, offset=None):
 
 
 def load_raw_data(path=None, n_channels_dat=None, dtype=None, offset=None):
+    """Load raw data at a given path."""
     if not path:
         return
     path = Path(path)
@@ -102,6 +107,7 @@ def load_raw_data(path=None, n_channels_dat=None, dtype=None, offset=None):
 
 
 def get_closest_channels(channel_positions, channel_index, n=None):
+    """Get the channels closest to a given channel on the probe."""
     x = channel_positions[:, 0]
     y = channel_positions[:, 1]
     x0, y0 = channel_positions[channel_index]
@@ -180,6 +186,8 @@ def _find_first_existing_path(*paths, multiple_ok=True):
 #------------------------------------------------------------------------------
 
 class TemplateModel(object):
+    """Object holding all data of a KiloSort/phy dataset."""
+
     n_closest_channels = 16
     amplitude_threshold = .25
 
@@ -209,23 +217,23 @@ class TemplateModel(object):
         self.waveform_loader = self._create_waveform_loader()
 
     def describe(self):
+        """Display basic information about the dataset."""
         def _print(name, value):
             print("{0: <24}{1}".format(name, value))
 
         _print('Data files', ', '.join(map(str, self.dat_path)))
-        # _print('Data shape',
-        #        'None' if self.traces is None else str(self.traces.shape))
+        _print('Directory', self.dir_path)
         _print('Duration', '{:.1f}s'.format(self.duration))
         _print('Number of channels', self.n_channels)
         _print('Number of templates', self.n_templates)
         _print('Number of spikes', "{:,}".format(self.n_spikes))
-        # _print('Features shape',
-        #        'None' if self.features is None else str(self.features.shape))
 
     def spikes_in_template(self, template_id):
+        """Return the spike ids that belong to a given template."""
         return _spikes_in_clusters(self.spike_templates, [template_id])
 
     def _load_data(self):
+        """Load all data."""
         sr = self.sample_rate
 
         # Spikes.
@@ -351,6 +359,7 @@ class TemplateModel(object):
         return metadata
 
     def _load_spike_attributes(self):
+        """Load all spike_*.npy files, called spike attributes."""
         files = list(self.dir_path.glob('spike_*.npy'))
         spike_attributes = Bunch()
         for filename in files:
@@ -632,13 +641,14 @@ class TemplateModel(object):
         return b
 
     def get_template(self, template_id, channel_ids=None):
+        """Get data about a template."""
         if self.sparse_templates.cols is not None:
             return self._get_template_sparse(template_id)
         else:
             return self._get_template_dense(template_id, channel_ids=channel_ids)
 
     def get_waveforms(self, spike_ids, channel_ids):
-        """Return several waveforms on specified channels."""
+        """Return a selection of waveforms on specified channels."""
         if self.waveform_loader is None:
             return
         out = self.waveform_loader.get(spike_ids, channel_ids)

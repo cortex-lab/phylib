@@ -37,6 +37,7 @@ def staggered_positions(n_channels):
 #------------------------------------------------------------------------------
 
 def range_transform(from_bounds, to_bounds, positions):
+    """Transform for a rectangle to another."""
     from_bounds = np.asarray(from_bounds)
     to_bounds = np.asarray(to_bounds)
     positions = np.asarray(positions)
@@ -155,6 +156,7 @@ def _get_box_pos_size(box_bounds):
 
 
 def _check_data_bounds(data_bounds):
+    """Check that a data bounds is a valid."""
     assert data_bounds.ndim == 2
     assert data_bounds.shape[1] == 4
     assert np.all(data_bounds[:, 0] < data_bounds[:, 2])

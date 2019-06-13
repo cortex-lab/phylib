@@ -10,18 +10,10 @@ import numpy as np
 from numpy.testing import assert_array_equal as ae
 from pytest import raises, mark
 
-from .._misc import (_git_version,
-                     _load_json, _save_json,
-                     _load_pickle, _save_pickle,
-                     _read_python,
-                     _read_text,
-                     _write_text,
-                     _read_tsv,
-                     _write_tsv,
-                     _encode_qbytearray, _decode_qbytearray,
-                     _fullname,
-                     _load_from_fullname,
-                     )
+from .._misc import (
+    _git_version, load_json, save_json, load_pickle, save_pickle, read_python, read_text,
+    write_text, _read_tsv, _write_tsv, _encode_qbytearray, _decode_qbytearray, _fullname,
+    _load_from_fullname)
 
 
 #------------------------------------------------------------------------------
@@ -46,8 +38,8 @@ def test_qbytearray(tempdir):
     # Test JSON serialization of QByteArray.
     d = {'arr': arr}
     path = tempdir / 'test'
-    _save_json(path, d)
-    d_bis = _load_json(path)
+    save_json(path, d)
+    d_bis = load_json(path)
     assert d == d_bis
 
 
@@ -55,14 +47,14 @@ def test_json_simple(tempdir):
     d = {'a': 1, 'b': 'bb', 3: '33', 'mock': {'mock': True}}
 
     path = tempdir / 'test_dir/test'
-    _save_json(path, d)
-    d_bis = _load_json(path)
+    save_json(path, d)
+    d_bis = load_json(path)
     assert d == d_bis
 
     path.write_text('')
-    assert _load_json(path) == {}
+    assert load_json(path) == {}
     with raises(IOError):
-        _load_json('%s_bis' % path)
+        load_json('%s_bis' % path)
 
 
 @mark.parametrize('kind', ['json', 'pickle'])
@@ -71,10 +63,10 @@ def test_json_numpy(tempdir, kind):
     d = {'a': arr, 'b': arr.ravel()[:10], 'c': arr[0, 0]}
 
     path = tempdir / 'test'
-    f = _save_json if kind == 'json' else _save_pickle
+    f = save_json if kind == 'json' else save_pickle
     f(path, d)
 
-    f = _load_json if kind == 'json' else _load_pickle
+    f = load_json if kind == 'json' else load_pickle
     d_bis = f(path)
     arr_bis = d_bis['a']
 
@@ -91,15 +83,15 @@ def test_read_python(tempdir):
     with open(path, 'w') as f:
         f.write("""a = {'b': 1}""")
 
-    assert _read_python(path) == {'a': {'b': 1}}
+    assert read_python(path) == {'a': {'b': 1}}
 
 
 def test_write_text(tempdir):
     for path in (tempdir / 'test_1',
                  tempdir / 'test_dir/test_2.txt',
                  ):
-        _write_text(path, 'hello world')
-        assert _read_text(path) == 'hello world'
+        write_text(path, 'hello world')
+        assert read_text(path) == 'hello world'
 
 
 def test_write_tsv(tempdir):

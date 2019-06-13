@@ -12,7 +12,7 @@ import shutil
 import numpy as np
 from pytest import fixture
 
-from phylib.utils._misc import _read_python, _write_text
+from phylib.utils._misc import read_python, write_text
 from ..model import TemplateModel, write_array
 from phylib.io.datasets import download_test_file
 
@@ -81,7 +81,7 @@ def template_path(tempdir, request):
             np.save(tempdir / 'spikes.times.npy', st / 25000.)  # sample rate
             _remove(tempdir / 'spike_times.npy')
         # Buggy TSV file should not cause a crash.
-        _write_text(tempdir / 'error.tsv', '')
+        write_text(tempdir / 'error.tsv', '')
         # Remove some non-necessary files.
         _remove(tempdir / 'template_features.npy')
         _remove(tempdir / 'pc_features.npy')
@@ -98,7 +98,7 @@ def template_path(tempdir, request):
 
 @fixture
 def template_model(template_path):
-    params = _read_python(template_path)
+    params = read_python(template_path)
     params['dat_path'] = template_path.parent / params['dat_path']
     params['dir_path'] = template_path.parent
     model = TemplateModel(**params)

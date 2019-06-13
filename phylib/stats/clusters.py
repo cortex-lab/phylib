@@ -14,20 +14,23 @@ import numpy as np
 #------------------------------------------------------------------------------
 
 def mean(x):
+    """Return the mean of an array across the first dimension."""
     return x.mean(axis=0)
 
 
 def get_unmasked_channels(mean_masks, min_mask=.25):
+    """Return the unmasked channels (mean masks above a given threshold)."""
     return np.nonzero(mean_masks > min_mask)[0]
 
 
 def get_mean_probe_position(mean_masks, site_positions):
-    return (np.sum(site_positions * mean_masks[:, np.newaxis], axis=0) /
-            max(1, np.sum(mean_masks)))
+    """Return the mean position of clusters on the probe, depending on the masks."""
+    m = max(1, np.sum(mean_masks))
+    return np.sum(site_positions * mean_masks[:, np.newaxis], axis=0) / m
 
 
 def get_sorted_main_channels(mean_masks, unmasked_channels):
-    # Weighted mean of the channels, weighted by the mean masks.
+    """Weighted mean of the channels, weighted by the mean masks."""
     main_channels = np.argsort(mean_masks)[::-1]
     main_channels = np.array([c for c in main_channels
                               if c in unmasked_channels])
@@ -55,12 +58,8 @@ def get_waveform_amplitude(mean_masks, mean_waveforms):
     return M - m
 
 
-def get_mean_masked_features_distance(mean_features_0,
-                                      mean_features_1,
-                                      mean_masks_0,
-                                      mean_masks_1,
-                                      n_features_per_channel=None,
-                                      ):
+def get_mean_masked_features_distance(
+        mean_features_0, mean_features_1, mean_masks_0, mean_masks_1, n_features_per_channel=None):
     """Compute the distance between the mean masked features."""
 
     assert n_features_per_channel > 0

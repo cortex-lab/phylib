@@ -6,7 +6,6 @@
 # Imports
 #------------------------------------------------------------------------------
 
-from collections import defaultdict
 import logging
 import math
 from math import floor, exp
@@ -212,6 +211,10 @@ def get_closest_clusters(cluster_id, cluster_ids, sim_func, max_n=None):
     return l[:max_n]
 
 
+def _flatten(l):
+    return [item for sublist in l for item in sublist]
+
+
 # -----------------------------------------------------------------------------
 # I/O functions
 # -----------------------------------------------------------------------------
@@ -273,8 +276,7 @@ def _fill_index(arr, item):
 
 
 class ConcatenatedArrays(object):
-    """This object represents a concatenation of several memory-mapped
-    arrays."""
+    """This object represents a concatenation of several memory-mapped arrays."""
     def __init__(self, arrs, cols=None, scaling=None):
         assert isinstance(arrs, list)
         self.arrs = arrs
@@ -436,6 +438,7 @@ def data_chunk(data, chunk, with_overlap=False):
 
 
 def get_excerpts(data, n_excerpts=None, excerpt_size=None):
+    """Return excerpts of a data array."""
     assert n_excerpts is not None
     assert excerpt_size is not None
     if len(data) < n_excerpts * excerpt_size:
@@ -534,12 +537,9 @@ def regular_subset(spikes, n_spikes_max=None, offset=0):
     return my_spikes
 
 
-def select_spikes(cluster_ids=None,
-                  max_n_spikes_per_cluster=None,
-                  spikes_per_cluster=None,
-                  batch_size=None,
-                  subset=None,
-                  ):
+def select_spikes(
+        cluster_ids=None, max_n_spikes_per_cluster=None, spikes_per_cluster=None,
+        batch_size=None, subset=None):
     """Return a selection of spikes belonging to the specified clusters."""
     subset = subset or 'regular'
     assert _is_array_like(cluster_ids)
@@ -579,74 +579,14 @@ class Selector(object):
         # NOTE: spikes_per_cluster is a function.
         self.spikes_per_cluster = spikes_per_cluster
 
-    def select_spikes(self, cluster_ids=None,
-                      max_n_spikes_per_cluster=None,
-                      batch_size=None,
-                      subset=None,
-                      ):
+    def select_spikes(
+            self, cluster_ids=None, max_n_spikes_per_cluster=None, batch_size=None, subset=None):
+        """Get a selection of spikes from a given set of clusters."""
         if cluster_ids is None or not len(cluster_ids):
             return None
         ns = max_n_spikes_per_cluster
         assert len(cluster_ids) >= 1
         # Select a subset of the spikes.
-        return select_spikes(cluster_ids,
-                             spikes_per_cluster=self.spikes_per_cluster,
-                             max_n_spikes_per_cluster=ns,
-                             batch_size=batch_size,
-                             subset=subset,
-                             )
-
-
-# -----------------------------------------------------------------------------
-# Accumulator
-# -----------------------------------------------------------------------------
-
-def _flatten(l):
-    return [item for sublist in l for item in sublist]
-
-
-class Accumulator(object):
-    """Accumulate arrays for concatenation."""
-    def __init__(self):
-        self._data = defaultdict(list)
-
-    def add(self, name, val):
-        """Add an array."""
-        self._data[name].append(val)
-
-    @property
-    def names(self):
-        """List of names."""
-        return set(self._data)
-
-    def get(self, name):
-        """Return the list of arrays for a given name."""
-        return _flatten(self._data[name])
-
-    def __getitem__(self, name):
-        """Concatenate all arrays with a given name."""
-        l = self._data[name]
-        # Process scalars: only return the first one and don't concatenate.
-        if len(l) and not hasattr(l[0], '__len__'):
-            return l[0]
-        return np.concatenate(l, axis=0)
-
-
-def _accumulate(data_list, no_concat=()):
-    """Concatenate a list of dicts `(name, array)`.
-
-    You can specify some names which arrays should not be concatenated.
-    This is necessary with lists of plots with different sizes.
-
-    """
-    acc = Accumulator()
-    for data in data_list:
-        for name, val in data.items():
-            acc.add(name, val)
-    out = {name: acc[name] for name in acc.names if name not in no_concat}
-
-    # Some variables should not be concatenated but should be kept as lists.
-    # This is when there can be several arrays of variable length (NumPy
-    # doesn't support ragged arrays).
-    out.update({name: acc.get(name) for name in no_concat})
-    return out
+        return select_spikes(
+            cluster_ids, spikes_per_cluster=self.spikes_per_cluster, max_n_spikes_per_cluster=ns,
+            batch_size=batch_size, subset=subset)

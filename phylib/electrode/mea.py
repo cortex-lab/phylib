@@ -13,7 +13,7 @@ from pathlib import Path
 import numpy as np
 
 from phylib.utils._types import _as_array
-from phylib.utils._misc import _read_python
+from phylib.utils._misc import read_python
 
 
 #------------------------------------------------------------------------------
@@ -88,7 +88,7 @@ def load_probe(name_or_path):
         path = Path(__file__).parent / ('probes/%s.prb' % name_or_path)
     if not path.exists():
         raise IOError("The probe `{}` cannot be found.".format(name_or_path))
-    return MEA(probe=_read_python(path))
+    return MEA(probe=read_python(path))
 
 
 def list_probes():

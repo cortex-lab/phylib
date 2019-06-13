@@ -29,12 +29,14 @@ logger = logging.getLogger(__name__)
 #------------------------------------------------------------------------------
 
 def _encode_qbytearray(arr):
+    """Encode binary arrays with base64."""
     b = arr.toBase64().data()
     data_b64 = base64.b64encode(b).decode('utf8')
     return data_b64
 
 
 def _decode_qbytearray(data_b64):
+    """Decode binary arrays with base64."""
     encoded = base64.b64decode(data_b64)
     try:
         from PyQt5.QtCore import QByteArray
@@ -45,6 +47,7 @@ def _decode_qbytearray(data_b64):
 
 
 class _CustomEncoder(json.JSONEncoder):
+    """JSON encoder that accepts NumPy arrays."""
     def default(self, obj):
         if isinstance(obj, np.ndarray) and obj.ndim == 1 and obj.shape[0] <= 10:
             # Serialize small arrays in clear text (lists of numbers).
@@ -52,9 +55,7 @@ class _CustomEncoder(json.JSONEncoder):
         elif isinstance(obj, np.ndarray):
             obj_contiguous = np.ascontiguousarray(obj)
             data_b64 = base64.b64encode(obj_contiguous.data).decode('utf8')
-            return dict(__ndarray__=data_b64,
-                        dtype=str(obj.dtype),
-                        shape=obj.shape)
+            return dict(__ndarray__=data_b64, dtype=str(obj.dtype), shape=obj.shape)
         elif obj.__class__.__name__ == 'QByteArray':
             return {'__qbytearray__': _encode_qbytearray(obj)}
         elif isinstance(obj, np.generic):
@@ -63,6 +64,7 @@ class _CustomEncoder(json.JSONEncoder):
 
 
 def _json_custom_hook(d):
+    """Serialize NumPy arrays."""
     if isinstance(d, dict) and '__ndarray__' in d:
         data = base64.b64decode(d['__ndarray__'])
         return np.frombuffer(data, d['dtype']).reshape(d['shape'])
@@ -72,6 +74,7 @@ def _json_custom_hook(d):
 
 
 def _intify_keys(d):
+    """Make sure all integer strings in a dictionary are converted into integers."""
     assert isinstance(d, dict)
     out = {}
     for k, v in d.items():
@@ -82,6 +85,7 @@ def _intify_keys(d):
 
 
 def _stringify_keys(d):
+    """Make sure all integers in a dictionary are converted into strings."""
     assert isinstance(d, dict)
     out = {}
     for k, v in d.items():
@@ -91,7 +95,8 @@ def _stringify_keys(d):
     return out
 
 
-def _load_json(path):
+def load_json(path):
+    """Load a JSON file."""
     path = Path(path)
     if not path.exists():
         raise IOError("The JSON file `{}` doesn't exist.".format(path))
@@ -102,7 +107,8 @@ def _load_json(path):
     return _intify_keys(out)
 
 
-def _save_json(path, data):
+def save_json(path, data):
+    """Save a dictionary to a JSON file."""
     assert isinstance(data, dict)
     data = _stringify_keys(data)
     path = Path(path)
@@ -111,13 +117,13 @@ def _save_json(path, data):
         json.dump(data, f, cls=_CustomEncoder, indent=2, sort_keys=True)
 
 
-def _load_pickle(path):
+def load_pickle(path):
     """Load a pickle file using joblib."""
     from joblib import load
     return load(path)
 
 
-def _save_pickle(path, data):
+def save_pickle(path, data):
     """Save data to a pickle file using joblib."""
     from joblib import dump
     return dump(data, path)
@@ -133,13 +139,15 @@ def _fullname(o):
 
 
 def _load_from_fullname(name):
+    """Load a Python object from its fully qualified name."""
     if not isinstance(name, str):
         return name
     parts = name.rsplit('.', 1)
     return getattr(import_module(parts[0]), parts[1], parts[1])
 
 
-def _read_python(path):
+def read_python(path):
+    """Read a Python file."""
     path = Path(path)
     if not path.exists():  # pragma: no cover
         raise IOError("Path %s does not exist.", path)
@@ -150,12 +158,14 @@ def _read_python(path):
     return metadata
 
 
-def _read_text(path):
+def read_text(path):
+    """Read a text file."""
     path = Path(path)
     return path.read_text()
 
 
-def _write_text(path, contents):
+def write_text(path, contents):
+    """Write a text file."""
     contents = dedent(contents)
     path = Path(path)
     _ensure_dir_exists(path.parent)
@@ -205,13 +215,13 @@ def _write_tsv(path, field_name, data):
 
 
 def _git_version():
+    """Return the git version."""
     curdir = os.getcwd()
     os.chdir(str(Path(__file__).parent))
     try:
         with open(os.devnull, 'w') as fnull:
             version = ('-git-' + subprocess.check_output(
-                       ['git', 'describe', '--abbrev=8', '--dirty',
-                        '--always', '--tags'],
+                       ['git', 'describe', '--abbrev=8', '--dirty', '--always', '--tags'],
                        stderr=fnull).strip().decode('ascii'))
             return version
     except (OSError, subprocess.CalledProcessError):  # pragma: no cover

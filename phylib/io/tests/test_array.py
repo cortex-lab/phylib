@@ -11,34 +11,12 @@ from pathlib import Path
 import numpy as np
 from pytest import raises
 
-from ..array import (_unique,
-                     _normalize,
-                     _index_of,
-                     _in_polygon,
-                     _spikes_in_clusters,
-                     _spikes_per_cluster,
-                     _flatten_per_cluster,
-                     get_closest_clusters,
-                     _get_data_lim,
-                     _flatten,
-                     _start_stop,
-                     select_spikes,
-                     Selector,
-                     chunk_bounds,
-                     regular_subset,
-                     excerpts,
-                     data_chunk,
-                     grouped_mean,
-                     get_excerpts,
-                     _concatenate_virtual_arrays,
-                     _range_from_slice,
-                     _pad,
-                     _get_padded,
-                     read_array,
-                     write_array,
-                     Accumulator,
-                     _accumulate,
-                     )
+from ..array import (
+    _unique, _normalize, _index_of, _in_polygon, _spikes_in_clusters, _spikes_per_cluster,
+    _flatten_per_cluster, get_closest_clusters, _get_data_lim, _flatten, _start_stop,
+    select_spikes, Selector, chunk_bounds, regular_subset, excerpts, data_chunk, grouped_mean,
+    get_excerpts, _concatenate_virtual_arrays, _range_from_slice, _pad, _get_padded,
+    read_array, write_array)
 from phylib.utils._types import _as_array
 from phylib.utils.testing import _assert_equal as ae
 from ..mock import artificial_spike_clusters
@@ -447,27 +425,3 @@ def test_select_spikes_random():
                       )
     assert len(s) == 2
     assert np.all(np.in1d(s, [2, 3, 4]))
-
-
-#------------------------------------------------------------------------------
-# Test accumulator
-#------------------------------------------------------------------------------
-
-def test_accumulator_1():
-    acc = Accumulator()
-    acc.add('a', [0])
-    acc.add('a', [1])
-    assert acc.get('a') == [0, 1]
-
-
-def test_accumulator_2():
-    acc = _accumulate([{'a': np.arange(3), 'b': np.arange(3) * 10,
-                        'c': 0},
-                       {'a': np.arange(3, 5), 'b': np.arange(3, 5) * 10,
-                        'c': 1},
-                       ])
-    ae(acc['a'], np.arange(5))
-    ae(acc['b'], np.arange(5) * 10)
-    # NOTE: in case of scalars, we take the first one and discard the others.
-    # We don't concatenate them.
-    assert acc['c'] == 0

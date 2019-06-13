@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 @contextmanager
 def captured_output():
+    """Context manager that captures all output to stdout and stderr."""
     new_out, new_err = StringIO(), StringIO()
     old_out, old_err = sys.stdout, sys.stderr
     try:
@@ -37,6 +38,7 @@ def captured_output():
 
 @contextmanager
 def captured_logging(name=None):
+    """Context manager that captures all logging."""
     logger = logging.getLogger(name)
     handlers = list(logger.handlers)
     for handler in logger.handlers:
@@ -72,4 +74,5 @@ def _assert_equal(d_0, d_1):
 
 
 def _in_travis():  # pragma: no cover
+    """Return whether we're in travis."""
     return 'TRAVIS' in os.environ

@@ -14,10 +14,9 @@ import numpy as np
 # Various Python utility functions
 #------------------------------------------------------------------------------
 
-_ACCEPTED_ARRAY_DTYPES = (np.float, np.float32, np.float64,
-                          np.int, np.int8, np.int16, np.uint8, np.uint16,
-                          np.int32, np.int64, np.uint32, np.uint64,
-                          np.bool)
+_ACCEPTED_ARRAY_DTYPES = (
+    np.float, np.float32, np.float64, np.int, np.int8, np.int16, np.uint8, np.uint16,
+    np.int32, np.int64, np.uint32, np.uint64, np.bool)
 
 
 class Bunch(dict):
@@ -41,10 +40,12 @@ def _bunchify(b):
 
 
 def _is_list(obj):
+    """Return whether an object is a list."""
     return isinstance(obj, list)
 
 
 def _as_scalar(obj):
+    """Return whether an object is a scalar number (integer or floating point number)."""
     if isinstance(obj, np.generic):
         return obj.item()
     assert isinstance(obj, (int, float))
@@ -52,14 +53,17 @@ def _as_scalar(obj):
 
 
 def _as_scalars(arr):
+    """Make sure a list only contains scalar numbers."""
     return [_as_scalar(x) for x in arr]
 
 
 def _is_integer(x):
+    """Return whether an object is an integer."""
     return isinstance(x, (int, np.generic))
 
 
 def _is_float(x):
+    """Return whether an object is a floating point number."""
     return isinstance(x, (float, np.float32, np.float64))
 
 
@@ -78,6 +82,7 @@ def _as_list(obj):
 
 
 def _is_array_like(arr):
+    """Return whether an object is an array or a list."""
     return isinstance(arr, (list, np.ndarray))
 
 
