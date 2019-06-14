@@ -12,7 +12,7 @@ from pytest import raises, mark
 
 from .._misc import (
     _git_version, load_json, save_json, load_pickle, save_pickle, read_python, read_text,
-    write_text, _read_tsv_simple, _write_tsv_simple, read_tsv, write_tsv,
+    write_text, _read_tsv_simple, _write_tsv_simple, read_tsv, write_tsv, _pretty_floats,
     _encode_qbytearray, _decode_qbytearray, _fullname, _load_from_fullname)
 
 
@@ -41,6 +41,12 @@ def test_qbytearray(tempdir):
     save_json(path, d)
     d_bis = load_json(path)
     assert d == d_bis
+
+
+def test_pretty_float():
+    assert _pretty_floats(0.123456) == '0.1235'
+    assert _pretty_floats([0.123456]) == ['0.1235']
+    assert _pretty_floats({'a': 0.123456}) == {'a': '0.1235'}
 
 
 def test_json_simple(tempdir):
@@ -111,8 +117,13 @@ def test_write_tsv(tempdir):
     write_tsv(path, [])
 
     data = [{'a': 1, 'b': 2}, {'a': 10}, {'b': 20, 'c': 30.5}]
-    write_tsv(path, data)
 
+    write_tsv(path, data)
+    assert read_tsv(path) == data
+
+    write_tsv(path, data, first_field='b', exclude_fields=('c', 'd'))
+    assert read_text(path)[0] == 'b'
+    del data[2]['c']
     assert read_tsv(path) == data
 
 

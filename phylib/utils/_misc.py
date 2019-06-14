@@ -95,6 +95,17 @@ def _stringify_keys(d):
     return out
 
 
+def _pretty_floats(obj):
+    """Display floating point numbers properly."""
+    if isinstance(obj, (float, np.float64, np.float32)):
+        return '%.4g' % obj
+    elif isinstance(obj, dict):
+        return dict((k, _pretty_floats(v)) for k, v in obj.items())
+    elif isinstance(obj, (list, tuple)):
+        return list(map(_pretty_floats, obj))
+    return obj
+
+
 def load_json(path):
     """Load a JSON file."""
     path = Path(path)
@@ -195,7 +206,7 @@ def read_tsv(path):
     return data
 
 
-def write_tsv(path, data):
+def write_tsv(path, data, first_field=None, exclude_fields=()):
     """Write a CSV/TSV file.
 
     data is a list of dictionaries.
@@ -209,10 +220,23 @@ def write_tsv(path, data):
             logger.info("Data was empty when writing %s.", path)
             return
         # Get the union of all keys from all rows.
-        fields = sorted(set().union(*data))
+        fields = set().union(*data)
+        # Remove ignored fields.
+        for field in exclude_fields:
+            if field in fields:
+                fields.remove(field)
+        # Make sure the first field is the first one.
+        if first_field in fields:
+            fields.remove(first_field)
+            fields = [first_field] + sorted(fields)
+        else:
+            fields = sorted(fields)
         writer = csv.writer(f, delimiter=delimiter)
+        # Write the header.
         writer.writerow(fields)
-        writer.writerows([[row.get(field, None) for field in fields] for row in data])
+        # Write all rows.
+        writer.writerows(
+            [[_pretty_floats(row.get(field, None)) for field in fields] for row in data])
     logger.debug("Wrote %s.", path)
 
 
