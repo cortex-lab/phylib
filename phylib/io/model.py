@@ -22,8 +22,7 @@ from .array import (
 )
 from phylib.traces import WaveformLoader
 from phylib.utils import Bunch
-from phylib.utils._misc import _write_tsv_simple, _read_tsv_simple
-
+from phylib.utils._misc import _write_tsv_simple, _read_tsv_simple, read_python
 
 logger = logging.getLogger(__name__)
 
@@ -726,3 +725,25 @@ class TemplateModel(object):
 
         assert template_features.shape[0] == ns
         return template_features
+
+
+def get_template_params(params_path):
+    """Get a dictionary of parameters from a params.py file."""
+    params_path = Path(params_path)
+
+    params = read_python(params_path)
+    if isinstance(params['dat_path'], str):
+        params['dat_path'] = [params['dat_path']]
+    params['dat_path'] = [Path(_) for _ in params['dat_path']]
+    params['dtype'] = np.dtype(params['dtype'])
+    if 'dir_path' not in params:
+        params['dir_path'] = params_path.parent
+    params['dir_path'] = Path(params['dir_path'])
+    assert params['dir_path'].exists()
+    assert params['dir_path'].is_dir()
+    return params
+
+
+def load_model(params_path):
+    """Return a TemplateModel instance from a path to a params.py file."""
+    return TemplateModel(**get_template_params(params_path))

@@ -12,8 +12,8 @@ import shutil
 import numpy as np
 from pytest import fixture
 
-from phylib.utils._misc import read_python, write_text
-from ..model import TemplateModel, write_array
+from phylib.utils._misc import write_text
+from ..model import load_model, write_array
 from phylib.io.datasets import download_test_file
 
 logger = logging.getLogger(__name__)
@@ -98,8 +98,4 @@ def template_path(tempdir, request):
 
 @fixture
 def template_model(template_path):
-    params = read_python(template_path)
-    params['dat_path'] = template_path.parent / params['dat_path']
-    params['dir_path'] = template_path.parent
-    model = TemplateModel(**params)
-    return model
+    return load_model(template_path)
