@@ -369,12 +369,17 @@ class TemplateModel(object):
     def _load_channel_map(self):
         path = self._find_path('channel_map.npy', 'channels.rawRow.npy')
         out = self._read_array(path)
+        out = np.atleast_1d(out)
+        assert out.ndim == 1
         assert out.dtype in (np.uint32, np.int32, np.int64)
         return out
 
     def _load_channel_positions(self):
         path = self._find_path('channel_positions.npy', 'channels.sitePositions.npy')
-        return self._read_array(path)
+        out = self._read_array(path)
+        out = np.atleast_2d(out)
+        assert out.ndim == 2
+        return out
 
     def _load_traces(self, channel_map=None):
         if not self.dat_path:
@@ -393,7 +398,9 @@ class TemplateModel(object):
         return traces
 
     def _load_amplitudes(self):
-        return self._read_array(self._find_path('amplitudes.npy', 'spikes.amps.npy'))
+        out = self._read_array(self._find_path('amplitudes.npy', 'spikes.amps.npy'))
+        assert out.ndim == 1
+        return out
 
     def _load_spike_templates(self):
         path = self._find_path('spike_templates.npy', 'ks2/spikes.clusters.npy')
@@ -401,6 +408,7 @@ class TemplateModel(object):
         if out.dtype in (np.float32, np.float64):  # pragma: no cover
             out = out.astype(np.int32)
         assert out.dtype in (np.uint32, np.int32, np.int64)
+        assert out.ndim == 1
         return out
 
     def _load_spike_clusters(self):
@@ -416,6 +424,7 @@ class TemplateModel(object):
         # NOTE: we make a copy in memory so that we can update this array
         # during manual clustering.
         out = self._read_array(path).astype(np.int32)
+        assert out.ndim == 1
         return out
 
     def _load_spike_samples(self):
@@ -423,16 +432,21 @@ class TemplateModel(object):
         # divide by the sampling rate to get spike times in seconds.
         path = self.dir_path / 'spike_times.npy'
         if path.exists():
-            return self._read_array(path)
+            out = self._read_array(path)
         else:
             # WARNING: spikes.times.npy is in seconds, not samples !
             path = self.dir_path / 'spikes.times.npy'
             logger.info("Loading spikes.times.npy in seconds, converting to samples.")
             spike_times = self._read_array(path)
-            return (spike_times * self.sample_rate).astype(np.uint64)
+            out = (spike_times * self.sample_rate).astype(np.uint64)
+        assert out.ndim == 1
+        return out
 
     def _load_similar_templates(self):
-        return self._read_array(self._find_path('similar_templates.npy'))
+        out = self._read_array(self._find_path('similar_templates.npy'))
+        out = np.atleast_2d(out)
+        assert out.ndim == 2
+        return out
 
     def _load_templates(self):
         logger.debug("Loading templates.")
@@ -441,6 +455,7 @@ class TemplateModel(object):
         try:
             path = self._find_path('templates.npy', 'clusters.templateWaveforms.npy')
             data = self._read_array(path)
+            data = np.atleast_3d(data)
             assert data.ndim == 3
             assert data.dtype in (np.float32, np.float64)
             n_templates, n_samples, n_channels_loc = data.shape
@@ -449,6 +464,8 @@ class TemplateModel(object):
 
         try:
             cols = self._read_array(self._find_path('template_ind.npy'))
+            cols = np.atleast_2d(cols)
+            assert cols.ndim == 2
             logger.debug("Templates are sparse.")
             assert cols.shape == (n_templates, n_channels_loc)
         except IOError:
@@ -459,11 +476,17 @@ class TemplateModel(object):
 
     def _load_wm(self):
         logger.debug("Loading the whitening matrix.")
-        return self._read_array(self._find_path('whitening_mat.npy'))
+        out = self._read_array(self._find_path('whitening_mat.npy'))
+        out = np.atleast_2d(out)
+        assert out.ndim == 2
+        return out
 
-    def _load_wmi(self):
+    def _load_wmi(self):  # pragma: no cover
         logger.debug("Loading the inverse of the whitening matrix.")
-        return self._read_array(self._find_path('whitening_mat_inv.npy'))
+        out = self._read_array(self._find_path('whitening_mat_inv.npy'))
+        out = np.atleast_2d(out)
+        assert out.ndim == 2
+        return out
 
     def _compute_wmi(self, wm):
         logger.debug("Inversing the whitening matrix %s.", wm.shape)
@@ -486,6 +509,7 @@ class TemplateModel(object):
         try:
             logger.debug("Loading features.")
             data = self._read_array(self._find_path('pc_features.npy')).transpose((0, 2, 1))
+            data = np.atleast_3d(data)
             assert data.ndim == 3
             assert data.dtype in (np.float32, np.float64)
             n_spikes, n_channels_loc, n_pcs = data.shape
@@ -495,6 +519,8 @@ class TemplateModel(object):
         try:
             cols = self._read_array(self._find_path('pc_feature_ind.npy'))
             logger.debug("Features are sparse.")
+            cols = np.atleast_2d(cols)
+            assert cols.ndim == 2
             assert cols.shape == (self.n_templates, n_channels_loc)
         except IOError:
             logger.debug("Features are dense.")
