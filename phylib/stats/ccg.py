@@ -172,10 +172,8 @@ def correlograms(
 
         # Find the indices in the raveled correlograms array that need
         # to be incremented, taking into account the spike clusters.
-        indices = np.ravel_multi_index((spike_clusters_i[:-shift][m],
-                                        spike_clusters_i[+shift:][m],
-                                        d),
-                                       correlograms.shape)
+        indices = np.ravel_multi_index(
+            (spike_clusters_i[:-shift][m], spike_clusters_i[+shift:][m], d), correlograms.shape)
 
         # Increment the matching spikes in the correlograms array.
         _increment(correlograms.ravel(), indices)
@@ -183,9 +181,7 @@ def correlograms(
         shift += 1
 
     # Remove ACG peaks.
-    correlograms[np.arange(n_clusters),
-                 np.arange(n_clusters),
-                 0] = 0
+    correlograms[np.arange(n_clusters), np.arange(n_clusters), 0] = 0
 
     if symmetrize:
         return _symmetrize_correlograms(correlograms)
