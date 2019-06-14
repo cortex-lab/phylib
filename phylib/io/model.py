@@ -15,11 +15,7 @@ import shutil
 import numpy as np
 import scipy.io as sio
 
-from .array import (
-    _concatenate_virtual_arrays,
-    _index_of,
-    _spikes_in_clusters,
-)
+from .array import _concatenate_virtual_arrays, _index_of, _spikes_in_clusters
 from phylib.traces import WaveformLoader
 from phylib.utils import Bunch
 from phylib.utils._misc import _write_tsv_simple, _read_tsv_simple, read_python
@@ -215,21 +211,9 @@ class TemplateModel(object):
         self._load_data()
         self.waveform_loader = self._create_waveform_loader()
 
-    def describe(self):
-        """Display basic information about the dataset."""
-        def _print(name, value):
-            print("{0: <24}{1}".format(name, value))
-
-        _print('Data files', ', '.join(map(str, self.dat_path)))
-        _print('Directory', self.dir_path)
-        _print('Duration', '{:.1f}s'.format(self.duration))
-        _print('Number of channels', self.n_channels)
-        _print('Number of templates', self.n_templates)
-        _print('Number of spikes', "{:,}".format(self.n_spikes))
-
-    def spikes_in_template(self, template_id):
-        """Return the spike ids that belong to a given template."""
-        return _spikes_in_clusters(self.spike_templates, [template_id])
+    #--------------------------------------------------------------------------
+    # Internal loading methods
+    #--------------------------------------------------------------------------
 
     def _load_data(self):
         """Load all data."""
@@ -381,43 +365,6 @@ class TemplateModel(object):
                 continue
             spike_attributes[n] = arr
         return spike_attributes
-
-    @property
-    def metadata_fields(self):
-        """List of metadata fields."""
-        return sorted(self.metadata)
-
-    def get_metadata(self, name):
-        """Return a dictionary {cluster_id: value} for a cluster metadata
-        field."""
-        return self.metadata.get(name, {})
-
-    def save_metadata(self, name, values):
-        """Save a dictionary {cluster_id: value} with cluster metadata in
-        a TSV file."""
-        path = self.dir_path / ('cluster_%s.tsv' % name)
-        logger.debug("Save cluster metadata to `%s`.", path)
-        # Remove empty values.
-        save_metadata(
-            path, name, {c: v for c, v in values.items() if v is not None})
-
-    def save_spike_clusters(self, spike_clusters):
-        """Save the spike clusters."""
-        path = self._find_path('spike_clusters.npy', 'spikes.clusters.npy', multiple_ok=False)
-        logger.debug("Save spike clusters to `%s`.", path)
-        np.save(path, spike_clusters)
-
-    def save_mean_waveforms(self, mean_waveforms):
-        """Save the mean waveforms as a single array."""
-        path = self.dir_path / 'clusters.meanWaveforms.npy'
-        n_clusters = len(mean_waveforms)
-        out = np.zeros((n_clusters, self.n_samples_templates, self.n_channels))
-        for i, cluster_id in enumerate(sorted(mean_waveforms)):
-            b = mean_waveforms[cluster_id]
-            if b.data is not None:
-                out[i, :, b.channel_ids] = b.data[0, ...].T
-        logger.debug("Save mean waveforms to `%s`.", path)
-        np.save(path, out)
 
     def _load_channel_map(self):
         path = self._find_path('channel_map.npy', 'channels.rawRow.npy')
@@ -589,6 +536,51 @@ class TemplateModel(object):
 
         return Bunch(data=data, cols=cols, rows=rows)
 
+    #--------------------------------------------------------------------------
+    # Internal data access methods
+    #--------------------------------------------------------------------------
+
+    def _find_best_channels(self, template):
+        """Find the best channels for a given template."""
+        # Compute the template amplitude on each channel.
+        assert template.ndim == 2  # shape: (n_samples, n_channels)
+        amplitude = template.max(axis=0) - template.min(axis=0)
+        assert amplitude.ndim == 1  # shape: (n_channels,)
+        # Find the peak channel.
+        best_channel = np.argmax(amplitude)
+        max_amp = amplitude[best_channel]
+        # Find the channels X% peak.
+        peak_channels = np.nonzero(amplitude > self.amplitude_threshold * max_amp)[0]
+        # Find N closest channels.
+        close_channels = get_closest_channels(
+            self.channel_positions, best_channel, self.n_closest_channels)
+        # Keep the intersection.
+        channel_ids = np.intersect1d(peak_channels, close_channels)
+        # Order the channels by decreasing amplitude.
+        order = np.argsort(amplitude[channel_ids])[::-1]
+        channel_ids = channel_ids[order]
+        amplitude = amplitude[order]
+        assert best_channel in channel_ids
+        assert amplitude.shape == (len(channel_ids),)
+        return channel_ids, amplitude, best_channel
+
+    def _get_template_dense(self, template_id, channel_ids=None):
+        """Return data for one template."""
+        template_w = self.sparse_templates.data[template_id, ...]
+        template = self._unwhiten(template_w).astype(np.float32)
+        assert template.ndim == 2
+        channel_ids_, amplitude, best_channel = self._find_best_channels(template)
+        channel_ids = channel_ids if channel_ids is not None else channel_ids_
+        template = template[:, channel_ids]
+        assert template.ndim == 2
+        assert template.shape[1] == channel_ids.shape[0]
+        return Bunch(
+            template=template,
+            amplitude=amplitude,
+            best_channel=best_channel,
+            channel_ids=channel_ids,
+        )
+
     def _get_template_sparse(self, template_id):
         data, cols = self.sparse_templates.data, self.sparse_templates.cols
         assert cols is not None
@@ -605,44 +597,16 @@ class TemplateModel(object):
         # Compute the amplitude and the channel with max amplitude.
         amplitude = template.max(axis=0) - template.min(axis=0)
         best_channel = channel_ids[np.argmax(amplitude)]
-        b = Bunch(template=template,
-                  amplitude=amplitude,
-                  best_channel=best_channel,
-                  channel_ids=channel_ids,
-                  )
-        return b
+        return Bunch(
+            template=template,
+            amplitude=amplitude,
+            best_channel=best_channel,
+            channel_ids=channel_ids,
+        )
 
-    def _find_best_channels(self, template):
-        # Compute the template amplitude on each channel.
-        amplitude = template.max(axis=0) - template.min(axis=0)
-        # Find the peak channel.
-        best_channel = np.argmax(amplitude)
-        max_amp = amplitude[best_channel]
-        # Find the channels X% peak.
-        peak_channels = np.nonzero(amplitude > self.amplitude_threshold * max_amp)[0]
-        # Find N closest channels.
-        close_channels = get_closest_channels(
-            self.channel_positions, best_channel, self.n_closest_channels)
-        # Keep the intersection.
-        channel_ids = np.intersect1d(peak_channels, close_channels)
-        return channel_ids, amplitude, best_channel
-
-    def _get_template_dense(self, template_id, channel_ids=None):
-        """Return data for one template."""
-        template_w = self.sparse_templates.data[template_id, ...]
-        template = self._unwhiten(template_w).astype(np.float32)
-        assert template.ndim == 2
-        channel_ids_, amplitude, best_channel = self._find_best_channels(template)
-        channel_ids = channel_ids if channel_ids is not None else channel_ids_
-        template = template[:, channel_ids]
-        assert template.ndim == 2
-        assert template.shape[1] == channel_ids.shape[0]
-        b = Bunch(template=template,
-                  amplitude=amplitude,
-                  best_channel=best_channel,
-                  channel_ids=channel_ids,
-                  )
-        return b
+    #--------------------------------------------------------------------------
+    # Data access methods
+    #--------------------------------------------------------------------------
 
     def get_template(self, template_id, channel_ids=None):
         """Get data about a template."""
@@ -652,7 +616,7 @@ class TemplateModel(object):
             return self._get_template_dense(template_id, channel_ids=channel_ids)
 
     def get_waveforms(self, spike_ids, channel_ids):
-        """Return a selection of waveforms on specified channels."""
+        """Return spike waveforms on specified channels."""
         if self.waveform_loader is None:
             return
         out = self.waveform_loader.get(spike_ids, channel_ids)
@@ -725,6 +689,119 @@ class TemplateModel(object):
 
         assert template_features.shape[0] == ns
         return template_features
+
+    #--------------------------------------------------------------------------
+    # Internal helper methods for public high-level methods
+    #--------------------------------------------------------------------------
+
+    def _get_template_from_spikes(self, spike_ids):
+        """Get the main template from a set of spikes."""
+        # We get the original template ids for the spikes.
+        st = self.spike_templates[spike_ids]
+        # We find the template with the largest number of spikes from the spike selection.
+        template_ids, counts = np.unique(st, return_counts=True)
+        ind = np.argmax(counts)
+        template_id = template_ids[ind]
+        # We load the template.
+        template = self.get_template(template_id)
+        # We return the template.
+        return template
+
+    #--------------------------------------------------------------------------
+    # Public high-level methods
+    #--------------------------------------------------------------------------
+
+    def describe(self):
+        """Display basic information about the dataset."""
+        def _print(name, value):
+            print("{0: <24}{1}".format(name, value))
+
+        _print('Data files', ', '.join(map(str, self.dat_path)))
+        _print('Directory', self.dir_path)
+        _print('Duration', '{:.1f}s'.format(self.duration))
+        _print('Number of channels', self.n_channels)
+        _print('Number of templates', self.n_templates)
+        _print('Number of spikes', "{:,}".format(self.n_spikes))
+
+    def get_template_spikes(self, template_id):
+        """Return the spike ids that belong to a given template."""
+        return _spikes_in_clusters(self.spike_templates, [template_id])
+
+    def get_cluster_spikes(self, cluster_id):
+        """Return the spike ids that belong to a given template."""
+        return _spikes_in_clusters(self.spike_clusters, [cluster_id])
+
+    def get_template_channels(self, template_id):
+        """Return the most relevant channels of a template."""
+        template = self.get_template(template_id)
+        return template.channel_ids
+
+    def get_cluster_channels(self, cluster_id):
+        """Return the most relevant channels of a cluster."""
+        spike_ids = self.get_cluster_spikes(cluster_id)
+        return self._get_template_from_spikes(spike_ids).channel_ids
+
+    def get_template_waveforms(self, template_id):
+        """Return the waveforms of a template on the most relevant channels."""
+        template = self.get_template(template_id)
+        return template.template
+
+    def get_template_spike_waveforms(self, template_id):
+        """Return all spike waveforms of a template, on the most relevant channels."""
+        spike_ids = self.get_template_spikes(template_id)
+        channel_ids = self.get_template_channels(template_id)
+        return self.get_waveforms(spike_ids, channel_ids)
+
+    def get_cluster_spike_waveforms(self, cluster_id):
+        """Return all spike waveforms of a cluster, on the most relevant channels."""
+        spike_ids = self.get_cluster_spikes(cluster_id)
+        channel_ids = self.get_cluster_channels(cluster_id)
+        return self.get_waveforms(spike_ids, channel_ids)
+
+    #--------------------------------------------------------------------------
+    # Metadata methods
+    #--------------------------------------------------------------------------
+
+    @property
+    def metadata_fields(self):
+        """List of metadata fields."""
+        return sorted(self.metadata)
+
+    def get_metadata(self, name):
+        """Return a dictionary {cluster_id: value} for a cluster metadata
+        field."""
+        return self.metadata.get(name, {})
+
+    #--------------------------------------------------------------------------
+    # Saving methods
+    #--------------------------------------------------------------------------
+
+    def save_metadata(self, name, values):
+        """Save a dictionary {cluster_id: value} with cluster metadata in
+        a TSV file."""
+        path = self.dir_path / ('cluster_%s.tsv' % name)
+        logger.debug("Save cluster metadata to `%s`.", path)
+        # Remove empty values.
+        save_metadata(
+            path, name, {c: v for c, v in values.items() if v is not None})
+
+    def save_spike_clusters(self, spike_clusters):
+        """Save the spike clusters."""
+        path = self._find_path('spike_clusters.npy', 'spikes.clusters.npy', multiple_ok=False)
+        logger.debug("Save spike clusters to `%s`.", path)
+        np.save(path, spike_clusters)
+
+    def save_mean_waveforms(self, mean_waveforms):
+        """Save the mean waveforms as a single array."""
+        path = self.dir_path / 'clusters.meanWaveforms.npy'
+        n_clusters = len(mean_waveforms)
+        out = np.zeros((n_clusters, self.n_samples_templates, self.n_channels))
+        for i, cluster_id in enumerate(sorted(mean_waveforms)):
+            b = mean_waveforms[cluster_id]
+            if b.data is not None:
+                out[i, :, b.channel_ids] = b.data[0, ...].T
+        logger.debug("Save mean waveforms to `%s`.", path)
+        np.save(path, out)
 
 
 def get_template_params(params_path):

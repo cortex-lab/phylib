@@ -57,7 +57,7 @@ def test_model_2(template_model):
     m = template_model
     tmp = m.get_template(3)
     channel_ids = tmp.channel_ids
-    spike_ids = m.spikes_in_template(3)
+    spike_ids = m.get_cluster_spikes(3)
 
     w = m.get_waveforms(spike_ids, channel_ids)
     assert w is None or w.shape == (len(spike_ids), tmp.template.shape[0], len(channel_ids))
@@ -67,6 +67,42 @@ def test_model_2(template_model):
 
     tf = m.get_template_features(spike_ids)
     assert tf is None or tf.shape == (len(spike_ids), m.n_templates)
+
+
+def test_model_3(template_model):
+    m = template_model
+
+    spike_ids = m.get_template_spikes(3)
+    n_spikes = len(spike_ids)
+
+    channel_ids = m.get_template_channels(3)
+    n_channels = len(channel_ids)
+
+    waveforms = m.get_template_spike_waveforms(3)
+    if waveforms is not None:
+        assert waveforms.ndim == 3
+        assert waveforms.shape[0] == n_spikes
+        assert waveforms.shape[2] == n_channels
+
+    tw = m.get_template_waveforms(3)
+    assert tw.ndim == 2
+    assert tw.shape[1] == n_channels
+
+
+def test_model_4(template_model):
+    m = template_model
+
+    spike_ids = m.get_cluster_spikes(3)
+    n_spikes = len(spike_ids)
+
+    channel_ids = m.get_cluster_channels(3)
+    n_channels = len(channel_ids)
+
+    waveforms = m.get_cluster_spike_waveforms(3)
+    if waveforms is not None:
+        assert waveforms.ndim == 3
+        assert waveforms.shape[0] == n_spikes
+        assert waveforms.shape[2] == n_channels
 
 
 def test_model_save(template_model):

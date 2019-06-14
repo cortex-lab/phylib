@@ -271,10 +271,7 @@ class WaveformLoader(object):
     def get(self, spike_ids, channels=None):
         """Load the waveforms of the specified spikes."""
         if isinstance(spike_ids, slice):
-            spike_ids = _range_from_slice(spike_ids,
-                                          start=0,
-                                          stop=self.n_spikes,
-                                          )
+            spike_ids = _range_from_slice(spike_ids, start=0, stop=self.n_spikes)
         if not hasattr(spike_ids, '__len__'):
             spike_ids = [spike_ids]
         if channels is None:

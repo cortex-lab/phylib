@@ -22,7 +22,7 @@ from ..color import (
 #------------------------------------------------------------------------------
 
 def test_random_color():
-    for _ in range(10):
+    for _ in range(20):
         assert _is_bright(_random_bright_color())
 
 
