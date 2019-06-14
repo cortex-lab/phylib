@@ -12,8 +12,8 @@ from pytest import raises, mark
 
 from .._misc import (
     _git_version, load_json, save_json, load_pickle, save_pickle, read_python, read_text,
-    write_text, _read_tsv, _write_tsv, _encode_qbytearray, _decode_qbytearray, _fullname,
-    _load_from_fullname)
+    write_text, _read_tsv_simple, _write_tsv_simple, read_tsv, write_tsv,
+    _encode_qbytearray, _decode_qbytearray, _fullname, _load_from_fullname)
 
 
 #------------------------------------------------------------------------------
@@ -94,14 +94,26 @@ def test_write_text(tempdir):
         assert read_text(path) == 'hello world'
 
 
+def test_write_tsv_simple(tempdir):
+    path = tempdir / 'test.tsv'
+    assert _read_tsv_simple(path) == {}
+
+    # The read/write TSV functions conserve the types: int, float, or strings.
+    data = {2: 20, 3: 30.5, 5: 'hello'}
+    _write_tsv_simple(path, 'myfield', data)
+
+    assert _read_tsv_simple(path) == ('myfield', data)
+
+
 def test_write_tsv(tempdir):
     path = tempdir / 'test.tsv'
-    assert _read_tsv(path) == {}
+    assert read_tsv(path) == []
+    write_tsv(path, [])
 
-    data = {2: '20', 3: '30', 5: '50'}
-    _write_tsv(path, 'myfield', data)
+    data = [{'a': 1, 'b': 2}, {'a': 10}, {'b': 20, 'c': 30.5}]
+    write_tsv(path, data)
 
-    assert _read_tsv(path) == ('myfield', data)
+    assert read_tsv(path) == data
 
 
 def test_git_version():

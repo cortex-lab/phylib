@@ -14,7 +14,7 @@ import shutil
 
 import numpy as np
 
-from phylib.utils._misc import _read_tsv, _ensure_dir_exists
+from phylib.utils._misc import _read_tsv_simple, _ensure_dir_exists
 from phylib.io.array import _spikes_per_cluster, select_spikes, _unique, grouped_mean, _index_of
 
 logger = logging.getLogger(__name__)
@@ -103,7 +103,7 @@ def _load(path):
     if path.endswith('.npy'):
         return np.load(path)
     elif path.endswith(('.csv', '.tsv')):
-        return _read_tsv(path)[1]  # the function returns a tuple (field, data)
+        return _read_tsv_simple(path)[1]  # the function returns a tuple (field, data)
     elif path.endswith('.bin'):
         # TODO: configurable dtype
         return np.fromfile(path, np.int16)

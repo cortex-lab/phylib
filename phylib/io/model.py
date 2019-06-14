@@ -22,7 +22,7 @@ from .array import (
 )
 from phylib.traces import WaveformLoader
 from phylib.utils import Bunch
-from phylib.utils._misc import _write_tsv, _read_tsv
+from phylib.utils._misc import _write_tsv_simple, _read_tsv_simple
 
 
 logger = logging.getLogger(__name__)
@@ -63,12 +63,12 @@ def load_metadata(filename):
     Return (field_name, dictionary).
 
     """
-    return _read_tsv(filename)
+    return _read_tsv_simple(filename)
 
 
 def save_metadata(filename, field_name, metadata):
     """Save metadata in a CSV file."""
-    return _write_tsv(filename, field_name, metadata)
+    return _write_tsv_simple(filename, field_name, metadata)
 
 
 def _dat_n_samples(filename, dtype=None, n_channels=None, offset=None):
@@ -345,10 +345,15 @@ class TemplateModel(object):
 
     def _load_metadata(self):
         """Load cluster metadata from all CSV/TSV files in the data directory."""
+        # Files to exclude.
+        excluded_names = ('cluster_info',)
+        # Get all CSV/TSV files in the directory.
         files = list(self.dir_path.glob('*.csv'))
         files.extend(self.dir_path.glob('*.tsv'))
         metadata = {}
         for filename in files:
+            if filename.stem in excluded_names:
+                continue
             logger.debug("Load `%s`.", filename)
             try:
                 field_name, values = load_metadata(filename)

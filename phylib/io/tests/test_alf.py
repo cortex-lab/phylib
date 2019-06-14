@@ -15,7 +15,7 @@ from pytest import fixture, raises
 import numpy as np
 import numpy.random as nr
 
-from phylib.utils._misc import _write_tsv
+from phylib.utils._misc import _write_tsv_simple
 from ..alf import _FILE_RENAMES, _load, EphysAlfCreator
 from ..model import TemplateModel
 
@@ -40,7 +40,7 @@ class Dataset(object):
         np.save(p / 'templates.npy', np.random.normal(size=(self.nt, 50, self.nc)))
         np.save(p / 'similar_templates.npy', np.tile(np.arange(self.nt), (self.nt, 1)))
         np.save(p / 'channel_map.npy', np.c_[np.arange(self.nc)])
-        _write_tsv(p / 'cluster_group.tsv', 'group', {2: 'good', 3: 'mua', 5: 'noise'})
+        _write_tsv_simple(p / 'cluster_group.tsv', 'group', {2: 'good', 3: 'mua', 5: 'noise'})
 
         # Raw data
         self.dat_path = p / 'rawdata.npy'

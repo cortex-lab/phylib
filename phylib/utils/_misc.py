@@ -117,6 +117,10 @@ def save_json(path, data):
         json.dump(data, f, cls=_CustomEncoder, indent=2, sort_keys=True)
 
 
+#------------------------------------------------------------------------------
+# Other read/write functions
+#------------------------------------------------------------------------------
+
 def load_pickle(path):
     """Load a pickle file using joblib."""
     from joblib import load
@@ -127,23 +131,6 @@ def save_pickle(path, data):
     """Save data to a pickle file using joblib."""
     from joblib import dump
     return dump(data, path)
-
-
-#------------------------------------------------------------------------------
-# Various Python utility functions
-#------------------------------------------------------------------------------
-
-def _fullname(o):
-    """Return the fully-qualified name of a function."""
-    return o.__module__ + "." + o.__name__ if o.__module__ else o.__name__
-
-
-def _load_from_fullname(name):
-    """Load a Python object from its fully qualified name."""
-    if not isinstance(name, str):
-        return name
-    parts = name.rsplit('.', 1)
-    return getattr(import_module(parts[0]), parts[1], parts[1])
 
 
 def read_python(path):
@@ -172,7 +159,64 @@ def write_text(path, contents):
     path.write_text(contents)
 
 
-def _read_tsv(path):
+def _try_make_number(value):
+    """Convert a string into an int or float if possible, otherwise do nothing."""
+    try:
+        return int(value)
+    except ValueError:
+        try:
+            return float(value)
+        except ValueError:
+            return value
+    raise ValueError()
+
+
+def read_tsv(path):
+    """Read a CSV/TSV file.
+
+    Return a list of dictionaries.
+
+    """
+    path = Path(path)
+    data = []
+    if not path.exists():
+        logger.warning("%s does not exist, skipping.", path)
+        return data
+    # Find whether the delimiter is tab or comma.
+    with path.open('r') as f:
+        delimiter = '\t' if '\t' in f.readline() else ','
+    with path.open('r') as f:
+        reader = csv.reader(f, delimiter=delimiter)
+        # Skip the header.
+        field_names = list(next(reader))
+        for row in reader:
+            data.append({k: _try_make_number(v) for k, v in zip(field_names, row) if v != ''})
+    logger.debug("Read %s.", path)
+    return data
+
+
+def write_tsv(path, data):
+    """Write a CSV/TSV file.
+
+    data is a list of dictionaries.
+
+    """
+    path = Path(path)
+    _ensure_dir_exists(path.parent)
+    delimiter = '\t' if path.suffix == '.tsv' else ','
+    with path.open('w', newline='') as f:
+        if not data:
+            logger.info("Data was empty when writing %s.", path)
+            return
+        # Get the union of all keys from all rows.
+        fields = sorted(set().union(*data))
+        writer = csv.writer(f, delimiter=delimiter)
+        writer.writerow(fields)
+        writer.writerows([[row.get(field, None) for field in fields] for row in data])
+    logger.debug("Wrote %s.", path)
+
+
+def _read_tsv_simple(path):
     """Read a CSV/TSV file with only two columns: cluster_id and <field>.
 
     Return (field_name, dictionary {cluster_id: value}).
@@ -193,12 +237,12 @@ def _read_tsv(path):
         for row in reader:
             cluster_id, value = row
             cluster_id = int(cluster_id)
-            data[cluster_id] = value
+            data[cluster_id] = _try_make_number(value)
     logger.debug("Read %s.", path)
     return field_name, data
 
 
-def _write_tsv(path, field_name, data):
+def _write_tsv_simple(path, field_name, data):
     """Write a CSV/TSV file with two columns: cluster_id and <field>.
 
     data is a dictionary {cluster_id: value}.
@@ -212,6 +256,23 @@ def _write_tsv(path, field_name, data):
         writer.writerow(['cluster_id', field_name])
         writer.writerows([(cluster_id, data[cluster_id]) for cluster_id in sorted(data)])
     logger.debug("Wrote %s.", path)
+
+
+#------------------------------------------------------------------------------
+# Various Python utility functions
+#------------------------------------------------------------------------------
+
+def _fullname(o):
+    """Return the fully-qualified name of a function."""
+    return o.__module__ + "." + o.__name__ if o.__module__ else o.__name__
+
+
+def _load_from_fullname(name):
+    """Load a Python object from its fully qualified name."""
+    if not isinstance(name, str):
+        return name
+    parts = name.rsplit('.', 1)
+    return getattr(import_module(parts[0]), parts[1], parts[1])
 
 
 def _git_version():
