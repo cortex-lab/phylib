@@ -59,7 +59,7 @@ def _remove(path):
 
 
 @fixture(scope='function', params=('dense', 'sparse', 'misc'))
-def template_path(tempdir, request):
+def template_path_full(tempdir, request):
     # Download the dataset.
     paths = list(map(download_test_file, _FILES))
     # Copy the dataset to a temporary directory.
@@ -94,6 +94,25 @@ def template_path(tempdir, request):
 
     template_path = tempdir / paths[0].name
     return template_path
+
+
+@fixture(scope='function')
+def template_path(tempdir, request):
+    # Download the dataset.
+    paths = list(map(download_test_file, _FILES))
+    # Copy the dataset to a temporary directory.
+    for path in paths:
+        to_path = tempdir / path.name
+        logger.debug("Copying file to %s.", to_path)
+        shutil.copy(path, to_path)
+
+    template_path = tempdir / paths[0].name
+    return template_path
+
+
+@fixture
+def template_model_full(template_path_full):
+    return load_model(template_path_full)
 
 
 @fixture

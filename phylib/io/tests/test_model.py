@@ -45,16 +45,16 @@ def test_from_sparse():
         _test([19, 19], [[0, 0], [4, 4]])
 
 
-def test_model_1(template_model):
+def test_model_1(template_model_full):
     with captured_output() as (stdout, stderr):
-        template_model.describe()
+        template_model_full.describe()
     out = stdout.getvalue()
     assert 'sim_binary.dat' in out
     assert '64' in out
 
 
-def test_model_2(template_model):
-    m = template_model
+def test_model_2(template_model_full):
+    m = template_model_full
     tmp = m.get_template(3)
     channel_ids = tmp.channel_ids
     spike_ids = m.get_cluster_spikes(3)
@@ -69,8 +69,8 @@ def test_model_2(template_model):
     assert tf is None or tf.shape == (len(spike_ids), m.n_templates)
 
 
-def test_model_3(template_model):
-    m = template_model
+def test_model_3(template_model_full):
+    m = template_model_full
 
     spike_ids = m.get_template_spikes(3)
     n_spikes = len(spike_ids)
@@ -89,8 +89,8 @@ def test_model_3(template_model):
     assert tw.shape[1] == n_channels
 
 
-def test_model_4(template_model):
-    m = template_model
+def test_model_4(template_model_full):
+    m = template_model_full
 
     spike_ids = m.get_cluster_spikes(3)
     n_spikes = len(spike_ids)
@@ -105,8 +105,8 @@ def test_model_4(template_model):
         assert waveforms.shape[2] == n_channels
 
 
-def test_model_save(template_model):
-    m = template_model
+def test_model_save(template_model_full):
+    m = template_model_full
     m.save_metadata('test', {1: 1})
     m.save_spike_clusters(m.spike_clusters)
     m.save_mean_waveforms({1: Bunch(
@@ -114,8 +114,8 @@ def test_model_save(template_model):
         data=np.zeros((1, m.n_samples_templates, m.n_channels)))})
 
 
-def test_model_metadata_1(template_model):
-    m = template_model
+def test_model_metadata_1(template_model_full):
+    m = template_model_full
     assert m.metadata_fields
 
     assert m.get_metadata('group').get(4, None) == 'good'
@@ -137,7 +137,8 @@ def test_model_metadata_2(template_model):
     assert m.get_metadata('quality').get(1, None) == 1
 
 
-def test_model_spike_attributes(template_model):
-    assert set(template_model.spike_attributes.keys()) == set(('randn', 'works'))
-    assert template_model.spike_attributes.works.shape == (template_model.n_spikes,)
-    assert template_model.spike_attributes.randn.shape == (template_model.n_spikes, 2)
+def test_model_spike_attributes(template_model_full):
+    model = template_model_full
+    assert set(model.spike_attributes.keys()) == set(('randn', 'works'))
+    assert model.spike_attributes.works.shape == (model.n_spikes,)
+    assert model.spike_attributes.randn.shape == (model.n_spikes, 2)
