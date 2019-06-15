@@ -91,6 +91,7 @@ def _spike_colors(spike_clusters=None, masks=None, alpha=None, colormap=None):
 
 def _continuous_colormap(colormap, values, vmin=None, vmax=None):
     """Convert values into colors given a specified continuous colormap."""
+    assert values is not None
     assert colormap.shape[1] == 3
     n = colormap.shape[0]
     vmin = vmin if vmin is not None else values.min()
@@ -191,6 +192,16 @@ def add_alpha(c, alpha=1.):
     raise ValueError("Unknown value given in add_alpha().")
 
 
+def _categorize(values):
+    """Categorize a lsit of values by replacing strings and None values by integers."""
+    if any(isinstance(v, str) or v is None for v in values):
+        # HACK: replace None by empty string to avoid error when sorting the unique values.
+        values = [str(v).lower() if v is not None else '' for v in values]
+        uv = sorted(set(values))
+        values = [uv.index(v) for v in values]
+    return values
+
+
 class ClusterColorSelector(object):
     """Assign a color to clusters depending on cluster labels or metrics."""
     _color_field = 'cluster'
@@ -262,6 +273,7 @@ class ClusterColorSelector(object):
             vmin, vmax = np.log(self.vmin), np.log(self.vmax)
         else:
             vmin, vmax = self.vmin, self.vmax
+        assert values is not None
         # Use categorical or continuous colormap depending on the categorical option.
         f = (_categorical_colormap
              if self._categorical and np.issubdtype(values.dtype, np.integer)
@@ -285,22 +297,18 @@ class ClusterColorSelector(object):
         assert self.cluster_ids is not None
         assert self._colormap is not None
         val = self._get_cluster_value(cluster_id)
-        col = tuple(self.map(np.array([val]))[0].tolist())
+        col = tuple(self.map(np.array(_categorize([val])))[0].tolist())
         return add_alpha(col, alpha=alpha)
 
     def get_values(self, cluster_ids):
         """Get the values of clusters for the selected color field.."""
         values = [self._get_cluster_value(cluster_id) for cluster_id in cluster_ids]
-        # Deal with categorical variables (strings)
-        if any(isinstance(v, str) or v is None for v in values):
-            # HACK: replace None by empty string to avoid error when sorting the unique values.
-            values = [str(v).lower() if v is not None else '' for v in values]
-            uv = sorted(set(values))
-            values = [uv.index(v) for v in values]
+        values = _categorize(values)
         return np.array(values)
 
     def get_colors(self, cluster_ids, alpha=1.):
         """Return the colors of some clusters."""
         values = self.get_values(cluster_ids)
+        assert values is not None
         assert len(values) == len(cluster_ids)
         return add_alpha(self.map(values), alpha=alpha)
