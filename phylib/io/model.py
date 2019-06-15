@@ -183,8 +183,8 @@ def _find_first_existing_path(*paths, multiple_ok=True):
 class TemplateModel(object):
     """Object holding all data of a KiloSort/phy dataset."""
 
-    n_closest_channels = 16
-    amplitude_threshold = .25
+    n_closest_channels = 12
+    amplitude_threshold = 0
 
     def __init__(self, dat_path=None, **kwargs):
         if not dat_path:  # pragma: no cover
