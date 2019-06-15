@@ -119,11 +119,17 @@ def load_json(path):
 
 
 def save_json(path, data):
-    """Save a dictionary to a JSON file."""
+    """Save a dictionary to a JSON file.
+
+    Support NumPy arrays and QByteArray objects. NumPy arrays are saved as base64-encoded strings,
+    except for 1D arrays with less than 10 elements, which are saved as a list for human
+    readability.
+
+    """
     assert isinstance(data, dict)
     data = _stringify_keys(data)
     path = Path(path)
-    _ensure_dir_exists(path.parent)
+    ensure_dir_exists(path.parent)
     with path.open('w') as f:
         json.dump(data, f, cls=_CustomEncoder, indent=2, sort_keys=True)
 
@@ -145,7 +151,20 @@ def save_pickle(path, data):
 
 
 def read_python(path):
-    """Read a Python file."""
+    """Read a Python file.
+
+    Parameters
+    ----------
+
+    path : str or Path
+
+    Returns
+    -------
+
+    metadata : dict
+        A dictionary containing all variables defined in the Python file (with `exec()`).
+
+    """
     path = Path(path)
     if not path.exists():  # pragma: no cover
         raise IOError("Path %s does not exist.", path)
@@ -166,7 +185,7 @@ def write_text(path, contents):
     """Write a text file."""
     contents = dedent(contents)
     path = Path(path)
-    _ensure_dir_exists(path.parent)
+    ensure_dir_exists(path.parent)
     path.write_text(contents)
 
 
@@ -185,7 +204,10 @@ def _try_make_number(value):
 def read_tsv(path):
     """Read a CSV/TSV file.
 
-    Return a list of dictionaries.
+    Returns
+    -------
+
+    data : list of dicts
 
     """
     path = Path(path)
@@ -209,11 +231,20 @@ def read_tsv(path):
 def write_tsv(path, data, first_field=None, exclude_fields=(), n_significant_figures=4):
     """Write a CSV/TSV file.
 
-    data is a list of dictionaries.
+    Parameters
+    ----------
+
+    data : list of dicts
+    first_field : str
+        The name of the field that should come first in the file.
+    exclude_fields : list-like
+        Fields present in the data that should not be saved in the file.
+    n_significant_figures : int
+        Number of significant figures used for floating-point numbers in the file.
 
     """
     path = Path(path)
-    _ensure_dir_exists(path.parent)
+    ensure_dir_exists(path.parent)
     delimiter = '\t' if path.suffix == '.tsv' else ','
     with path.open('w', newline='') as f:
         if not data:
@@ -274,7 +305,7 @@ def _write_tsv_simple(path, field_name, data):
 
     """
     path = Path(path)
-    _ensure_dir_exists(path.parent)
+    ensure_dir_exists(path.parent)
     delimiter = '\t' if path.suffix == '.tsv' else ','
     with path.open('w', newline='') as f:
         writer = csv.writer(f, delimiter=delimiter)
@@ -317,12 +348,12 @@ def _git_version():
 
 
 def phy_config_dir():
-    """Return the absolute path to the phy user directory."""
+    """Return the absolute path to the phy user directory. By default, `~/.phy/`."""
     return Path.home() / '.phy'
 
 
-def _ensure_dir_exists(path):
-    """Ensure a directory exists."""
+def ensure_dir_exists(path):
+    """Ensure a directory exists, and create it otherwise."""
     path = Path(path)
     if path.exists():
         assert path.is_dir()

@@ -20,12 +20,13 @@ _ACCEPTED_ARRAY_DTYPES = (
 
 
 class Bunch(dict):
-    """A dict with additional dot syntax."""
+    """A subclass of dictionary with an additional dot syntax."""
     def __init__(self, *args, **kwargs):
         super(Bunch, self).__init__(*args, **kwargs)
         self.__dict__ = self
 
     def copy(self):
+        """Return a new Bunch instance which is a copy of the current Bunch instance."""
         return Bunch(super(Bunch, self).copy())
 
 

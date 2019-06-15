@@ -116,14 +116,15 @@ def get_closest_channels(channel_positions, channel_index, n=None):
 def from_sparse(data, cols, channel_ids):
     """Convert a sparse structure into a dense one.
 
-    Arguments:
+    Parameters
+    ----------
 
-    data : array
+    data : array-like
         A (n_spikes, n_channels_loc, ...) array with the data.
-    cols : array
+    cols : array-like
         A (n_spikes, n_channels_loc) array with the channel indices of
         every row in data.
-    channel_ids : array
+    channel_ids : array-like
         List of requested channel ids (columns).
 
     """
@@ -181,9 +182,36 @@ def _find_first_existing_path(*paths, multiple_ok=True):
 #------------------------------------------------------------------------------
 
 class TemplateModel(object):
-    """Object holding all data of a KiloSort/phy dataset."""
+    """Object holding all data of a KiloSort/phy dataset.
 
+    Constructor
+    -----------
+
+    dat_path : str, Path, or list
+        Path to the raw data files.
+    dir_path : str or Path
+        Path to the dataset directory
+    dtype : NumPy dtype
+        Data type of the raw data file
+    offset : int
+        Header offset of the binary file
+    n_channels_dat : int
+        Number of channels in the dat file
+    sample_rate : float
+        Sampling rate of the data file.
+    filter_order : int
+        Order of the filter used for waveforms
+    hp_filtered : bool
+        Whether the raw data file is already high-pass filtered. In that case, disable the
+        filtering for the waveform extraction.
+
+    """
+
+    """Number of closest channels used for templates."""
     n_closest_channels = 12
+
+    """Fraction of the peak amplitude required by the closest channels to be kept as best
+    channels."""
     amplitude_threshold = 0
 
     def __init__(self, dat_path=None, **kwargs):
@@ -307,12 +335,13 @@ class TemplateModel(object):
         # Number of time samples in the templates.
         nsw = self.n_samples_templates
         if self.traces is not None:
-            return WaveformLoader(traces=self.traces,
-                                  spike_samples=self.spike_samples,
-                                  n_samples_waveforms=nsw,
-                                  filter_order=self.filter_order,
-                                  sample_rate=self.sample_rate,
-                                  )
+            return WaveformLoader(
+                traces=self.traces,
+                spike_samples=self.spike_samples,
+                n_samples_waveforms=nsw,
+                filter_order=self.filter_order,
+                sample_rate=self.sample_rate,
+            )
 
     def _find_path(self, *names, multiple_ok=True):
         return _find_first_existing_path(

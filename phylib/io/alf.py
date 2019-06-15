@@ -14,7 +14,7 @@ import shutil
 
 import numpy as np
 
-from phylib.utils._misc import _read_tsv_simple, _ensure_dir_exists
+from phylib.utils._misc import _read_tsv_simple, ensure_dir_exists
 from phylib.io.array import _spikes_per_cluster, select_spikes, _unique, grouped_mean, _index_of
 
 logger = logging.getLogger(__name__)
@@ -60,7 +60,7 @@ def _create_if_possible(path, new_path):
     if Path(new_path).exists():  # pragma: no cover
         logger.warning("Path %s already exists, skipping.", new_path)
         return False
-    _ensure_dir_exists(new_path.parent)
+    ensure_dir_exists(new_path.parent)
     return True
 
 

@@ -150,7 +150,7 @@ def _make_cluster_group_colormap():
     ])
 
 
-# Built-in colormaps.
+"""Built-in colormaps."""
 colormaps = Bunch(
     default=_make_default_colormap(),
     cluster_group=_make_cluster_group_colormap(),
@@ -162,7 +162,7 @@ colormaps = Bunch(
 
 
 def selected_cluster_color(i, alpha=1.):
-    """Return the color of the i-th selected cluster."""
+    """Return the color, as a 4-tuple, of the i-th selected cluster."""
     return add_alpha(tuple(colormaps.default[i % len(colormaps.default)]), alpha=alpha)
 
 
@@ -182,7 +182,15 @@ def _add_selected_clusters_colors(selected_clusters, cluster_ids, cluster_colors
 #------------------------------------------------------------------------------
 
 def add_alpha(c, alpha=1.):
-    """Add an alpha channel to an RGB color."""
+    """Add an alpha channel to an RGB color.
+
+    Parameters
+    ----------
+
+    c : array-like (2D, shape[1] == 3) or 3-tuple
+    alpha : float
+
+    """
     if isinstance(c, (tuple,)):
         return c + (alpha,)
     elif isinstance(c, np.ndarray):
@@ -226,7 +234,8 @@ class ClusterColorSelector(object):
 
     @property
     def state(self):
-        """Colormap state."""
+        """Colormap state. This is a Bunch with the following keys: color_field, colormap,
+        categorical, logarithmic."""
         colormap_name = None
         # Find the colormap name from the colormap array.
         for cname, arr in colormaps.items():
@@ -248,7 +257,22 @@ class ClusterColorSelector(object):
 
     def set_color_mapping(
             self, color_field=None, colormap=None, categorical=None, logarithmic=None):
-        """Set the field used to choose the cluster colors, and the associated colormap."""
+        """Set the field used to choose the cluster colors, and the associated colormap.
+
+        Parameters
+        ----------
+
+        color_field : str
+            Name of the cluster metrics or label to use for the color.
+        colormap : array-like
+            A `(N, 3)` array with the colormaps colors
+        categorical : boolean
+            Whether the colormap is categorical (one value = one color) or continuous (values
+            are continuously mapped from their initial interval to the colors).
+        logarithmic : boolean
+            Whether to use a logarithmic transform for the mapping.
+
+        """
         if isinstance(colormap, str):
             colormap = colormaps[colormap]
         self._colormap = colormap if colormap is not None else self._colormap
@@ -266,7 +290,19 @@ class ClusterColorSelector(object):
             self.vmin, self.vmax = values.min(), values.max()
 
     def map(self, values):
-        """Convert values to colors using the selected colormap."""
+        """Convert values to colors using the selected colormap.
+
+        Parameters
+        ----------
+
+        values : array-like (1D)
+
+        Returns
+        -------
+
+        colors : array-like (2D, shape[1] == 3)
+
+        """
         if self._logarithmic:
             assert np.all(values > 0)
             values = np.log(values)
@@ -293,7 +329,7 @@ class ClusterColorSelector(object):
         return 0
 
     def get(self, cluster_id, alpha=None):
-        """Return the color of a given cluster."""
+        """Return the RGBA color of a single cluster."""
         assert self.cluster_ids is not None
         assert self._colormap is not None
         val = self._get_cluster_value(cluster_id)
@@ -307,7 +343,7 @@ class ClusterColorSelector(object):
         return np.array(values)
 
     def get_colors(self, cluster_ids, alpha=1.):
-        """Return the colors of some clusters."""
+        """Return the RGBA colors of some clusters."""
         values = self.get_values(cluster_ids)
         assert values is not None
         assert len(values) == len(cluster_ids)

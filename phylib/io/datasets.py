@@ -10,7 +10,7 @@ import hashlib
 import logging
 from pathlib import Path
 
-from phylib.utils._misc import _ensure_dir_exists, phy_config_dir
+from phylib.utils._misc import ensure_dir_exists, phy_config_dir
 from phylib.utils.event import ProgressReporter
 
 
@@ -134,7 +134,7 @@ def download_test_file(name, config_dir=None, force=False):
     config_dir = Path(config_dir or phy_config_dir())
     path = config_dir / 'test_data' / name
     # Ensure the directory exists.
-    _ensure_dir_exists(path.parent)
+    ensure_dir_exists(path.parent)
     if not force and path.exists():
         return path
     url = _BASE_URL + name
