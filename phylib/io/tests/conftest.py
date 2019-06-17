@@ -34,6 +34,7 @@ _FILES = ['template/params.py',
 
           'template/channel_map.npy',
           'template/channel_positions.npy',
+          'template/channel_shanks.npy',
 
           'template/similar_templates.npy',
           'template/whitening_mat.npy',
@@ -85,6 +86,7 @@ def template_path_full(tempdir, request):
         # Remove some non-necessary files.
         _remove(tempdir / 'template_features.npy')
         _remove(tempdir / 'pc_features.npy')
+        _remove(tempdir / 'channel_shanks.npy')
         _remove(tempdir / 'sim_binary.dat')
 
     # Spike attributes.

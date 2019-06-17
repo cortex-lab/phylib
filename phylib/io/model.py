@@ -269,8 +269,11 @@ class TemplateModel(object):
         self.channel_positions = self._load_channel_positions()
         assert self.channel_positions.shape == (nc, 2)
 
-        self.channel_vertical_order = np.argsort(self.channel_positions[:, 1],
-                                                 kind='mergesort')
+        self.channel_shanks = self._load_channel_shanks()
+        if self.channel_shanks is not None:
+            assert self.channel_shanks.shape == (nc,)
+
+        self.channel_vertical_order = np.argsort(self.channel_positions[:, 1], kind='mergesort')
 
         # Templates.
         self.sparse_templates = self._load_templates()
@@ -278,8 +281,7 @@ class TemplateModel(object):
         self.n_samples_templates = self.sparse_templates.data.shape[1]
         self.n_channels_loc = self.sparse_templates.data.shape[2]
         if self.sparse_templates.cols is not None:
-            assert self.sparse_templates.cols.shape == (self.n_templates,
-                                                        self.n_channels_loc)
+            assert self.sparse_templates.cols.shape == (self.n_templates, self.n_channels_loc)
 
         # Whitening.
         try:
@@ -409,6 +411,16 @@ class TemplateModel(object):
         out = np.atleast_2d(out)
         assert out.ndim == 2
         return out
+
+    def _load_channel_shanks(self):
+        try:
+            path = self._find_path('channel_shanks.npy')
+            out = self._read_array(path).reshape((-1,))
+            assert out.ndim == 1
+            return out
+        except IOError:
+            logger.debug("No channel shank file found.")
+            return
 
     def _load_traces(self, channel_map=None):
         if not self.dat_path:
