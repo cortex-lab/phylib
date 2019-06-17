@@ -44,9 +44,9 @@ def test_qbytearray(tempdir):
 
 
 def test_pretty_float():
-    assert _pretty_floats(0.123456) == '0.1235'
-    assert _pretty_floats([0.123456]) == ['0.1235']
-    assert _pretty_floats({'a': 0.123456}) == {'a': '0.1235'}
+    assert _pretty_floats(0.123456) == '0.12'
+    assert _pretty_floats([0.123456]) == ['0.12']
+    assert _pretty_floats({'a': 0.123456}) == {'a': '0.12'}
 
 
 def test_json_simple(tempdir):
