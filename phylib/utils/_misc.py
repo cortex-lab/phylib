@@ -95,10 +95,10 @@ def _stringify_keys(d):
     return out
 
 
-def _pretty_floats(obj, n=4):
+def _pretty_floats(obj, n=2):
     """Display floating point numbers properly."""
     if isinstance(obj, (float, np.float64, np.float32)):
-        return ('%.' + str(n) + 'g') % obj
+        return ('%.' + str(n) + 'f') % obj
     elif isinstance(obj, dict):
         return dict((k, _pretty_floats(v)) for k, v in obj.items())
     elif isinstance(obj, (list, tuple)):
