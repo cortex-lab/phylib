@@ -621,6 +621,11 @@ class TemplateModel(object):
         # Find N closest channels.
         close_channels = get_closest_channels(
             self.channel_positions, best_channel, self.n_closest_channels)
+        # Restrict to the channels belonging to the best channel's shank.
+        if self.channel_shanks is not None:
+            shank = self.channel_shanks[best_channel]  # shank of best channel
+            channels_on_shank = np.nonzero(self.channel_shanks == shank)[0]
+            close_channels = np.intersect1d(close_channels, channels_on_shank)
         # Keep the intersection.
         channel_ids = np.intersect1d(peak_channels, close_channels)
         # Order the channels by decreasing amplitude.
