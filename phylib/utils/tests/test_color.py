@@ -34,6 +34,9 @@ def test_add_alpha():
     assert add_alpha((0, .5, 1), .75) == (0, .5, 1, .75)
     assert add_alpha(np.random.rand(5, 3), .5).shape == (5, 4)
 
+    assert add_alpha((0, .5, 1, .1), .75) == (0, .5, 1, .75)
+    assert add_alpha(np.random.rand(5, 4), .5).shape == (5, 4)
+
 
 def test_selected_cluster_color():
     c = selected_cluster_color(0)

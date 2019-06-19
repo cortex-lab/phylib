@@ -192,9 +192,13 @@ def add_alpha(c, alpha=1.):
 
     """
     if isinstance(c, (tuple,)):
+        if len(c) == 4:
+            c = c[:3]
         return c + (alpha,)
     elif isinstance(c, np.ndarray):
         assert c.ndim == 2
+        if c.shape[1] == 4:
+            c = c[:, :3]
         assert c.shape[1] == 3
         return np.c_[c, alpha * np.ones((c.shape[0], 1))]
     raise ValueError("Unknown value given in add_alpha().")
