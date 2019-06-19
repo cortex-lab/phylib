@@ -385,7 +385,7 @@ class TemplateModel(object):
             # The part after spike_***
             n = filename.stem[6:]
             # Skip known files.
-            if n in ('clusters', 'templates', 'samples', 'times'):
+            if n in ('clusters', 'templates', 'samples', 'times', 'amplitudes'):
                 continue
             try:
                 arr = self._read_array(filename)
