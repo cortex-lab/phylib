@@ -687,14 +687,15 @@ class TemplateModel(object):
         else:
             return self._get_template_dense(template_id, channel_ids=channel_ids)
 
-    def get_waveforms(self, spike_ids, channel_ids):
+    def get_waveforms(self, spike_ids, channel_ids=None):
         """Return spike waveforms on specified channels."""
         if self.waveform_loader is None:
             return
         out = self.waveform_loader.get(spike_ids, channel_ids)
         assert out.dtype in (np.float32, np.float64)
         assert out.shape[0] == len(spike_ids)
-        assert out.shape[2] == len(channel_ids)
+        if channel_ids is not None:
+            assert out.shape[2] == len(channel_ids)
         return out
 
     def get_features(self, spike_ids, channel_ids):
