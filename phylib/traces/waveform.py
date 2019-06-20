@@ -24,12 +24,8 @@ logger = logging.getLogger(__name__)
 
 class WaveformExtractor(object):
     """Extract waveforms after data filtering and spike detection."""
-    def __init__(self,
-                 extract_before=None,
-                 extract_after=None,
-                 weight_power=None,
-                 thresholds=None,
-                 ):
+    def __init__(
+            self, extract_before=None, extract_after=None, weight_power=None, thresholds=None):
         self._extract_before = extract_before
         self._extract_after = extract_after
         self._weight_power = weight_power if weight_power is not None else 1.
@@ -45,11 +41,7 @@ class WaveformExtractor(object):
         s_max = min(s_max, n_samples)
         assert s_min < s_max
 
-        return Bunch(comp_s=comp_s,
-                     comp_ch=comp_ch,
-                     s_min=s_min,
-                     s_max=s_max,
-                     )
+        return Bunch(comp_s=comp_s, comp_ch=comp_ch, s_min=s_min, s_max=s_max)
 
     def _normalize(self, x):
         x = _as_array(x)
@@ -99,9 +91,7 @@ class WaveformExtractor(object):
     def extract(self, data, s_aligned):
         s = int(s_aligned)
         # Get block of given size around peak sample.
-        waveform = _get_padded(data,
-                               s - self._extract_before - 1,
-                               s + self._extract_after + 2)
+        waveform = _get_padded(data, s - self._extract_before - 1, s + self._extract_after + 2)
         return waveform
 
     def align(self, waveform, s_aligned):
@@ -111,8 +101,7 @@ class WaveformExtractor(object):
         old_s = np.arange(s - sb - 1, s + sa + 2)
         new_s = np.arange(s - sb + 0, s + sa + 0) + (s_aligned - s)
         try:
-            f = interp1d(old_s, waveform, bounds_error=True,
-                         kind='cubic', axis=0)
+            f = interp1d(old_s, waveform, bounds_error=True, kind='cubic', axis=0)
         except ValueError:  # pragma: no cover
             logger.warning("Interpolation error at time %d", s)
             return waveform
@@ -123,10 +112,7 @@ class WaveformExtractor(object):
 
     def __call__(self, component=None, data=None, data_t=None):
         assert data.shape == data_t.shape
-        comp = self._component(component,
-                               data=data,
-                               n_samples=data_t.shape[0],
-                               )
+        comp = self._component(component, data=data, n_samples=data_t.shape[0])
 
         wave = self._comp_wave(data_t, comp)
         masks = self.masks(data_t, wave, comp)
@@ -182,13 +168,9 @@ def _slice(index, n_samples, margin=None):
 class WaveformLoader(object):
     """Load waveforms from filtered or unfiltered traces."""
 
-    def __init__(self,
-                 traces=None,
-                 sample_rate=None,
-                 spike_samples=None,
-                 filter_order=None,
-                 n_samples_waveforms=None,
-                 ):
+    def __init__(
+            self, traces=None, sample_rate=None, spike_samples=None, filter_order=None,
+            n_samples_waveforms=None):
 
         # Traces.
         if traces is not None:
@@ -205,13 +187,9 @@ class WaveformLoader(object):
         # Define filter.
         if filter_order:
             filter_margin = filter_order * 3
-            b_filter = bandpass_filter(rate=sample_rate,
-                                       low=500.,
-                                       high=sample_rate * .475,
-                                       order=filter_order,
-                                       )
-            self._filter = lambda x, axis=0: apply_filter(x, b_filter,
-                                                          axis=axis)
+            b_filter = bandpass_filter(
+                rate=sample_rate, low=500., high=sample_rate * .475, order=filter_order)
+            self._filter = lambda x, axis=0: apply_filter(x, b_filter, axis=axis)
         else:
             filter_margin = 0
             self._filter = lambda x, axis=0: x
@@ -224,8 +202,7 @@ class WaveformLoader(object):
         # Number of additional samples to use for filtering.
         self._filter_margin = _before_after(filter_margin)
         # Number of samples in the extracted raw data chunk.
-        self._n_samples_extract = (self.n_samples_waveforms +
-                                   sum(self._filter_margin))
+        self._n_samples_extract = (self.n_samples_waveforms + sum(self._filter_margin))
 
         self.dtype = np.float32
         self.shape = (self.n_spikes, self._n_samples_extract, self.n_channels)
@@ -254,9 +231,7 @@ class WaveformLoader(object):
         ns = self.n_samples_trace
         if not (0 <= time_o < ns):
             raise ValueError("Invalid time {0:d}/{1:d}.".format(time_o, ns))
-        slice_extract = _slice(time_o,
-                               self.n_samples_before_after,
-                               self._filter_margin)
+        slice_extract = _slice(time_o, self.n_samples_before_after, self._filter_margin)
         extract = self._traces[slice_extract][:, channels].astype(np.float32)
 
         # Pad the extracted chunk if needed.
@@ -316,8 +291,7 @@ class WaveformLoader(object):
         # Only filter the non-zero waveforms.
         unmasked = waveforms_f.max(axis=1) != 0
         waveforms_f[unmasked] = self._filter(waveforms_f[unmasked], axis=1)
-        waveforms_f = waveforms_f.reshape((n_spikes, nc,
-                                           self._n_samples_extract))
+        waveforms_f = waveforms_f.reshape((n_spikes, nc, self._n_samples_extract))
 
         # Remove the margin.
         margin_before, margin_after = self._filter_margin
@@ -325,10 +299,7 @@ class WaveformLoader(object):
             assert margin_before >= 0
             waveforms_f = waveforms_f[:, :, margin_before:-margin_after]
 
-        assert waveforms_f.shape == (n_spikes,
-                                     nc,
-                                     self.n_samples_waveforms,
-                                     )
+        assert waveforms_f.shape == (n_spikes, nc, self.n_samples_waveforms)
 
         # NOTE: we transpose before returning the array.
         return np.transpose(waveforms_f, (0, 2, 1))
