@@ -59,16 +59,21 @@ def firing_rate(spike_clusters, cluster_ids=None, bin_size=None, duration=None):
 
     # Take the cluster order into account.
     if cluster_ids is None:
-        clusters = _unique(spike_clusters)
+        cluster_ids = _unique(spike_clusters)
     else:
-        clusters = _as_array(cluster_ids)
+        cluster_ids = _as_array(cluster_ids)
 
     # Like spike_clusters, but with 0..n_clusters-1 indices.
-    spike_clusters_i = _index_of(spike_clusters, clusters)
+    spike_clusters_i = _index_of(spike_clusters, cluster_ids)
 
     assert duration > 0
     assert bin_size > 0
     bc = np.bincount(spike_clusters_i)
+    # Handle the case where the last cluster(s) are empty.
+    if len(bc) < len(cluster_ids):
+        n = len(cluster_ids) - len(bc)
+        bc = np.concatenate((bc, np.zeros(n, dtype=bc.dtype)))
+    assert bc.shape == (len(cluster_ids),)
     return bc * np.c_[bc] * (bin_size / duration)
 
 

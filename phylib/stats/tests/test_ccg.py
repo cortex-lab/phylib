@@ -64,6 +64,17 @@ def test_firing_rate_0():
 
 
 def test_firing_rate_1():
+    spike_clusters = [0, 1, 0, 1]
+    bin_size = 1
+
+    fr = firing_rate(spike_clusters, cluster_ids=[0, 1, 2], bin_size=bin_size, duration=20)
+    print(fr)
+    ae(fr[:2, :2], .2 * np.ones((2, 2)))
+    assert np.all(fr[2, :] == fr[:, 2])
+    assert np.all(fr[2, :] == 0)
+
+
+def test_firing_rate_2():
     spike_clusters = np.tile(np.arange(10), 100)
     fr = firing_rate(spike_clusters, cluster_ids=np.arange(10), bin_size=.1, duration=1.)
     ae(fr, np.ones((10, 10)) * 1000)
@@ -112,9 +123,9 @@ def test_ccg_2():
     spike_samples, spike_clusters = _random_data(max_cluster)
     bin_size, winsize_bins = _ccg_params()
 
-    c = correlograms(spike_samples, spike_clusters,
-                     bin_size=bin_size, window_size=winsize_bins,
-                     sample_rate=20000, symmetrize=False)
+    c = correlograms(
+        spike_samples, spike_clusters, bin_size=bin_size, window_size=winsize_bins,
+        sample_rate=20000, symmetrize=False)
 
     assert c.shape == (max_cluster, max_cluster, 26)
 
