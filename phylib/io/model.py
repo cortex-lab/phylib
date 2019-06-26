@@ -278,7 +278,7 @@ class TemplateModel(object):
         # Templates.
         self.sparse_templates = self._load_templates()
         self.n_templates = self.sparse_templates.data.shape[0]
-        self.n_samples_templates = self.sparse_templates.data.shape[1]
+        self.n_samples_waveforms = self.sparse_templates.data.shape[1]
         self.n_channels_loc = self.sparse_templates.data.shape[2]
         if self.sparse_templates.cols is not None:
             assert self.sparse_templates.cols.shape == (self.n_templates, self.n_channels_loc)
@@ -335,7 +335,7 @@ class TemplateModel(object):
 
     def _create_waveform_loader(self):
         # Number of time samples in the templates.
-        nsw = self.n_samples_templates
+        nsw = self.n_samples_waveforms
         if self.traces is not None:
             return WaveformLoader(
                 traces=self.traces,
@@ -832,20 +832,6 @@ class TemplateModel(object):
         return self.get_waveforms(spike_ids, channel_ids)
 
     #--------------------------------------------------------------------------
-    # Metadata methods
-    #--------------------------------------------------------------------------
-
-    @property
-    def metadata_fields(self):
-        """List of metadata fields."""
-        return sorted(self.metadata)
-
-    def get_metadata(self, name):
-        """Return a dictionary {cluster_id: value} for a cluster metadata
-        field."""
-        return self.metadata.get(name, {})
-
-    #--------------------------------------------------------------------------
     # Saving methods
     #--------------------------------------------------------------------------
 
@@ -868,7 +854,7 @@ class TemplateModel(object):
         """Save the mean waveforms as a single array."""
         path = self.dir_path / 'clusters.meanWaveforms.npy'
         n_clusters = len(mean_waveforms)
-        out = np.zeros((n_clusters, self.n_samples_templates, self.n_channels))
+        out = np.zeros((n_clusters, self.n_samples_waveforms, self.n_channels))
         for i, cluster_id in enumerate(sorted(mean_waveforms)):
             b = mean_waveforms[cluster_id]
             if b.data is not None:
