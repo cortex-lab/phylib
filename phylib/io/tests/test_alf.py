@@ -82,7 +82,7 @@ def test_creator(dataset):
     out_path = path / 'alf'
 
     model = TemplateModel(
-        dataset.dat_path, sample_rate=2000, n_channels_dat=dataset.ncd)
+        dir_path=path, dat_path=dataset.dat_path, sample_rate=2000, n_channels_dat=dataset.ncd)
 
     c = EphysAlfCreator(model)
     with raises(IOError):

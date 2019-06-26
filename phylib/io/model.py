@@ -187,10 +187,10 @@ class TemplateModel(object):
     Constructor
     -----------
 
-    dat_path : str, Path, or list
-        Path to the raw data files.
     dir_path : str or Path
         Path to the dataset directory
+    dat_path : str, Path, or list
+        Path to the raw data files.
     dtype : NumPy dtype
         Data type of the raw data file
     offset : int
@@ -214,20 +214,19 @@ class TemplateModel(object):
     channels."""
     amplitude_threshold = 0
 
-    def __init__(self, dat_path=None, **kwargs):
-        if not dat_path:  # pragma: no cover
-            self.dat_path = None
-            self.dir_path = Path.cwd()
-        else:
-            if not isinstance(dat_path, (list, tuple)):
-                dat_path = [dat_path]
-            assert isinstance(dat_path, (list, tuple))
-            dat_path = [Path(_).resolve() for _ in dat_path]
-            self.dir_path = dat_path[0].parent
-            self.dat_path = dat_path
+    def __init__(self, **kwargs):
         self.__dict__.update(kwargs)
+
+        # Set dir_path.
         self.dir_path = Path(self.dir_path).resolve()
         assert isinstance(self.dir_path, Path)
+        assert self.dir_path.exists()
+
+        # Set dat_path.
+        if not isinstance(self.dat_path, (list, tuple)):
+            self.dat_path = [self.dat_path]
+        assert isinstance(self.dat_path, (list, tuple))
+        self.dat_path = [Path(_).resolve() for _ in self.dat_path]
 
         self.dtype = getattr(self, 'dtype', np.int16)
         self.sample_rate = float(self.sample_rate)
@@ -875,8 +874,8 @@ def get_template_params(params_path):
     if 'dir_path' not in params:
         params['dir_path'] = params_path.parent
     params['dir_path'] = Path(params['dir_path'])
-    assert params['dir_path'].exists()
     assert params['dir_path'].is_dir()
+    assert params['dir_path'].exists()
     return params
 
 
