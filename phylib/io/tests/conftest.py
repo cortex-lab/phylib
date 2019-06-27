@@ -23,34 +23,34 @@ logger = logging.getLogger(__name__)
 # Fixtures
 #------------------------------------------------------------------------------
 
-_FILES = ['template/params.py',
-          'template/sim_binary.dat',
-          'template/spike_times.npy',
-          'template/spike_templates.npy',
-          'template/spike_clusters.npy',
-          'template/amplitudes.npy',
+_FILES = [
+    'template/params.py',
+    'template/sim_binary.dat',
+    'template/spike_times.npy',
+    'template/spike_templates.npy',
+    'template/spike_clusters.npy',
+    'template/amplitudes.npy',
 
-          'template/cluster_group.tsv',
+    'template/cluster_group.tsv',
 
-          'template/channel_map.npy',
-          'template/channel_positions.npy',
-          'template/channel_shanks.npy',
+    'template/channel_map.npy',
+    'template/channel_positions.npy',
+    'template/channel_shanks.npy',
 
-          'template/similar_templates.npy',
-          'template/whitening_mat.npy',
+    'template/similar_templates.npy',
+    'template/whitening_mat.npy',
 
-          'template/templates.npy',
-          'template/template_ind.npy',
+    'template/templates.npy',
+    'template/template_ind.npy',
 
-          'template/pc_features.npy',
-          'template/pc_feature_ind.npy',
-          'template/pc_feature_spike_ids.npy',
+    'template/pc_features.npy',
+    'template/pc_feature_ind.npy',
+    'template/pc_feature_spike_ids.npy',
 
-          'template/template_features.npy',
-          'template/template_feature_ind.npy',
-          'template/template_feature_spike_ids.npy',
-
-          ]
+    'template/template_features.npy',
+    'template/template_feature_ind.npy',
+    'template/template_feature_spike_ids.npy',
+]
 
 
 def _remove(path):
@@ -59,21 +59,20 @@ def _remove(path):
         logger.debug("Removed %s.", path)
 
 
-@fixture(scope='function', params=('dense', 'sparse', 'misc'))
-def template_path_full(tempdir, request):
+def _make_dataset(tempdir, param='dense', has_spike_attributes=True):
     # Download the dataset.
     paths = list(map(download_test_file, _FILES))
     # Copy the dataset to a temporary directory.
     for path in paths:
         to_path = tempdir / path.name
         # Skip sparse arrays if is_sparse is False.
-        if request.param == 'sparse' and ('_ind.' in str(to_path) or 'spike_ids.' in str(to_path)):
+        if param == 'sparse' and ('_ind.' in str(to_path) or 'spike_ids.' in str(to_path)):
             continue
         logger.debug("Copying file to %s.", to_path)
         shutil.copy(path, to_path)
 
     # Some changes to files if 'misc' fixture parameter.
-    if request.param == 'misc':
+    if param == 'misc':
         # Remove spike_clusters and recreate it from spike_templates.
         _remove(tempdir / 'spike_clusters.npy')
         # Replace spike_times.npy, in samples, by spikes.times.npy, in seconds.
@@ -90,26 +89,23 @@ def template_path_full(tempdir, request):
         _remove(tempdir / 'sim_binary.dat')
 
     # Spike attributes.
-    write_array(tempdir / 'spike_fail.npy', np.full(10, np.nan))  # wrong number of spikes
-    write_array(tempdir / 'spike_works.npy', np.random.rand(314))
-    write_array(tempdir / 'spike_randn.npy', np.random.randn(314, 2))
+    if has_spike_attributes:
+        write_array(tempdir / 'spike_fail.npy', np.full(10, np.nan))  # wrong number of spikes
+        write_array(tempdir / 'spike_works.npy', np.random.rand(314))
+        write_array(tempdir / 'spike_randn.npy', np.random.randn(314, 2))
 
     template_path = tempdir / paths[0].name
     return template_path
+
+
+@fixture(scope='function', params=('dense', 'sparse', 'misc'))
+def template_path_full(tempdir, request):
+    return _make_dataset(tempdir, request.param)
 
 
 @fixture(scope='function')
 def template_path(tempdir, request):
-    # Download the dataset.
-    paths = list(map(download_test_file, _FILES))
-    # Copy the dataset to a temporary directory.
-    for path in paths:
-        to_path = tempdir / path.name
-        logger.debug("Copying file to %s.", to_path)
-        shutil.copy(path, to_path)
-
-    template_path = tempdir / paths[0].name
-    return template_path
+    return _make_dataset(tempdir, param='dense', has_spike_attributes=False)
 
 
 @fixture
