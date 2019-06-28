@@ -862,20 +862,31 @@ class TemplateModel(object):
         np.save(path, out)
 
 
+def _make_abs_path(p, dir_path):
+    p = Path(p)
+    if not op.isabs(p):
+        p = dir_path / p
+    if not p.exists():
+        logger.warning("File %s does not exist.", p)
+    return p
+
+
 def get_template_params(params_path):
     """Get a dictionary of parameters from a params.py file."""
     params_path = Path(params_path)
 
     params = read_python(params_path)
-    if isinstance(params['dat_path'], str):
-        params['dat_path'] = [params['dat_path']]
-    params['dat_path'] = [Path(_) for _ in params['dat_path']]
     params['dtype'] = np.dtype(params['dtype'])
+
     if 'dir_path' not in params:
         params['dir_path'] = params_path.parent
     params['dir_path'] = Path(params['dir_path'])
     assert params['dir_path'].is_dir()
     assert params['dir_path'].exists()
+
+    if isinstance(params['dat_path'], str):
+        params['dat_path'] = [params['dat_path']]
+    params['dat_path'] = [_make_abs_path(_, params['dir_path']) for _ in params['dat_path']]
     return params
 
 
