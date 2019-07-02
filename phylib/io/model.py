@@ -252,7 +252,8 @@ class TemplateModel(object):
         ns, = self.n_spikes, = self.spike_times.shape
 
         self.amplitudes = self._load_amplitudes()
-        assert self.amplitudes.shape == (ns,)
+        if self.amplitudes is not None:
+            assert self.amplitudes.shape == (ns,)
 
         self.spike_templates = self._load_spike_templates()
         assert self.spike_templates.shape == (ns,)
@@ -438,9 +439,13 @@ class TemplateModel(object):
         return traces
 
     def _load_amplitudes(self):
-        out = self._read_array(self._find_path('amplitudes.npy', 'spikes.amps.npy'))
-        assert out.ndim == 1
-        return out
+        try:
+            out = self._read_array(self._find_path('amplitudes.npy', 'spikes.amps.npy'))
+            assert out.ndim == 1
+            return out
+        except IOError:
+            logger.debug("No amplitude file found.")
+            return
 
     def _load_spike_templates(self):
         path = self._find_path('spike_templates.npy', 'ks2/spikes.clusters.npy')

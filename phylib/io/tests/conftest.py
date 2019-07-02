@@ -86,6 +86,9 @@ def _make_dataset(tempdir, param='dense', has_spike_attributes=True):
         _remove(tempdir / 'template_features.npy')
         _remove(tempdir / 'pc_features.npy')
         _remove(tempdir / 'channel_shanks.npy')
+        _remove(tempdir / 'amplitudes.npy')
+        _remove(tempdir / 'whitening_mat.npy')
+        _remove(tempdir / 'whitening_mat_inv.npy')
         _remove(tempdir / 'sim_binary.dat')
 
     # Spike attributes.
