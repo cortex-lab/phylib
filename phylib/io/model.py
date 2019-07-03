@@ -877,7 +877,7 @@ def _make_abs_path(p, dir_path):
 
 
 def get_template_params(params_path):
-    """Get a dictionary of parameters from a params.py file."""
+    """Get a dictionary of parameters from a `params.py` file."""
     params_path = Path(params_path)
 
     params = read_python(params_path)
@@ -896,5 +896,5 @@ def get_template_params(params_path):
 
 
 def load_model(params_path):
-    """Return a TemplateModel instance from a path to a params.py file."""
+    """Return a TemplateModel instance from a path to a `params.py` file."""
     return TemplateModel(**get_template_params(params_path))
