@@ -12,7 +12,7 @@ from numpy.testing import assert_almost_equal as ae
 
 from phylib.utils import Bunch
 from ..color import (
-    _is_bright, _random_bright_color, _spike_colors, add_alpha, selected_cluster_color,
+    _is_bright, _random_bright_color, spike_colors, add_alpha, selected_cluster_color,
     _hex_to_triplet, _continuous_colormap, _categorical_colormap, ClusterColorSelector,
     colormaps, _add_selected_clusters_colors)
 
@@ -44,15 +44,6 @@ def test_selected_cluster_color():
     assert len(c) == 4
 
 
-def test_spike_colors():
-    assert _spike_colors([0, 1, 10, 1000]).shape == (4, 4)
-    assert _spike_colors([0, 1, 10, 1000],
-                         alpha=1.).shape == (4, 4)
-    assert _spike_colors([0, 1, 10, 1000],
-                         masks=np.linspace(0., 1., 4)).shape == (4, 4)
-    assert _spike_colors(masks=np.linspace(0., 1., 4)).shape == (4, 4)
-
-
 def test_colormaps():
     colormap = np.array(cc.glasbey_bw_minc_20_minl_30)
     values = np.random.randint(10, 20, size=100)
@@ -63,6 +54,14 @@ def test_colormaps():
     values = np.linspace(0, 1, 100)
     colors = _continuous_colormap(colormap, values)
     assert colors.shape == (100, 3)
+
+
+def test_spike_colors():
+    spike_clusters = [1, 0, 0, 3]
+    cluster_ids = [0, 1, 2, 3]
+    colors = spike_colors(spike_clusters, cluster_ids)
+    assert colors.shape == (4, 4)
+    ae(colors[1], colors[2])
 
 
 def test_cluster_color_selector():

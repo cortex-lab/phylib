@@ -14,7 +14,7 @@ from phylib.io.array import _index_of
 
 import numpy as np
 from numpy.random import uniform
-from matplotlib.colors import rgb_to_hsv, hsv_to_rgb
+from matplotlib.colors import hsv_to_rgb
 
 logger = logging.getLogger(__name__)
 
@@ -63,31 +63,6 @@ def _hex_to_triplet(h):
 #------------------------------------------------------------------------------
 # Colormap utilities
 #------------------------------------------------------------------------------
-
-def _apply_color_masks(color, masks=None, alpha=None):
-    """Apply masks to colors."""
-    alpha = alpha or .5
-    hsv = rgb_to_hsv(color[:, :3])
-    # Change the saturation and value as a function of the mask.
-    if masks is not None:
-        hsv[:, 1] *= masks
-        hsv[:, 2] *= .5 * (1. + masks)
-    color = hsv_to_rgb(hsv)
-    n = color.shape[0]
-    color = np.c_[color, alpha * np.ones((n, 1))]
-    return color
-
-
-def _spike_colors(spike_clusters=None, masks=None, alpha=None, colormap=None):
-    """Return color of spikes depending on a given colormap."""
-    colormap = colormap if colormap is not None else colormaps.default
-    n = len(colormap)
-    if spike_clusters is not None:
-        c = colormap[np.mod(spike_clusters, n), :]
-    else:
-        c = np.ones((masks.shape[0], 3))
-    return _apply_color_masks(c, masks=masks, alpha=alpha)
-
 
 def _continuous_colormap(colormap, values, vmin=None, vmax=None):
     """Convert values into colors given a specified continuous colormap."""
@@ -166,7 +141,30 @@ def selected_cluster_color(i, alpha=1.):
     return add_alpha(tuple(colormaps.default[i % len(colormaps.default)]), alpha=alpha)
 
 
-def _add_selected_clusters_colors(selected_clusters, cluster_ids, cluster_colors):
+def spike_colors(spike_clusters, cluster_ids):
+    """Return the colors of spikes according to the index of their cluster within `cluster_ids`.
+
+    Parameters
+    ----------
+
+    spike_clusters : array-like
+        The spike-cluster assignments.
+    cluster_ids : array-like
+        The set of unique selected cluster ids appearing in spike_clusters, in a given order
+
+    Returns
+    -------
+
+    spike_colors : array-like
+        For each spike, the RGBA color (in [0,1]) depending on the index of the cluster within
+        `cluster_ids`.
+
+    """
+    spike_clusters_idx = _index_of(spike_clusters, cluster_ids)
+    return add_alpha(colormaps.default[np.mod(spike_clusters_idx, colormaps.default.shape[0])])
+
+
+def _add_selected_clusters_colors(selected_clusters, cluster_ids, cluster_colors=None):
     """Take an array with colors of clusters as input, and add colors of selected clusters."""
     # Find the index of the selected clusters within the self.cluster_ids.
     clu_idx = _index_of(selected_clusters, cluster_ids)
