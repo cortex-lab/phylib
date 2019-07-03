@@ -90,10 +90,10 @@ def load_raw_data(path=None, n_channels_dat=None, dtype=None, offset=None):
         return
     path = Path(path)
     if not path.exists():
+        logger.warning("Path %s does not exist, trying ephys.raw filename.", path)
         path = path.parent / ('ephys.raw' + path.suffix)
         if not path.exists():
-            logger.warning(
-                "Error while loading data: File `%s` not found.", path)
+            logger.warning("Error while loading data: File `%s` not found.", path)
             return None
     assert path.exists()
     logger.debug("Loading traces at `%s`.", path)
