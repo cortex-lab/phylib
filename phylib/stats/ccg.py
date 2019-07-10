@@ -184,9 +184,6 @@ def correlograms(
 
         shift += 1
 
-    # Remove ACG peaks.
-    correlograms[np.arange(n_clusters), np.arange(n_clusters), 0] = 0
-
     if symmetrize:
         return _symmetrize_correlograms(correlograms)
     else:
