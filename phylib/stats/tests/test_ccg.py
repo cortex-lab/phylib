@@ -194,7 +194,4 @@ def test_symmetrize_correlograms():
     for i in range(3):
         ae(sym[i, i, :], sym[i, i, ::-1])
 
-    # Check that ACG peak is 0.
-    assert np.all(sym[np.arange(3), np.arange(3), 25] == 0)
-
     ae(sym[0, 1, :], sym[1, 0, ::-1])
