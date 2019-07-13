@@ -14,7 +14,7 @@ from phylib.io.array import _index_of
 
 import numpy as np
 from numpy.random import uniform
-from matplotlib.colors import hsv_to_rgb
+from matplotlib.colors import hsv_to_rgb, rgb_to_hsv
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +58,15 @@ def _hex_to_triplet(h):
     if h.startswith('#'):
         h = h[1:]
     return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def _override_hsv(rgb, h=None, s=None, v=None):
+    h_, s_, v_ = rgb_to_hsv(np.array([[rgb]])).flat
+    h = h if h is not None else h_
+    s = s if s is not None else s_
+    v = v if v is not None else v_
+    r, g, b = hsv_to_rgb(np.array([[[h, s, v]]])).flat
+    return r, g, b
 
 
 #------------------------------------------------------------------------------
@@ -194,11 +203,13 @@ def add_alpha(c, alpha=1.):
             c = c[:3]
         return c + (alpha,)
     elif isinstance(c, np.ndarray):
-        assert c.ndim == 2
-        if c.shape[1] == 4:
-            c = c[:, :3]
-        assert c.shape[1] == 3
-        return np.c_[c, alpha * np.ones((c.shape[0], 1))]
+        if c.shape[-1] == 4:
+            c = c[..., :3]
+        assert c.shape[-1] == 3
+        out = np.concatenate([c, alpha * np.ones((c.shape[:-1] + (1,)))], axis=-1)
+        assert out.ndim == c.ndim
+        assert out.shape[-1] == c.shape[-1] + 1
+        return out
     raise ValueError("Unknown value given in add_alpha().")
 
 
