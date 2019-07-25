@@ -621,7 +621,7 @@ class TemplateModel(object):
         best_channel = np.argmax(amplitude)
         max_amp = amplitude[best_channel]
         # Find the channels X% peak.
-        peak_channels = np.nonzero(amplitude > self.amplitude_threshold * max_amp)[0]
+        peak_channels = np.nonzero(amplitude >= self.amplitude_threshold * max_amp)[0]
         # Find N closest channels.
         close_channels = get_closest_channels(
             self.channel_positions, best_channel, self.n_closest_channels)
