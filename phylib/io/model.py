@@ -19,6 +19,7 @@ from .array import _concatenate_virtual_arrays, _index_of, _spikes_in_clusters
 from phylib.traces import WaveformLoader
 from phylib.utils import Bunch
 from phylib.utils._misc import _write_tsv_simple, _read_tsv_simple, read_python
+from phylib.utils.geometry import linear_positions
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +102,11 @@ def load_raw_data(path=None, n_channels_dat=None, dtype=None, offset=None):
     return _dat_to_traces(path, n_channels=n_channels_dat, dtype=dtype, offset=offset)
 
 
+def _all_positions_distinct(positions):
+    """Return whether all positions are distinct."""
+    return len(set(tuple(row) for row in positions)) == len(positions)
+
+
 def get_closest_channels(channel_positions, channel_index, n=None):
     """Get the channels closest to a given channel on the probe."""
     x = channel_positions[:, 0]
@@ -110,6 +116,7 @@ def get_closest_channels(channel_positions, channel_index, n=None):
     out = np.argsort(d)
     if n:
         out = out[:n]
+    assert out[0] == channel_index
     return out
 
 
@@ -268,6 +275,10 @@ class TemplateModel(object):
 
         self.channel_positions = self._load_channel_positions()
         assert self.channel_positions.shape == (nc, 2)
+        if not _all_positions_distinct(self.channel_positions):  # pragma: no cover
+            logger.error(
+                "Some channels are on the same position, please check the channel positions file.")
+            self.channel_positions = linear_positions(nc)
 
         self.channel_shanks = self._load_channel_shanks()
         if self.channel_shanks is not None:
@@ -535,7 +546,11 @@ class TemplateModel(object):
 
     def _compute_wmi(self, wm):
         logger.debug("Inversing the whitening matrix %s.", wm.shape)
-        wmi = np.linalg.inv(wm)
+        try:
+            wmi = np.linalg.inv(wm)
+        except np.linalg.LinAlgError as e:  # pragma: no cover
+            raise ValueError(
+                "Error when inverting the whitening matrix: %s.", e)
         self._write_array(self.dir_path / 'whitening_mat_inv.npy', wmi)
         return wmi
 
@@ -625,6 +640,7 @@ class TemplateModel(object):
         # Find N closest channels.
         close_channels = get_closest_channels(
             self.channel_positions, best_channel, self.n_closest_channels)
+        assert best_channel in close_channels
         # Restrict to the channels belonging to the best channel's shank.
         if self.channel_shanks is not None:
             shank = self.channel_shanks[best_channel]  # shank of best channel
