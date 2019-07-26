@@ -261,13 +261,16 @@ class TemplateModel(object):
         self.spike_times = self.spike_samples / sr
         ns, = self.n_spikes, = self.spike_times.shape
 
+        # Spike amplitudes.
         self.amplitudes = self._load_amplitudes()
         if self.amplitudes is not None:
             assert self.amplitudes.shape == (ns,)
 
+        # Spike templates.
         self.spike_templates = self._load_spike_templates()
         assert self.spike_templates.shape == (ns,)
 
+        # Spike clusters.
         self.spike_clusters = self._load_spike_clusters()
         assert self.spike_clusters.shape == (ns,)
 
@@ -276,6 +279,7 @@ class TemplateModel(object):
         self.n_channels = nc = self.channel_mapping.shape[0]
         assert np.all(self.channel_mapping <= self.n_channels_dat - 1)
 
+        # Channel positions.
         self.channel_positions = self._load_channel_positions()
         assert self.channel_positions.shape == (nc, 2)
         if not _all_positions_distinct(self.channel_positions):  # pragma: no cover
@@ -283,17 +287,18 @@ class TemplateModel(object):
                 "Some channels are on the same position, please check the channel positions file.")
             self.channel_positions = linear_positions(nc)
 
+        # Channel shanks.
         self.channel_shanks = self._load_channel_shanks()
         if self.channel_shanks is not None:
             assert self.channel_shanks.shape == (nc,)
 
+        # Ordering of the channels in the trace view.
         self.channel_vertical_order = np.argsort(self.channel_positions[:, 1], kind='mergesort')
 
         # Templates.
         self.sparse_templates = self._load_templates()
-        self.n_templates = self.sparse_templates.data.shape[0]
-        self.n_samples_waveforms = self.sparse_templates.data.shape[1]
-        self.n_channels_loc = self.sparse_templates.data.shape[2]
+        self.n_templates, self.n_samples_waveforms, self.n_channels_loc = \
+            self.sparse_templates.data.shape
         if self.sparse_templates.cols is not None:
             assert self.sparse_templates.cols.shape == (self.n_templates, self.n_channels_loc)
 
@@ -310,9 +315,11 @@ class TemplateModel(object):
             self.wmi = self._compute_wmi(self.wm)
         assert self.wmi.shape == (nc, nc)
 
+        # Similar templates.
         self.similar_templates = self._load_similar_templates()
         assert self.similar_templates.shape == (self.n_templates, self.n_templates)
 
+        # Traces and duration.
         self.traces = self._load_traces(self.channel_mapping)
         if self.traces is not None:
             self.duration = self.traces.shape[0] / float(self.sample_rate)
@@ -324,27 +331,17 @@ class TemplateModel(object):
                 np.sum(self.spike_times > self.duration), self.n_spikes)
 
         # Features.
-        f = self._load_features()
-        if f is not None:
-            self.features = f.data
-            self.n_features_per_channel = self.features.shape[2]
-            self.features_cols = f.cols
-            self.features_rows = f.rows
-        else:
-            self.features = None
-            self.features_cols = None
-            self.features_rows = None
+        self.sparse_features = self._load_features()
+        if self.sparse_features is not None:
+            self.n_features_per_channel = self.sparse_features.data.shape[2]
 
-        tf = self._load_template_features()
-        if tf is not None:
-            self.template_features = tf.data
-            self.template_features_cols = tf.cols
-            self.template_features_rows = tf.rows
-        else:
-            self.template_features = None
+        # Template features.
+        self.sparse_template_features = self._load_template_features()
 
+        # Spike attributes.
         self.spike_attributes = self._load_spike_attributes()
 
+        # Metadata.
         self.metadata = self._load_metadata()
 
     def _create_waveform_loader(self):
@@ -390,6 +387,10 @@ class TemplateModel(object):
                 continue
             metadata[field_name] = values
         return metadata
+
+    #--------------------------------------------------------------------------
+    # Specific loading methods
+    #--------------------------------------------------------------------------
 
     def _load_spike_attributes(self):
         """Load all spike_*.npy files, called spike attributes."""
@@ -724,10 +725,10 @@ class TemplateModel(object):
 
     def get_features(self, spike_ids, channel_ids):
         """Return sparse features for given spikes."""
-        data = self.features
-        if data is None:
+        sf = self.sparse_features
+        if sf is None:
             return
-        _, n_channels_loc, n_pcs = data.shape
+        _, n_channels_loc, n_pcs = sf.data.shape
         ns = len(spike_ids)
         nc = len(channel_ids)
 
@@ -735,23 +736,23 @@ class TemplateModel(object):
         features = np.empty((ns, n_channels_loc, n_pcs))
         features[:] = np.NAN
 
-        if self.features_rows is not None:
-            s = np.intersect1d(spike_ids, self.features_rows)
+        if sf.rows is not None:
+            s = np.intersect1d(spike_ids, sf.rows)
             # Relative indices of the spikes in the self.features_spike_ids
             # array, necessary to load features from all_features which only
             # contains the subset of the spikes.
-            rows = _index_of(s, self.features_rows)
+            rows = _index_of(s, sf.rows)
             # Relative indices of the non-null rows in the output features
             # array.
             rows_out = _index_of(s, spike_ids)
         else:
             rows = spike_ids
             rows_out = slice(None, None, None)
-        features[rows_out, ...] = data[rows]
+        features[rows_out, ...] = sf.data[rows]
 
-        if self.features_cols is not None:
-            assert self.features_cols.shape[1] == n_channels_loc
-            cols = self.features_cols[self.spike_templates[spike_ids]]
+        if sf.cols is not None:
+            assert sf.cols.shape[1] == n_channels_loc
+            cols = sf.cols[self.spike_templates[spike_ids]]
         else:
             cols = np.tile(np.arange(n_channels_loc), (ns, 1))
         features = from_sparse(features, cols, channel_ids)
@@ -761,25 +762,25 @@ class TemplateModel(object):
 
     def get_template_features(self, spike_ids):
         """Return sparse template features for given spikes."""
-        data = self.template_features
-        if data is None:
+        tf = self.sparse_template_features
+        if tf is None:
             return
-        _, n_templates_loc = data.shape
+        _, n_templates_loc = tf.data.shape
         ns = len(spike_ids)
 
-        if self.template_features_rows is not None:
-            spike_ids = np.intersect1d(spike_ids, self.features_rows)
+        if tf.rows is not None:
+            spike_ids = np.intersect1d(spike_ids, tf.rows)
             # Relative indices of the spikes in the self.features_spike_ids
             # array, necessary to load features from all_features which only
             # contains the subset of the spikes.
-            rows = _index_of(spike_ids, self.template_features_rows)
+            rows = _index_of(spike_ids, tf.rows)
         else:
             rows = spike_ids
-        template_features = data[rows]
+        template_features = tf.data[rows]
 
-        if self.template_features_cols is not None:
-            assert self.template_features_cols.shape[1] == n_templates_loc
-            cols = self.template_features_cols[self.spike_templates[spike_ids]]
+        if tf.cols is not None:
+            assert tf.cols.shape[1] == n_templates_loc
+            cols = tf.cols[self.spike_templates[spike_ids]]
         else:
             cols = np.tile(np.arange(n_templates_loc), (len(spike_ids), 1))
         template_features = from_sparse(template_features, cols, np.arange(self.n_templates))
