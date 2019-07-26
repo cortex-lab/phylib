@@ -56,73 +56,6 @@ def write_array(name, arr):
     np.save(name, arr)
 
 
-def load_metadata(filename):
-    """Load cluster metadata from a CSV file.
-
-    Return (field_name, dictionary).
-
-    """
-    return _read_tsv_simple(filename)
-
-
-def save_metadata(filename, field_name, metadata):
-    """Save metadata in a CSV file."""
-    return _write_tsv_simple(filename, field_name, metadata)
-
-
-def _dat_n_samples(filename, dtype=None, n_channels=None, offset=None):
-    """Get the number of samples from the size of a dat file."""
-    assert dtype is not None
-    item_size = np.dtype(dtype).itemsize
-    offset = offset if offset else 0
-    n_samples = (op.getsize(str(filename)) - offset) // (item_size * n_channels)
-    assert n_samples >= 0
-    return n_samples
-
-
-def _dat_to_traces(dat_path, n_channels=None, dtype=None, offset=None):
-    """Memmap a dat file."""
-    assert dtype is not None
-    assert n_channels is not None
-    n_samples = _dat_n_samples(dat_path, n_channels=n_channels, dtype=dtype, offset=offset)
-    return np.memmap(dat_path, dtype=dtype, shape=(n_samples, n_channels), offset=offset)
-
-
-def load_raw_data(path=None, n_channels_dat=None, dtype=None, offset=None):
-    """Load raw data at a given path."""
-    if not path:
-        return
-    path = Path(path)
-    if not path.exists():
-        logger.warning("Path %s does not exist, trying ephys.raw filename.", path)
-        path = path.parent / ('ephys.raw' + path.suffix)
-        if not path.exists():
-            logger.warning("Error while loading data: File `%s` not found.", path)
-            return None
-    assert path.exists()
-    logger.debug("Loading traces at `%s`.", path)
-    dtype = dtype if dtype is not None else np.int16
-    return _dat_to_traces(path, n_channels=n_channels_dat, dtype=dtype, offset=offset)
-
-
-def _all_positions_distinct(positions):
-    """Return whether all positions are distinct."""
-    return len(set(tuple(row) for row in positions)) == len(positions)
-
-
-def get_closest_channels(channel_positions, channel_index, n=None):
-    """Get the channels closest to a given channel on the probe."""
-    x = channel_positions[:, 0]
-    y = channel_positions[:, 1]
-    x0, y0 = channel_positions[channel_index]
-    d = (x - x0) ** 2 + (y - y0) ** 2
-    out = np.argsort(d)
-    if n:
-        out = out[:n]
-    assert out[0] == channel_index
-    return out
-
-
 def from_sparse(data, cols, channel_ids):
     """Convert a sparse structure into a dense one.
 
@@ -174,17 +107,97 @@ def from_sparse(data, cols, channel_ids):
     return out
 
 
+def load_metadata(filename):
+    """Load cluster metadata from a CSV file.
+
+    Return (field_name, dictionary).
+
+    """
+    return _read_tsv_simple(filename)
+
+
+def save_metadata(filename, field_name, metadata):
+    """Save metadata in a CSV file."""
+    return _write_tsv_simple(filename, field_name, metadata)
+
+
+#------------------------------------------------------------------------------
+# Raw data functions
+#------------------------------------------------------------------------------
+
+def _dat_n_samples(filename, dtype=None, n_channels=None, offset=None):
+    """Get the number of samples from the size of a dat file."""
+    assert dtype is not None
+    item_size = np.dtype(dtype).itemsize
+    offset = offset if offset else 0
+    n_samples = (op.getsize(str(filename)) - offset) // (item_size * n_channels)
+    assert n_samples >= 0
+    return n_samples
+
+
+def _dat_to_traces(dat_path, n_channels=None, dtype=None, offset=None):
+    """Memmap a dat file."""
+    assert dtype is not None
+    assert n_channels is not None
+    n_samples = _dat_n_samples(dat_path, n_channels=n_channels, dtype=dtype, offset=offset)
+    return np.memmap(dat_path, dtype=dtype, shape=(n_samples, n_channels), offset=offset)
+
+
+def load_raw_data(path=None, n_channels_dat=None, dtype=None, offset=None):
+    """Load raw data at a given path."""
+    if not path:
+        return
+    path = Path(path)
+    if not path.exists():
+        logger.warning("Path %s does not exist, trying ephys.raw filename.", path)
+        path = path.parent / ('ephys.raw' + path.suffix)
+        if not path.exists():
+            logger.warning("Error while loading data: File `%s` not found.", path)
+            return None
+    assert path.exists()
+    logger.debug("Loading traces at `%s`.", path)
+    dtype = dtype if dtype is not None else np.int16
+    return _dat_to_traces(path, n_channels=n_channels_dat, dtype=dtype, offset=offset)
+
+
+#------------------------------------------------------------------------------
+# Channel util functions
+#------------------------------------------------------------------------------
+
+def _all_positions_distinct(positions):
+    """Return whether all positions are distinct."""
+    return len(set(tuple(row) for row in positions)) == len(positions)
+
+
+def get_closest_channels(channel_positions, channel_index, n=None):
+    """Get the channels closest to a given channel on the probe."""
+    x = channel_positions[:, 0]
+    y = channel_positions[:, 1]
+    x0, y0 = channel_positions[channel_index]
+    d = (x - x0) ** 2 + (y - y0) ** 2
+    out = np.argsort(d)
+    if n:
+        out = out[:n]
+    assert out[0] == channel_index
+    return out
+
+
+#------------------------------------------------------------------------------
+# I/O util functions
+#------------------------------------------------------------------------------
+
 def _find_first_existing_path(*paths, multiple_ok=True):
-    out = None
+    out = []
     for path in paths:
         path = Path(path)
         if path.exists():
-            if out is not None and not multiple_ok:  # pragma: no cover
-                raise IOError("Multiple conflicting files exist: %s." % ', '.join((out, path)))
-            out = path
-        if multiple_ok:
-            break
-    return out
+            out.append(path)
+    if len(out) >= 2 and not multiple_ok:  # pragma: no cover
+        raise IOError("Multiple conflicting files exist: %s." % ', '.join((out, path)))
+    elif len(out) >= 1:
+        return out[0]
+    else:
+        return None
 
 
 #------------------------------------------------------------------------------
@@ -523,7 +536,8 @@ class TemplateModel(object):
             return
 
         try:
-            cols = self._read_array(self._find_path('template_ind.npy'))
+            path = self._find_path('template_ind.npy', 'templates_ind.npy')
+            cols = self._read_array(path)
             cols = np.atleast_2d(cols)
             assert cols.ndim == 2
             logger.debug("Templates are sparse.")
