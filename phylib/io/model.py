@@ -536,7 +536,12 @@ class TemplateModel(object):
             return
 
         try:
-            path = self._find_path('template_ind.npy', 'templates_ind.npy')
+            # WARNING: KS2 saves templates_ind.npy (with an s), and note template_ind.npy,
+            # so that file is not taken into account here.
+            # That means templates.npy is considered as a dense array.
+            # Proper fix would be to save templates.npy as a true sparse array, with proper
+            # template_ind.npy (without an s).
+            path = self._find_path('template_ind.npy')
             cols = self._read_array(path)
             cols = np.atleast_2d(cols)
             assert cols.ndim == 2
@@ -696,6 +701,7 @@ class TemplateModel(object):
         data, cols = self.sparse_templates.data, self.sparse_templates.cols
         assert cols is not None
         template_w, channel_ids = data[template_id], cols[template_id]
+        channel_ids = channel_ids.astype(np.uint32)
         # Remove unused channels = -1.
         used = channel_ids != -1
         template_w = template_w[:, used]
