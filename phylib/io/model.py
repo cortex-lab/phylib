@@ -345,11 +345,14 @@ class TemplateModel(object):
 
         # Features.
         self.sparse_features = self._load_features()
+        self.features = self.sparse_features.data if self.sparse_features else None
         if self.sparse_features is not None:
             self.n_features_per_channel = self.sparse_features.data.shape[2]
 
         # Template features.
         self.sparse_template_features = self._load_template_features()
+        self.template_features = (
+            self.sparse_template_features.data if self.sparse_template_features else None)
 
         # Spike attributes.
         self.spike_attributes = self._load_spike_attributes()
