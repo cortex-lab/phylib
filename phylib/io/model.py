@@ -38,13 +38,16 @@ def read_array(path, mmap_mode=None):
     elif ext == '.npy':
         out = np.load(path, mmap_mode=mmap_mode)
     # Filter out nan and inf values.
-    for w in ('nan', 'inf'):
-        errors = getattr(np, 'is' + w)(out)
-        if np.any(errors):
-            n = np.sum(errors)
-            n_tot = errors.size
-            logger.warning("%d/%d values are %s in %s, replacing by zero.", n, n_tot, w, path)
-            out[errors] = 0
+    # NOTE: do not check for nan/inf values on mmap arrays.
+    # TODO: virtual memmap array where the replacement is done on-the-fly when reading the array.
+    if mmap_mode is None:
+        for w in ('nan', 'inf'):
+            errors = getattr(np, 'is' + w)(out)
+            if np.any(errors):
+                n = np.sum(errors)
+                n_tot = errors.size
+                logger.warning("%d/%d values are %s in %s, replacing by zero.", n, n_tot, w, path)
+                out[errors] = 0
     return out
 
 
@@ -510,7 +513,7 @@ class TemplateModel(object):
         # Sparse structure: regular array with col indices.
         try:
             path = self._find_path('templates.npy', 'clusters.templateWaveforms.npy')
-            data = self._read_array(path)
+            data = self._read_array(path, mmap_mode='r')
             data = np.atleast_3d(data)
             assert data.ndim == 3
             assert data.dtype in (np.float32, np.float64)
@@ -568,7 +571,8 @@ class TemplateModel(object):
         # Sparse structure: regular array with row and col indices.
         try:
             logger.debug("Loading features.")
-            data = self._read_array(self._find_path('pc_features.npy')).transpose((0, 2, 1))
+            data = self._read_array(
+                self._find_path('pc_features.npy'), mmap_mode='r').transpose((0, 2, 1))
             data = np.atleast_3d(data)
             assert data.ndim == 3
             assert data.dtype in (np.float32, np.float64)
@@ -599,7 +603,7 @@ class TemplateModel(object):
         # Sparse structure: regular array with row and col indices.
         try:
             logger.debug("Loading template features.")
-            data = self._read_array(self._find_path('template_features.npy'))
+            data = self._read_array(self._find_path('template_features.npy'), mmap_mode='r')
             assert data.dtype in (np.float32, np.float64)
             assert data.ndim == 2
             n_spikes, n_channels_loc = data.shape
