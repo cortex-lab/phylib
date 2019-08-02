@@ -15,7 +15,7 @@ import ast
 
 import numpy as np
 
-from phylib.utils._misc import _read_tsv_simple, ensure_dir_exists
+from phylib.utils._misc import _read_tsv, _ensure_dir_exists
 from phylib.io.array import _spikes_per_cluster, select_spikes, _unique, grouped_mean, _index_of
 
 logger = logging.getLogger(__name__)
@@ -75,7 +75,7 @@ def _create_if_possible(path, new_path):
     if Path(new_path).exists():  # pragma: no cover
         logger.warning("Path %s already exists, skipping.", new_path)
         return False
-    ensure_dir_exists(new_path.parent)
+    _ensure_dir_exists(new_path.parent)
     return True
 
 
@@ -118,7 +118,7 @@ def _load(path):
     if path.endswith('.npy'):
         return np.load(path)
     elif path.endswith(('.csv', '.tsv')):
-        return _read_tsv_simple(path)[1]  # the function returns a tuple (field, data)
+        return _read_tsv(path)[1]  # the function returns a tuple (field, data)
     elif path.endswith('.bin'):
         # TODO: configurable dtype
         return np.fromfile(path, np.int16)
@@ -129,18 +129,16 @@ def _load(path):
 #------------------------------------------------------------------------------
 
 class EphysAlfCreator(object):
-    """Class for converting a dataset in KS/phy format into ALF."""
-
     def __init__(self, model):
         self.model = model
         self.dir_path = Path(model.dir_path)
         self.spc = _spikes_per_cluster(model.spike_clusters)
 
     def convert(self, out_path):
-        """Convert from KS/phy format to ALF."""
+        """Convert from phy/KS format to ALF."""
         logger.info("Converting dataset to ALF.")
         self.out_path = Path(out_path)
-        if self.out_path.resolve() == self.dir_path.resolve():
+        if self.out_path == self.dir_path:
             raise IOError("The source and target directories cannot be the same.")
 
         # Copy and symlink files.
@@ -158,7 +156,6 @@ class EphysAlfCreator(object):
         self.rm_files()
 
     def copy_files(self):
-        """Make the file renames (actually copies into a new directory)."""
         for fn0, fn1 in _FILE_RENAMES:
             if (self.dir_path / fn0).suffix == '.npy':
                 h = _read_npy_header(self.dir_path / fn0)
@@ -177,20 +174,16 @@ class EphysAlfCreator(object):
                 fn.unlink()
 
     def symlink_raw_data(self):
-        """Symlink the raw data files."""
-        # Raw data files.
-        assert isinstance(self.model.dat_path, (list, tuple))
-        for path in self.model.dat_path:
-            path = Path(path)
-            dst_path = self.out_path / ('ephys.raw' + path.suffix)
-            _symlink_if_possible(path, dst_path)
-            # Meta file attached to raw data can be copied as it's small
-            meta_file = path.parent / (path.stem + '.meta')
-            if meta_file.exists():
-                shutil.copyfile(meta_file, self.out_path / 'ephys.raw.meta')
+        # Raw data file.
+        path = Path(self.model.dat_path)
+        dst_path = self.out_path / ('ephys.raw' + path.suffix)
+        _symlink_if_possible(path, dst_path)
+        # Meta file attached to raw data can be copied
+        meta_file = path.parent / (path.stem + '.meta')
+        if meta_file.exists():
+            shutil.copyfile(meta_file, self.out_path / 'ephys.raw.meta')
 
     def symlink_lfp_data(self):
-        """Symlink the LFP data file."""
         # LFP data file.
         # TODO: support for different file extensions?
         lfp_path = Path(str(self.model.dat_path).replace('.ap.bin', '.lf.bin'))
@@ -207,7 +200,6 @@ class EphysAlfCreator(object):
     # -------------------------------------------------------------------------
 
     def _save_npy(self, filename, arr):
-        """Save an array into a .npy file."""
         np.save(self.out_path / filename, arr)
 
     def make_spike_times(self):
@@ -266,7 +258,6 @@ class EphysAlfCreator(object):
         self._save_npy('clusters.depths.npy', clusters_depths)
 
     def make_mean_waveforms(self):
-        """Make the mean waveforms file."""
         spike_ids = select_spikes(
             cluster_ids=self.cluster_ids,
             max_n_spikes_per_cluster=100,
