@@ -143,8 +143,6 @@ class EphysAlfCreator(object):
 
         # Copy and symlink files.
         self.copy_files()
-        self.symlink_raw_data()
-        self.symlink_lfp_data()
 
         # New files.
         self.make_spike_times()
@@ -162,6 +160,7 @@ class EphysAlfCreator(object):
                 # ks2 outputs vectors as multidimensional arrays. If there is no distinction
                 # for Matlab, there is one in Numpy
                 if len(h['shape']) == 2 and h['shape'][-1] == 1:
+                    print(fn0, fn1)
                     d = np.load(self.dir_path / fn0)
                     np.save(self.out_path / fn1, d.squeeze())
                     continue
