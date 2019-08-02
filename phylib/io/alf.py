@@ -15,7 +15,7 @@ import ast
 
 import numpy as np
 
-from phylib.utils._misc import _read_tsv, _ensure_dir_exists
+from phylib.utils._misc import _read_tsv_simple, ensure_dir_exists
 from phylib.io.array import _spikes_per_cluster, select_spikes, _unique, grouped_mean, _index_of
 
 logger = logging.getLogger(__name__)
@@ -38,17 +38,17 @@ channels.probe
 channels.brainLocation
 """
 
-_FILE_RENAMES = [
-    ('spike_clusters.npy', 'spikes.clusters.npy'),
-    ('amplitudes.npy', 'spikes.amps.npy'),
-    ('channel_positions.npy', 'channels.sitePositions.npy'),
-    ('templates.npy', 'clusters.templateWaveforms.npy'),
-    ('cluster_Amplitude.tsv', 'clusters.amps.tsv'),
-    ('channel_map.npy', 'channels.rawRow.npy'),
-    ('spike_templates.npy', 'ks2/spikes.clusters.npy'),
-    ('cluster_ContamPct.tsv', 'ks2/clusters.ContamPct.tsv'),
-    ('cluster_group.tsv', 'ks2/clusters.phyAnnotation.tsv'),
-    ('cluster_KSLabel.tsv', 'ks2/clusters.group.tsv'),
+_FILE_RENAMES = [  # file_in, file_out, squeeze (bool to squeeze vector from matlab in npy)
+    ('spike_clusters.npy', 'spikes.clusters.npy', True),
+    ('amplitudes.npy', 'spikes.amps.npy', True),
+    ('channel_positions.npy', 'channels.sitePositions.npy', False),
+    ('templates.npy', 'clusters.templateWaveforms.npy', False),
+    ('cluster_Amplitude.tsv', 'clusters.amps.tsv', False),
+    ('channel_map.npy', 'channels.rawRow.npy', True),
+    ('spike_templates.npy', 'ks2/spikes.clusters.npy', True),
+    ('cluster_ContamPct.tsv', 'ks2/clusters.ContamPct.tsv', False),
+    ('cluster_group.tsv', 'ks2/clusters.phyAnnotation.tsv', False),
+    ('cluster_KSLabel.tsv', 'ks2/clusters.group.tsv', False),
 ]
 
 FILE_DELETES = [
@@ -75,7 +75,7 @@ def _create_if_possible(path, new_path):
     if Path(new_path).exists():  # pragma: no cover
         logger.warning("Path %s already exists, skipping.", new_path)
         return False
-    _ensure_dir_exists(new_path.parent)
+    ensure_dir_exists(new_path.parent)
     return True
 
 
@@ -118,7 +118,7 @@ def _load(path):
     if path.endswith('.npy'):
         return np.load(path)
     elif path.endswith(('.csv', '.tsv')):
-        return _read_tsv(path)[1]  # the function returns a tuple (field, data)
+        return _read_tsv_simple(path)[1]  # the function returns a tuple (field, data)
     elif path.endswith('.bin'):
         # TODO: configurable dtype
         return np.fromfile(path, np.int16)
@@ -154,17 +154,16 @@ class EphysAlfCreator(object):
         self.rm_files()
 
     def copy_files(self):
-        for fn0, fn1 in _FILE_RENAMES:
-            if (self.dir_path / fn0).suffix == '.npy':
+        for fn0, fn1, squeeze in _FILE_RENAMES:
+            _copy_if_possible(self.dir_path / fn0, self.out_path / fn1)
+            if squeeze and (self.dir_path / fn0).suffix == '.npy':
                 h = _read_npy_header(self.dir_path / fn0)
                 # ks2 outputs vectors as multidimensional arrays. If there is no distinction
                 # for Matlab, there is one in Numpy
                 if len(h['shape']) == 2 and h['shape'][-1] == 1:
-                    print(fn0, fn1)
                     d = np.load(self.dir_path / fn0)
                     np.save(self.out_path / fn1, d.squeeze())
                     continue
-            _copy_if_possible(self.dir_path / fn0, self.out_path / fn1)
 
     def rm_files(self):
         for fn0 in FILE_DELETES:
@@ -184,7 +183,6 @@ class EphysAlfCreator(object):
 
     def symlink_lfp_data(self):
         # LFP data file.
-        # TODO: support for different file extensions?
         lfp_path = Path(str(self.model.dat_path).replace('.ap.bin', '.lf.bin'))
         if not lfp_path.exists():  # pragma: no cover
             logger.info("No LFP file, skipping symlinking.")
