@@ -76,7 +76,7 @@ def _symlink_if_possible(path, new_path):
     if not _create_if_possible(path, new_path):  # pragma: no cover
         return False
     logger.info("Symlinking %s to %s.", path, new_path)
-    os.symlink(path, new_path)
+    os.symlink(str(path), str(new_path))
     return True
 
 

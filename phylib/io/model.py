@@ -9,6 +9,7 @@
 
 import logging
 import os.path as op
+from operator import itemgetter
 from pathlib import Path
 import shutil
 
@@ -140,7 +141,7 @@ def _dat_to_traces(dat_path, n_channels=None, dtype=None, offset=None):
     assert dtype is not None
     assert n_channels is not None
     n_samples = _dat_n_samples(dat_path, n_channels=n_channels, dtype=dtype, offset=offset)
-    return np.memmap(dat_path, dtype=dtype, shape=(n_samples, n_channels), offset=offset)
+    return np.memmap(str(dat_path), dtype=dtype, shape=(n_samples, n_channels), offset=offset)
 
 
 def load_raw_data(path=None, n_channels_dat=None, dtype=None, offset=None):
@@ -198,6 +199,20 @@ def _find_first_existing_path(*paths, multiple_ok=True):
         return out[0]
     else:
         return None
+
+
+def _close_memmap(name, obj):
+    """Close a memmap array or a list of memmap arrays."""
+    if isinstance(obj, np.memmap):
+        logger.debug("Close memmap array %s.", name)
+        obj._mmap.close()
+    elif getattr(obj, 'arrs', None) is not None:
+        # Support ConcatenatedArrays.
+        _close_memmap('%s.arrs' % name, obj.arrs)
+    elif isinstance(obj, (list, tuple)):
+        [_close_memmap('%s[]' % name, item) for item in obj]
+    elif isinstance(obj, dict):
+        [_close_memmap('%s.%s' % (name, n), item) for n, item in obj.items()]
 
 
 #------------------------------------------------------------------------------
@@ -909,6 +924,11 @@ class TemplateModel(object):
                 out[i, :, b.channel_ids] = b.data[0, ...].T
         logger.debug("Save mean waveforms to `%s`.", path)
         np.save(path, out)
+
+    def close(self):
+        """Close all memmapped files."""
+        for k, v in sorted(self.__dict__.items(), key=itemgetter(0)):
+            _close_memmap(k, v)
 
 
 def _make_abs_path(p, dir_path):

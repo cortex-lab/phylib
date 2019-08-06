@@ -113,9 +113,13 @@ def template_path(tempdir, request):
 
 @fixture
 def template_model_full(template_path_full):
-    return load_model(template_path_full)
+    model = load_model(template_path_full)
+    yield model
+    model.close()
 
 
 @fixture
 def template_model(template_path):
-    return load_model(template_path)
+    model = load_model(template_path)
+    yield model
+    model.close()

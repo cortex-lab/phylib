@@ -8,6 +8,7 @@
 #------------------------------------------------------------------------------
 
 import os
+import os.path as op
 from pathlib import Path
 import shutil
 from pytest import fixture, raises
@@ -90,10 +91,12 @@ def test_creator(dataset):
     c.convert(out_path)
 
     # Check that the raw data has been renamed.
-    assert (out_path / 'ephys.raw.npy').exists()
-    assert (out_path / 'lfp.raw.bin').exists()
+    assert op.islink(str(out_path / 'ephys.raw.npy'))
+    assert op.exists(str(out_path / 'lfp.raw.bin'))
 
     # Check all renames.
     for old, new in _FILE_RENAMES:
-        if (path / old).exists():
-            assert (out_path / new).exists()
+        if op.exists(str(path / old)):
+            assert op.exists(str(out_path / new))
+
+    model.close()
