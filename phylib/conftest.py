@@ -11,7 +11,6 @@ import os
 from pathlib import Path
 import tempfile
 import shutil
-from tempfile import TemporaryDirectory
 import warnings
 
 import matplotlib
