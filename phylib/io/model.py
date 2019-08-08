@@ -610,10 +610,13 @@ class TemplateModel(object):
         try:
             logger.debug("Loading features.")
             data = self._read_array(
-                self._find_path('pc_features.npy'), mmap_mode='r').transpose((0, 2, 1))
-            data = np.atleast_3d(data)
+                self._find_path('pc_features.npy'))
+            if data.ndim == 2:  # pragma: no cover
+                # Deal with npcs = 1.
+                data = data.reshape(data.shape + (1,))
             assert data.ndim == 3
             assert data.dtype in (np.float32, np.float64)
+            data = data.transpose((0, 2, 1))
             n_spikes, n_channels_loc, n_pcs = data.shape
         except IOError:
             return
@@ -621,7 +624,9 @@ class TemplateModel(object):
         try:
             cols = self._read_array(self._find_path('pc_feature_ind.npy'))
             logger.debug("Features are sparse.")
-            cols = np.atleast_2d(cols)
+            if cols.ndim == 1:  # pragma: no cover
+                # Deal with npcs = 1.
+                cols = cols.reshape(cols.shape + (1,))
             assert cols.ndim == 2
             assert cols.shape == (self.n_templates, n_channels_loc)
         except IOError:
