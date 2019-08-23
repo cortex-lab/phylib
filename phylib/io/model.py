@@ -860,6 +860,7 @@ class TemplateModel(object):
         _print('Data files', ', '.join(map(str, self.dat_path)))
         _print('Directory', self.dir_path)
         _print('Duration', '{:.1f}s'.format(self.duration))
+        _print('Sample rate', '{:.1f} kHz'.format(self.sample_rate / 1000.))
         _print('Number of channels', self.n_channels)
         _print('Number of templates', self.n_templates)
         _print('Number of spikes', "{:,}".format(self.n_spikes))
