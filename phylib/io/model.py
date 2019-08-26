@@ -861,9 +861,11 @@ class TemplateModel(object):
         _print('Directory', self.dir_path)
         _print('Duration', '{:.1f}s'.format(self.duration))
         _print('Sample rate', '{:.1f} kHz'.format(self.sample_rate / 1000.))
-        _print('Number of channels', self.n_channels)
-        _print('Number of templates', self.n_templates)
-        _print('Number of spikes', "{:,}".format(self.n_spikes))
+        _print('Data type', self.dtype)
+        _print('# of channels', self.n_channels)
+        _print('# of channels (raw)', self.n_channels_dat)
+        _print('# of templates', self.n_templates)
+        _print('# of spikes', "{:,}".format(self.n_spikes))
 
     def get_template_spikes(self, template_id):
         """Return the spike ids that belong to a given template."""
