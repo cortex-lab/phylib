@@ -4,6 +4,7 @@
 *.log*
 .eggs
 .profile
+.idea
 __pycache__
 .pytest_cache
 _old
