@@ -90,12 +90,8 @@ def test_creator(dataset):
         c.convert(dataset.tmp_dir)
     c.convert(out_path)
 
-    # Check that the raw data has been renamed.
-    assert op.islink(str(out_path / 'ephys.raw.npy'))
-    assert op.exists(str(out_path / 'lfp.raw.bin'))
-
     # Check all renames.
-    for old, new in _FILE_RENAMES:
+    for old, new, _ in _FILE_RENAMES:
         if op.exists(str(path / old)):
             assert op.exists(str(out_path / new))
 

@@ -11,6 +11,7 @@ import logging
 from pathlib import Path
 import os
 import shutil
+import ast
 
 import numpy as np
 
@@ -37,18 +38,32 @@ channels.probe
 channels.brainLocation
 """
 
-_FILE_RENAMES = [
-    ('spike_clusters.npy', 'spikes.clusters.npy'),
-    ('amplitudes.npy', 'spikes.amps.npy'),
-    ('channel_positions.npy', 'channels.sitePositions.npy'),
-    ('templates.npy', 'clusters.templateWaveforms.npy'),
-    ('cluster_Amplitude.tsv', 'clusters.amps.tsv'),
-    ('channel_map.npy', 'channels.rawRow.npy'),
-    ('spike_templates.npy', 'ks2/spikes.clusters.npy'),
-    ('cluster_ContamPct.tsv', 'ks2/clusters.ContamPct.tsv'),
-    ('cluster_group.tsv', 'ks2/clusters.phyAnnotation.tsv'),
-    ('cluster_KSLabel.tsv', 'ks2/clusters.group.tsv'),
+_FILE_RENAMES = [  # file_in, file_out, squeeze (bool to squeeze vector from matlab in npy)
+    ('spike_clusters.npy', 'spikes.clusters.npy', True),
+    ('amplitudes.npy', 'spikes.amps.npy', True),
+    ('channel_positions.npy', 'channels.sitePositions.npy', False),
+    ('templates.npy', 'clusters.templateWaveforms.npy', False),
+    ('cluster_Amplitude.tsv', 'clusters.amps.tsv', False),
+    ('channel_map.npy', 'channels.rawRow.npy', True),
+    # ('spike_templates.npy', 'ks2/spikes.clusters.npy', True),
+    # ('cluster_ContamPct.tsv', 'ks2/clusters.ContamPct.tsv', False),
+    # ('cluster_group.tsv', 'ks2/clusters.phyAnnotation.tsv', False),
+    # ('cluster_KSLabel.tsv', 'ks2/clusters.group.tsv', False),
 ]
+
+FILE_DELETES = [
+    'temp_wh.dat',  # potentially large file that will clog the servers
+]
+
+
+def _read_npy_header(filename):
+    d = {}
+    with open(filename, 'rb') as fid:
+        d['magic_string'] = fid.read(6)
+        d['version'] = fid.read(2)
+        d['len'] = int.from_bytes(fid.read(2), byteorder='little')
+        d = {**d, **ast.literal_eval(fid.read(d['len']).decode())}
+    return d
 
 
 def _create_if_possible(path, new_path):
@@ -130,8 +145,6 @@ class EphysAlfCreator(object):
 
         # Copy and symlink files.
         self.copy_files()
-        self.symlink_raw_data()
-        self.symlink_lfp_data()
 
         # New files.
         self.make_spike_times()
@@ -139,30 +152,26 @@ class EphysAlfCreator(object):
         self.make_depths()
         self.make_mean_waveforms()
 
+        # Clean up
+        self.rm_files()
+
     def copy_files(self):
-        """Make the file renames (actually copies into a new directory)."""
-        for fn0, fn1 in _FILE_RENAMES:
+        for fn0, fn1, squeeze in _FILE_RENAMES:
             _copy_if_possible(self.dir_path / fn0, self.out_path / fn1)
+            if squeeze and (self.dir_path / fn0).suffix == '.npy':
+                h = _read_npy_header(self.dir_path / fn0)
+                # ks2 outputs vectors as multidimensional arrays. If there is no distinction
+                # for Matlab, there is one in Numpy
+                if len(h['shape']) == 2 and h['shape'][-1] == 1:
+                    d = np.load(self.dir_path / fn0)
+                    np.save(self.out_path / fn1, d.squeeze())
+                    continue
 
-    def symlink_raw_data(self):
-        """Symlink the raw data files."""
-        # Raw data files.
-        assert isinstance(self.model.dat_path, (list, tuple))
-        for path in self.model.dat_path:
-            path = Path(path)
-            dst_path = self.out_path / ('ephys.raw' + path.suffix)
-            _symlink_if_possible(path, dst_path)
-
-    def symlink_lfp_data(self):
-        """Symlink the LFP data file."""
-        # LFP data file.
-        # TODO: support for different file extensions?
-        lfp_path = _find_file_with_ext(self.dir_path, '.lf.bin')
-        if not lfp_path:  # pragma: no cover
-            logger.info("No LFP file, skipping symlinking.")
-            return
-        dst_path = self.out_path / ('lfp.raw' + lfp_path.suffix)
-        _symlink_if_possible(lfp_path, dst_path)
+    def rm_files(self):
+        for fn0 in FILE_DELETES:
+            fn = self.dir_path.joinpath(fn0)
+            if fn.exists():
+                fn.unlink()
 
     # File creation
     # -------------------------------------------------------------------------
