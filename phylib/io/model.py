@@ -261,7 +261,9 @@ class TemplateModel(object):
         assert self.dir_path.exists()
 
         # Set dat_path.
-        if not isinstance(self.dat_path, (list, tuple)):
+        if not self.dat_path:  # pragma: no cover
+            self.dat_path = []
+        elif not isinstance(self.dat_path, (list, tuple)):
             self.dat_path = [self.dat_path]
         assert isinstance(self.dat_path, (list, tuple))
         self.dat_path = [Path(_).resolve() for _ in self.dat_path]
