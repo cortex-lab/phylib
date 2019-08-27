@@ -41,7 +41,8 @@ class Dataset(object):
         np.save(p / 'templates.npy', np.random.normal(size=(self.nt, 50, self.nc)))
         np.save(p / 'similar_templates.npy', np.tile(np.arange(self.nt), (self.nt, 1)))
         np.save(p / 'channel_map.npy', np.c_[np.arange(self.nc)])
-        np.save(p / 'channels.probe.npy', np.ones(self.nc))
+        np.save(p / 'channels.probe.npy', np.zeros(self.nc))
+        np.save(p / 'clusters.probe.npy', np.zeros(self.nt))
         _write_tsv_simple(p / 'cluster_group.tsv', 'group', {2: 'good', 3: 'mua', 5: 'noise'})
         with open(p / 'probes.description.txt', 'w+') as fid:
             fid.writelines(['label\n'])
@@ -76,8 +77,8 @@ def test_ephys_1(dataset):
     assert dataset._load('templates.npy').shape == (dataset.nt, 50, dataset.nc)
     assert dataset._load('channel_map.npy').shape == (dataset.nc, 1)
     assert dataset._load('channels.probe.npy').shape == (dataset.nc,)
+    assert dataset._load('clusters.probe.npy').shape == (dataset.nt,)
     assert len(dataset._load('cluster_group.tsv')) == 3
-
     assert dataset._load('rawdata.npy').shape == (1000, dataset.nc)
     assert dataset._load('mydata.lf.bin').shape == (1000 * dataset.nc,)
 

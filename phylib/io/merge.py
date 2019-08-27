@@ -77,11 +77,17 @@ def probes(subdirs, out_dir, labels=None):
     spike_clusters_l = _load_multiple_files('spike_clusters.npy', subdirs)
 
     cluster_offsets = []
+    cluster_probes = []
     offset = 0
+    ind = 0
     for subdir, sc in zip(subdirs, spike_clusters_l):
         sc += offset
         cluster_offsets.append(offset)
+        cluster_probes.append(np.int8(sc * 0 + ind))
         offset = sc.max()
+        ind += 1
+    cluster_probes = np.concatenate(cluster_probes, axis=0)
+    np.save(out_dir / 'clusters.probe.npy', cluster_probes)
 
     # %% Cluster-dependent data
     """ We load all cluster metadata from TSV files, renumber the clusters, merge the dictionaries,
