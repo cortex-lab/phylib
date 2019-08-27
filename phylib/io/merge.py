@@ -4,6 +4,7 @@ import numpy as np
 from scipy.linalg import block_diag
 
 from phylib.utils._misc import _read_tsv_simple, _write_tsv_simple
+from phylib.io import model
 
 
 def _load_multiple_spike_times(*spike_times_l):
@@ -75,7 +76,6 @@ def probes(subdirs, out_dir, labels=None):
 
     # %% Spike clusters
     spike_clusters_l = _load_multiple_files('spike_clusters.npy', subdirs)
-
     cluster_offsets = []
     cluster_probes = []
     offset = 0
@@ -190,3 +190,10 @@ def probes(subdirs, out_dir, labels=None):
         concat = block_diag(*_load_multiple_files(fn, subdirs))
         print("Saving", fn, concat.shape)
         np.save(out_dir / fn, concat)
+
+    # output a template model - also serves the purpose of minimal consistency check...
+    m = model.TemplateModel(dir_path=out_dir,
+                            dat_path=None,
+                            sample_rate=1,
+                            n_channels_dat=np.max(channel_maps) + 1)
+    return m
