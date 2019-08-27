@@ -43,6 +43,8 @@ class Dataset(object):
         np.save(p / 'channel_map.npy', np.c_[np.arange(self.nc)])
         np.save(p / 'channels.probe.npy', np.ones(self.nc))
         _write_tsv_simple(p / 'cluster_group.tsv', 'group', {2: 'good', 3: 'mua', 5: 'noise'})
+        with open(p / 'probes.description.txt', 'w+') as fid:
+            fid.writelines(['label\n'])
 
         # Raw data
         self.dat_path = p / 'rawdata.npy'

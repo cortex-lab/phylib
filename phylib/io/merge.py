@@ -46,6 +46,14 @@ def probes(subdirs, out_dir, labels=None):
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    if not labels:
+        labels = [Path(subdir).parts[-1] for subdir in subdirs]
+
+    # %% Probes, this will have to be spun off to another function to be executed
+    # even for single probe data
+    with open(out_dir / 'probes.description.txt', 'w+') as fid:
+        fid.writelines([f'{lab}\n' for lab in labels])
+
     # %% Spike times
     spike_times_l = _load_multiple_files('spike_times.npy', subdirs)
     spike_times, order = _load_multiple_spike_times(*spike_times_l)
