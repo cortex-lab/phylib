@@ -46,9 +46,8 @@ _FILE_RENAMES = [  # file_in, file_out, squeeze (bool to squeeze vector from mat
     ('cluster_Amplitude.tsv', 'clusters.amps.tsv', False),
     ('channel_map.npy', 'channels.rawRow.npy', True),
     ('channel_map.npy', 'channels.rawRow.npy', True),
-    ('channels.probe.npy', 'channels.probe.npy', True),
+    ('channel_probe.npy', 'channels.probes.npy', True),
     ('probes.description.txt', 'probes.description.txt', False),
-    ('clusters.probe.npy', 'clusters.probe.npy', True),
     # ('spike_templates.npy', 'ks2/spikes.clusters.npy', True),
     # ('cluster_ContamPct.tsv', 'ks2/clusters.ContamPct.tsv', False),
     # ('cluster_group.tsv', 'ks2/clusters.phyAnnotation.tsv', False),
@@ -146,6 +145,8 @@ class EphysAlfCreator(object):
         self.out_path = Path(out_path)
         if self.out_path.resolve() == self.dir_path.resolve():
             raise IOError("The source and target directories cannot be the same.")
+        if not self.out_path.exists():
+            self.out_path.mkdir()
 
         # Copy and symlink files.
         self.copy_files()
@@ -161,14 +162,16 @@ class EphysAlfCreator(object):
 
     def copy_files(self):
         for fn0, fn1, squeeze in _FILE_RENAMES:
-            _copy_if_possible(self.dir_path / fn0, self.out_path / fn1)
-            if squeeze and (self.dir_path / fn0).suffix == '.npy':
-                h = _read_npy_header(self.dir_path / fn0)
+            f0 = self.dir_path / fn0
+            f1 = self.out_path / fn1
+            _copy_if_possible(f0, f1)
+            if f0.exists() and squeeze and f0.suffix == '.npy':
+                h = _read_npy_header(f0)
                 # ks2 outputs vectors as multidimensional arrays. If there is no distinction
                 # for Matlab, there is one in Numpy
                 if len(h['shape']) == 2 and h['shape'][-1] == 1:
-                    d = np.load(self.dir_path / fn0)
-                    np.save(self.out_path / fn1, d.squeeze())
+                    d = np.load(f0)
+                    np.save(f1, d.squeeze())
                     continue
 
     def rm_files(self):
@@ -236,8 +239,14 @@ class EphysAlfCreator(object):
         spikes_depths = clusters_depths[spike_clusters_rel]
         assert spikes_depths.shape == (n_spikes,)
 
+        if self.model.channel_probes is not None:
+            cluster_probes = np.int8(self.model.channel_probes[cluster_channels])
+        else:
+            cluster_probes = np.zeros(n_clusters, dtype=np.int8)
+
         self._save_npy('spikes.depths.npy', spikes_depths)
         self._save_npy('clusters.depths.npy', clusters_depths)
+        self._save_npy('clusters.probes.npy', cluster_probes)
 
     def make_mean_waveforms(self):
         """Make the mean waveforms file."""

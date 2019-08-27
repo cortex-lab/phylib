@@ -322,6 +322,11 @@ class TemplateModel(object):
         if self.channel_shanks is not None:
             assert self.channel_shanks.shape == (nc,)
 
+        # Channel probes.
+        self.channel_probes = self._load_channel_probes()
+        if self.channel_probes is not None:
+            assert self.channel_probes.shape == (nc,)
+
         # Ordering of the channels in the trace view.
         self.channel_vertical_order = np.argsort(self.channel_positions[:, 1], kind='mergesort')
 
@@ -451,6 +456,15 @@ class TemplateModel(object):
         out = np.atleast_1d(out)
         assert out.ndim == 1
         assert out.dtype in (np.uint32, np.int32, np.int64)
+        return out
+
+    def _load_channel_probes(self):
+        path = self._find_path('channel_probe.npy', 'channels.probes.npy')
+        if not path:
+            return
+        out = self._read_array(path)
+        out = np.atleast_1d(out)
+        assert out.ndim == 1
         return out
 
     def _load_channel_positions(self):

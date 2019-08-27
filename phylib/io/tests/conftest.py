@@ -85,6 +85,7 @@ def _make_dataset(tempdir, param='dense', has_spike_attributes=True):
         # Remove some non-necessary files.
         _remove(tempdir / 'template_features.npy')
         _remove(tempdir / 'pc_features.npy')
+        _remove(tempdir / 'channel_probes.npy')
         _remove(tempdir / 'channel_shanks.npy')
         _remove(tempdir / 'amplitudes.npy')
         _remove(tempdir / 'whitening_mat.npy')
