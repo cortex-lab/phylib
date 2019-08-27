@@ -45,6 +45,8 @@ _FILE_RENAMES = [  # file_in, file_out, squeeze (bool to squeeze vector from mat
     ('templates.npy', 'clusters.templateWaveforms.npy', False),
     ('cluster_Amplitude.tsv', 'clusters.amps.tsv', False),
     ('channel_map.npy', 'channels.rawRow.npy', True),
+    ('channel_map.npy', 'channels.rawRow.npy', True),
+    ('channels.probe.npy', 'channels.probe.npy', True),
     # ('spike_templates.npy', 'ks2/spikes.clusters.npy', True),
     # ('cluster_ContamPct.tsv', 'ks2/clusters.ContamPct.tsv', False),
     # ('cluster_group.tsv', 'ks2/clusters.phyAnnotation.tsv', False),

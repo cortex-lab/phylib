@@ -41,6 +41,7 @@ class Dataset(object):
         np.save(p / 'templates.npy', np.random.normal(size=(self.nt, 50, self.nc)))
         np.save(p / 'similar_templates.npy', np.tile(np.arange(self.nt), (self.nt, 1)))
         np.save(p / 'channel_map.npy', np.c_[np.arange(self.nc)])
+        np.save(p / 'channels.probe.npy', np.ones(self.nc))
         _write_tsv_simple(p / 'cluster_group.tsv', 'group', {2: 'good', 3: 'mua', 5: 'noise'})
 
         # Raw data
@@ -72,6 +73,7 @@ def test_ephys_1(dataset):
     assert dataset._load('channel_positions.npy').shape == (dataset.nc, 2)
     assert dataset._load('templates.npy').shape == (dataset.nt, 50, dataset.nc)
     assert dataset._load('channel_map.npy').shape == (dataset.nc, 1)
+    assert dataset._load('channels.probe.npy').shape == (dataset.nc,)
     assert len(dataset._load('cluster_group.tsv')) == 3
 
     assert dataset._load('rawdata.npy').shape == (1000, dataset.nc)
