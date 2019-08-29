@@ -64,7 +64,7 @@ def probes(subdirs, out_dir, labels=None):
         'amplitudes.npy',
         'spike_clusters.npy',
         'spike_templates.npy',
-        'pc_features.npy',
+        # 'pc_features.npy',
         'template_features.npy',
     ]
 
@@ -123,7 +123,7 @@ def probes(subdirs, out_dir, labels=None):
     channel_probes = np.concatenate(channel_probes, axis=0)
     print("Saving channel_maps and probes", channel_maps.shape)
     np.save(out_dir / 'channel_map.npy', channel_maps)
-    np.save(out_dir / 'channels.probe.npy', channel_probes)
+    np.save(out_dir / 'channel_probe.npy', channel_probes)
 
     # channel positions
     channel_positions_l = _load_multiple_files('channel_positions.npy', subdirs)

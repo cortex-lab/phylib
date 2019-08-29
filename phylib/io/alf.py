@@ -43,7 +43,6 @@ _FILE_RENAMES = [  # file_in, file_out, squeeze (bool to squeeze vector from mat
     ('amplitudes.npy', 'spikes.amps.npy', True),
     ('channel_positions.npy', 'channels.sitePositions.npy', False),
     ('templates.npy', 'clusters.templateWaveforms.npy', False),
-    ('cluster_Amplitude.tsv', 'clusters.amps.tsv', False),
     ('channel_map.npy', 'channels.rawRow.npy', True),
     ('channel_map.npy', 'channels.rawRow.npy', True),
     ('channel_probe.npy', 'channels.probes.npy', True),
@@ -153,6 +152,7 @@ class EphysAlfCreator(object):
 
         # New files.
         self.make_spike_times()
+        self.make_cluster_amps()
         self.make_cluster_waveforms()
         self.make_depths()
         self.make_mean_waveforms()
@@ -191,6 +191,17 @@ class EphysAlfCreator(object):
         """We cannot just rename/copy spike_times.npy because it is in unit of
         *samples*, and not in seconds."""
         self._save_npy('spikes.times.npy', self.model.spike_times)
+
+    def make_cluster_amps(self):
+        """
+        Save cluster.amps as a straight numpy array. Clusters without amplitudes are
+        labeled with NaN
+        """
+        cluster_amp_path = self.dir_path / 'cluster_Amplitude.tsv'
+        camps = np.genfromtxt(cluster_amp_path, names=True, delimiter='\t')
+        cluster_amps = np.zeros(self.model.n_templates) * np.nan
+        cluster_amps[np.int32(camps['cluster_id'])] = camps['Amplitude']
+        self._save_npy('clusters.amps.npy', cluster_amps)
 
     def make_cluster_waveforms(self):
         """Return the channel index with the highest template amplitude, for

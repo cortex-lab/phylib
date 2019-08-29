@@ -43,6 +43,8 @@ class Dataset(object):
         np.save(p / 'channel_map.npy', np.c_[np.arange(self.nc)])
         np.save(p / 'channel_probe.npy', np.zeros(self.nc))
         _write_tsv_simple(p / 'cluster_group.tsv', 'group', {2: 'good', 3: 'mua', 5: 'noise'})
+        _write_tsv_simple(p / 'cluster_Amplitude.tsv', field_name='Amplitude',
+                          data={str(n): np.random.rand() * 120 for n in np.arange(self.nt)})
         with open(p / 'probes.description.txt', 'w+') as fid:
             fid.writelines(['label\n'])
 
@@ -90,6 +92,7 @@ def test_creator(dataset):
         'clusters.depths.npy',
         'clusters.meanWaveforms.npy',
         'clusters.probes.npy',
+        'clusters.amps.npy'
     )
     path = Path(dataset.tmp_dir)
     out_path = path / 'alf'
