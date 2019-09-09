@@ -35,11 +35,12 @@ def _load_multiple_files(fn, subdirs):
     return [np.load(str(subdir / fn)).squeeze() for subdir in subdirs]
 
 
-def probes(subdirs, out_dir, labels=None):
+def probes(subdirs, out_dir, sampling_rate=30000, labels=None):
     """
     Merge spike-sorted data from different probes and output datasets to disk
     :param subdirs: Path or string of full path to the spike-sorted data, each probe in a folder
     :param out_dir: Output directory for merged spike-sorted data
+    :param sampling_rate: Hz sampling rate of the AP band binary data
     :param labels: labels for each probe. If not specified, defaults to the containing folder name
      for each probe
     :return: None
@@ -62,7 +63,6 @@ def probes(subdirs, out_dir, labels=None):
 
     spike_data = [
         'amplitudes.npy',
-        'spike_clusters.npy',
         'spike_templates.npy',
         # 'pc_features.npy',
         'template_features.npy',
@@ -81,13 +81,28 @@ def probes(subdirs, out_dir, labels=None):
     offset = 0
     ind = 0
     for subdir, sc in zip(subdirs, spike_clusters_l):
-        sc += offset
+        sc += np.uint32(offset)
         cluster_offsets.append(offset)
         cluster_probes.append(np.int8(sc * 0 + ind))
-        offset = sc.max()
+        offset = sc.max() + 1
         ind += 1
     cluster_probes = np.concatenate(cluster_probes, axis=0)
+    spike_clusters = _load_multiple_spike_arrays(*spike_clusters_l, spike_order=order)
     np.save(out_dir / 'clusters.probe.npy', cluster_probes)
+    np.save(out_dir / 'spike_clusters.npy', spike_clusters)
+    np.save(out_dir / 'spike_templates.npy', spike_clusters)
+
+    # ref = np.load(subdirs[0] / 'spike_clusters.npy')
+    # test = spike_clusters[order]
+    # tref = np.load(subdirs[0] / 'spike_times.npy')
+    #
+    # inds = spike_clusters < cluster_offsets[1]
+    # np.all(spike_clusters[inds] == ref.squeeze())
+    # np.all(spike_times[inds] == tref.squeeze())
+    #
+    # np.all(spike_clusters_l[0] == ref.squeeze())
+    # np.all(spike_clusters_l[1] >= cluster_offsets[1])
+    # np.all(spike_clusters_l[0] < cluster_offsets[1])
 
     # %% Cluster-dependent data
     """ We load all cluster metadata from TSV files, renumber the clusters, merge the dictionaries,
@@ -194,6 +209,6 @@ def probes(subdirs, out_dir, labels=None):
     # output a template model - also serves the purpose of minimal consistency check...
     m = model.TemplateModel(dir_path=out_dir,
                             dat_path=None,
-                            sample_rate=1,
+                            sample_rate=sampling_rate,
                             n_channels_dat=np.max(channel_maps) + 1)
     return m

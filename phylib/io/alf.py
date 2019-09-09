@@ -68,21 +68,21 @@ def _read_npy_header(filename):
     return d
 
 
-def _create_if_possible(path, new_path):
+def _create_if_possible(path, new_path, force=False):
     """Prepare the copy/move/symlink of a file, by making sure the source exists
     while the destination does not."""
     if not Path(path).exists():
         logger.warning("Path %s does not exist, skipping.", path)
         return False
-    if Path(new_path).exists():  # pragma: no cover
+    if Path(new_path).exists() and not force:  # pragma: no cover
         logger.warning("Path %s already exists, skipping.", new_path)
         return False
     ensure_dir_exists(new_path.parent)
     return True
 
 
-def _copy_if_possible(path, new_path):
-    if not _create_if_possible(path, new_path):
+def _copy_if_possible(path, new_path, force=False):
+    if not _create_if_possible(path, new_path, force=force):
         return False
     logger.info("Copying %s to %s.", path, new_path)
     shutil.copy(path, new_path)
@@ -138,7 +138,7 @@ class EphysAlfCreator(object):
         self.dir_path = Path(model.dir_path)
         self.spc = _spikes_per_cluster(model.spike_clusters)
 
-    def convert(self, out_path):
+    def convert(self, out_path, force=False):
         """Convert from KS/phy format to ALF."""
         logger.info("Converting dataset to ALF.")
         self.out_path = Path(out_path)
@@ -146,9 +146,8 @@ class EphysAlfCreator(object):
             raise IOError("The source and target directories cannot be the same.")
         if not self.out_path.exists():
             self.out_path.mkdir()
-
         # Copy and symlink files.
-        self.copy_files()
+        self.copy_files(force=force)
 
         # New files.
         self.make_spike_times()
@@ -160,11 +159,11 @@ class EphysAlfCreator(object):
         # Clean up
         self.rm_files()
 
-    def copy_files(self):
+    def copy_files(self, force=False):
         for fn0, fn1, squeeze in _FILE_RENAMES:
             f0 = self.dir_path / fn0
             f1 = self.out_path / fn1
-            _copy_if_possible(f0, f1)
+            _copy_if_possible(f0, f1, force=force)
             if f0.exists() and squeeze and f0.suffix == '.npy':
                 h = _read_npy_header(f0)
                 # ks2 outputs vectors as multidimensional arrays. If there is no distinction
@@ -190,6 +189,7 @@ class EphysAlfCreator(object):
     def make_spike_times(self):
         """We cannot just rename/copy spike_times.npy because it is in unit of
         *samples*, and not in seconds."""
+        self.dir_path
         self._save_npy('spikes.times.npy', self.model.spike_times)
 
     def make_cluster_amps(self):
