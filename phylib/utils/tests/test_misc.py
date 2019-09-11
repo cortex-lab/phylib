@@ -11,9 +11,9 @@ from numpy.testing import assert_array_equal as ae
 from pytest import raises, mark
 
 from .._misc import (
-    _git_version, load_json, save_json, load_pickle, save_pickle, read_python, read_text,
-    write_text, _read_tsv_simple, _write_tsv_simple, read_tsv, write_tsv, _pretty_floats,
-    _encode_qbytearray, _decode_qbytearray, _fullname, _load_from_fullname)
+    _git_version, load_json, save_json, load_pickle, save_pickle, read_python, write_python,
+    read_text, write_text, _read_tsv_simple, _write_tsv_simple, read_tsv, write_tsv,
+    _pretty_floats, _encode_qbytearray, _decode_qbytearray, _fullname, _load_from_fullname)
 
 
 #------------------------------------------------------------------------------
@@ -90,6 +90,14 @@ def test_read_python(tempdir):
         f.write("""a = {'b': 1}""")
 
     assert read_python(path) == {'a': {'b': 1}}
+
+
+def test_write_python(tempdir):
+    data = {'a': 1, 'b': 'hello', 'c': [1, 2, 3]}
+    path = tempdir / 'mock.py'
+
+    write_python(path, data)
+    assert read_python(path) == data
 
 
 def test_write_text(tempdir):
