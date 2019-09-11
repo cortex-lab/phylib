@@ -25,17 +25,12 @@ logger = logging.getLogger(__name__)
 #------------------------------------------------------------------------------
 
 
-"""
-## Todo later
+# ## TODO
 
-clusters.probes
-probes.insertion
-probes.description
-probes.sitePositions
-probes.rawFilename
-channels.probe
-channels.brainLocation
-"""
+# probes.insertion
+# probes.sitePositions
+# probes.rawFilename
+# channels.brainLocation
 
 _FILE_RENAMES = [  # file_in, file_out, squeeze (bool to squeeze vector from matlab in npy)
     ('spike_clusters.npy', 'spikes.clusters.npy', True),
@@ -45,7 +40,7 @@ _FILE_RENAMES = [  # file_in, file_out, squeeze (bool to squeeze vector from mat
     ('channel_map.npy', 'channels.rawRow.npy', True),
     ('channel_map.npy', 'channels.rawRow.npy', True),
     ('channel_probe.npy', 'channels.probes.npy', True),
-    ('probes.description.txt', 'probes.description.txt', False),
+    # ('probes.description.txt', 'probes.description.txt', False),
     # ('spike_templates.npy', 'ks2/spikes.clusters.npy', True),
     # ('cluster_ContamPct.tsv', 'ks2/clusters.ContamPct.tsv', False),
     # ('cluster_group.tsv', 'ks2/clusters.phyAnnotation.tsv', False),

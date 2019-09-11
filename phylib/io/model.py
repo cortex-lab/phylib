@@ -253,6 +253,11 @@ class TemplateModel(object):
     amplitude_threshold = 0
 
     def __init__(self, **kwargs):
+        # Default empty values.
+        self.dat_path = []
+        self.sample_rate = None
+        self.n_channels_dat = None
+
         self.__dict__.update(kwargs)
 
         # Set dir_path.
@@ -269,7 +274,9 @@ class TemplateModel(object):
         self.dat_path = [Path(_).resolve() for _ in self.dat_path]
 
         self.dtype = getattr(self, 'dtype', np.int16)
-        self.sample_rate = float(self.sample_rate)
+        if not self.sample_rate:
+            logger.warning("No sample rate was given! Defaulting to 1 Hz.")
+        self.sample_rate = float(self.sample_rate or 1.)
         assert self.sample_rate > 0
         self.offset = getattr(self, 'offset', 0)
 
@@ -307,7 +314,8 @@ class TemplateModel(object):
         # Channels.
         self.channel_mapping = self._load_channel_map()
         self.n_channels = nc = self.channel_mapping.shape[0]
-        assert np.all(self.channel_mapping <= self.n_channels_dat - 1)
+        if self.n_channels_dat:
+            assert np.all(self.channel_mapping <= self.n_channels_dat - 1)
 
         # Channel positions.
         self.channel_positions = self._load_channel_positions()
@@ -324,6 +332,8 @@ class TemplateModel(object):
         # Channel probes.
         self.channel_probes = self._load_channel_probes()
         assert self.channel_probes.shape == (nc,)
+        self.probes = np.unique(self.channel_probes)
+        self.n_probes = len(self.probes)
 
         # Ordering of the channels in the trace view.
         self.channel_vertical_order = np.argsort(self.channel_positions[:, 1], kind='mergesort')
