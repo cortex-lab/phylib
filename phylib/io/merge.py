@@ -15,7 +15,7 @@ from scipy.linalg import block_diag
 
 from phylib.utils._misc import (
     _read_tsv_simple, _write_tsv_simple, write_tsv, read_python, write_python)
-from phylib.io.model import TemplateModel
+from phylib.io.model import load_model
 
 logger = logging.getLogger(__name__)
 
@@ -24,12 +24,17 @@ logger = logging.getLogger(__name__)
 # Merge utils
 #------------------------------------------------------------------------------
 
+def _concat(arrs, axis=0, dtype=None):
+    dtype = dtype or arrs[0].dtype
+    return np.concatenate(arrs).astype(dtype)
+
+
 def _load_multiple_spike_times(*spike_times_l):
     """Load multiple spike_times arrays and merge them into a single one."""
     # We concatenate all spike times arrays.
-    spike_times_concat = np.concatenate(spike_times_l)
+    spike_times_concat = _concat(spike_times_l)
     # We sort by increasing time.
-    spike_order = np.argsort(spike_times_concat)
+    spike_order = np.argsort(spike_times_concat, kind='stable')
     spike_times_ordered = spike_times_concat[spike_order]
     assert np.all(np.diff(spike_times_ordered) >= 0)
     # We return the ordered spike times, and the reordering array.
@@ -41,7 +46,7 @@ def _load_multiple_spike_arrays(*spike_array_l, spike_order=None):
     Keep the spike time ordering.
     """
     assert spike_order is not None
-    spike_array_concat = np.concatenate(spike_array_l, axis=0)
+    spike_array_concat = _concat(spike_array_l, axis=0)
     assert spike_array_concat.shape[0] == spike_order.shape[0]
     return spike_array_concat[spike_order]
 
@@ -87,7 +92,7 @@ class Merger(object):
 
     def _save(self, name, arr):
         """Save a npy array in the output directory."""
-        logger.info("Saving %s, shape %s.", name, arr.shape)
+        logger.info("Saving %s %s %s.", name, arr.dtype, arr.shape)
         np.save(self.out_dir / name, arr)
 
     def write_params(self):
@@ -130,20 +135,19 @@ class Merger(object):
         """Write the merged spike clusters, and register self.cluster_offsets."""
         spike_clusters_l = _load_multiple_files('spike_clusters.npy', self.subdirs)
         self.cluster_offsets = []
-        cluster_probes = []
+        # cluster_probes = []
         offset = 0
         ind = 0
         for subdir, sc in zip(self.subdirs, spike_clusters_l):
             sc += offset
             self.cluster_offsets.append(offset)
-            cluster_probes.append(sc * 0 + ind)
+            # cluster_probes.append(ind * np.ones(len(sc)))
             offset = sc.max() + 1
             ind += 1
-        cluster_probes = np.concatenate(cluster_probes, axis=0)
+        # cluster_probes = _concat(cluster_probes, axis=0)
         spike_clusters = _load_multiple_spike_arrays(
             *spike_clusters_l, spike_order=self.spike_order)
 
-        self._save('clusters.probe.npy', cluster_probes)
         self._save('spike_clusters.npy', spike_clusters)
         self._save('spike_templates.npy', spike_clusters)
 
@@ -182,8 +186,8 @@ class Merger(object):
             self.channel_offsets.append(offset)
             offset = array.max()
             channel_probes.append(array * 0 + ind)
-        channel_maps = np.concatenate(channel_maps_l, axis=0)
-        channel_probes = np.concatenate(channel_probes, axis=0)
+        channel_maps = _concat(channel_maps_l, axis=0)
+        channel_probes = _concat(channel_probes, axis=0)
         self._save('channel_map.npy', channel_maps)
         self._save('channel_probe.npy', channel_probes)
 
@@ -194,7 +198,7 @@ class Merger(object):
         for array in channel_positions_l:
             array[:, 0] += x_offset
             x_offset = 2. * array[:, 0].max() - array[:, 0].min()
-        channel_positions = np.concatenate(channel_positions_l, axis=0)
+        channel_positions = _concat(channel_positions_l, axis=0)
         self._save('channel_positions.npy', channel_positions)
 
     def write_templates(self):
@@ -241,7 +245,7 @@ class Merger(object):
             # For ind arrays, we need to take into account the channel offset.
             for array, offset in zip(arrays, self.channel_offsets):
                 array += offset
-            concat = np.concatenate(arrays, axis=0).astype(np.uint32)
+            concat = _concat(arrays, axis=0).astype(np.uint32)
             self._save(fn, concat)
 
     def write_misc(self):
@@ -281,4 +285,4 @@ class Merger(object):
         self.write_template_data()
         self.write_misc()
 
-        return TemplateModel(dir_path=self.out_dir)
+        return load_model(self.out_dir / 'params.py')

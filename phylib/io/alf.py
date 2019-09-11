@@ -16,6 +16,7 @@ import numpy as np
 
 from phylib.utils._misc import _read_tsv_simple, ensure_dir_exists
 from phylib.io.array import _spikes_per_cluster, select_spikes, _unique, grouped_mean, _index_of
+from phylib.io.model import load_model
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,7 @@ logger = logging.getLogger(__name__)
 # channels.brainLocation
 
 _FILE_RENAMES = [  # file_in, file_out, squeeze (bool to squeeze vector from matlab in npy)
+    ('params.py', 'params.py', None),
     ('spike_clusters.npy', 'spikes.clusters.npy', True),
     ('amplitudes.npy', 'spikes.amps.npy', True),
     ('channel_positions.npy', 'channels.sitePositions.npy', False),
@@ -125,6 +127,11 @@ class EphysAlfCreator(object):
 
         # Clean up
         self.rm_files()
+
+        # Return the TemplateModel of the converted ALF dataset if the params.py file exists.
+        params_path = self.out_path / 'params.py'
+        if params_path.exists():
+            return load_model(params_path)
 
     def copy_files(self, force=False):
         for fn0, fn1, squeeze in _FILE_RENAMES:

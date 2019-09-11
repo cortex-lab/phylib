@@ -274,7 +274,7 @@ class TemplateModel(object):
         self.dat_path = [Path(_).resolve() for _ in self.dat_path]
 
         self.dtype = getattr(self, 'dtype', np.int16)
-        if not self.sample_rate:
+        if not self.sample_rate:  # pragma: no cover
             logger.warning("No sample rate was given! Defaulting to 1 Hz.")
         self.sample_rate = float(self.sample_rate or 1.)
         assert self.sample_rate > 0
@@ -344,6 +344,10 @@ class TemplateModel(object):
             self.sparse_templates.data.shape
         if self.sparse_templates.cols is not None:
             assert self.sparse_templates.cols.shape == (self.n_templates, self.n_channels_loc)
+
+        # Cluster probes and shanks (only when loading an ALF dataset).
+        self.cluster_probes = self._load_cluster_probes()
+        self.cluster_shanks = self._load_cluster_shanks()
 
         # Whitening.
         try:
@@ -483,6 +487,26 @@ class TemplateModel(object):
         except IOError:
             return np.zeros(self.n_channels, dtype=np.int32)
 
+    def _load_cluster_probes(self):
+        try:
+            path = self._find_path('clusters.probes.npy')
+            out = self._read_array(path)
+            out = np.atleast_1d(out)
+            assert out.ndim == 1
+            return out
+        except IOError:
+            return np.zeros(self.n_templates, dtype=np.int32)
+
+    def _load_cluster_shanks(self):
+        try:
+            path = self._find_path('clusters.shanks.npy')
+            out = self._read_array(path)
+            out = np.atleast_1d(out)
+            assert out.ndim == 1
+            return out
+        except IOError:
+            return np.zeros(self.n_templates, dtype=np.int32)
+
     def _load_channel_shanks(self):
         try:
             path = self._find_path('channel_shanks.npy', 'channels.shanks.npy')
@@ -518,7 +542,7 @@ class TemplateModel(object):
             return
 
     def _load_spike_templates(self):
-        path = self._find_path('spike_templates.npy', 'ks2/spikes.clusters.npy')
+        path = self._find_path('spike_templates.npy', 'spikes.clusters.npy')
         out = self._read_array(path)
         if out.dtype in (np.float32, np.float64):  # pragma: no cover
             out = out.astype(np.int32)
@@ -530,7 +554,7 @@ class TemplateModel(object):
         path = self._find_path('spike_clusters.npy', 'spikes.clusters.npy', multiple_ok=False)
         if path is None:
             # Create spike_clusters file if it doesn't exist.
-            tmp_path = self._find_path('spike_templates.npy', 'ks2/spikes.clusters.npy')
+            tmp_path = self._find_path('spike_templates.npy', 'spikes.clusters.npy')
             path = self.dir_path / 'spike_clusters.npy'
             logger.debug("Copying from %s to %s.", tmp_path, path)
             shutil.copy(tmp_path, path)
@@ -558,10 +582,13 @@ class TemplateModel(object):
         return out
 
     def _load_similar_templates(self):
-        out = self._read_array(self._find_path('similar_templates.npy'))
-        out = np.atleast_2d(out)
-        assert out.ndim == 2
-        return out
+        try:
+            out = self._read_array(self._find_path('similar_templates.npy'))
+            out = np.atleast_2d(out)
+            assert out.ndim == 2
+            return out
+        except IOError:
+            return np.zeros((self.n_templates, self.n_templates))
 
     def _load_templates(self):
         logger.debug("Loading templates.")
