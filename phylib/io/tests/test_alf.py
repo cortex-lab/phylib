@@ -66,8 +66,7 @@ class Dataset(object):
 
 @fixture
 def dataset(tempdir):
-    d = Dataset(tempdir)
-    return d
+    return Dataset(tempdir)
 
 
 def test_ephys_1(dataset):
@@ -92,7 +91,6 @@ def test_creator(dataset):
         'clusters.depths.npy',
         'clusters.meanWaveforms.npy',
         'clusters.probes.npy',
-        'clusters.amps.npy'
     )
     path = Path(dataset.tmp_dir)
     out_path = path / 'alf'

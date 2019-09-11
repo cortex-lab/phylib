@@ -9,7 +9,6 @@
 
 import logging
 from pathlib import Path
-import os
 import shutil
 import ast
 
@@ -71,7 +70,7 @@ def _read_npy_header(filename):
 def _create_if_possible(path, new_path, force=False):
     """Prepare the copy/move/symlink of a file, by making sure the source exists
     while the destination does not."""
-    if not Path(path).exists():
+    if not Path(path).exists():  # pragma: no cover
         logger.warning("Path %s does not exist, skipping.", path)
         return False
     if Path(new_path).exists() and not force:  # pragma: no cover
@@ -87,32 +86,6 @@ def _copy_if_possible(path, new_path, force=False):
     logger.info("Copying %s to %s.", path, new_path)
     shutil.copy(path, new_path)
     return True
-
-
-def _symlink_if_possible(path, new_path):
-    if not _create_if_possible(path, new_path):  # pragma: no cover
-        return False
-    logger.info("Symlinking %s to %s.", path, new_path)
-    os.symlink(str(path), str(new_path))
-    return True
-
-
-def _find_file_with_ext(path, ext):
-    """Find a file with a given extension in a directory.
-    Raises an exception if there are more than one file.
-    Return None if there is no such file.
-    """
-    p = Path(path)
-    assert p.is_dir()
-    files = list(p.glob('*' + ext))
-    if not files:
-        return
-    elif len(files) == 1:
-        return files[0]
-    raise RuntimeError(
-        "%d files with the extension %s were found in %s.",
-        len(files), ext, path
-    )  # pragma: no cover
 
 
 def _load(path):
@@ -151,7 +124,6 @@ class EphysAlfCreator(object):
 
         # New files.
         self.make_spike_times()
-        self.make_cluster_amps()
         self.make_cluster_waveforms()
         self.make_depths()
         self.make_mean_waveforms()
@@ -176,7 +148,7 @@ class EphysAlfCreator(object):
     def rm_files(self):
         for fn0 in FILE_DELETES:
             fn = self.dir_path.joinpath(fn0)
-            if fn.exists():
+            if fn.exists():  # pragma: no cover
                 fn.unlink()
 
     # File creation
@@ -191,17 +163,6 @@ class EphysAlfCreator(object):
         *samples*, and not in seconds."""
         self.dir_path
         self._save_npy('spikes.times.npy', self.model.spike_times)
-
-    def make_cluster_amps(self):
-        """
-        Save cluster.amps as a straight numpy array. Clusters without amplitudes are
-        labeled with NaN
-        """
-        cluster_amp_path = self.dir_path / 'cluster_Amplitude.tsv'
-        camps = np.genfromtxt(cluster_amp_path, names=True, delimiter='\t')
-        cluster_amps = np.zeros(self.model.n_templates) * np.nan
-        cluster_amps[np.int32(camps['cluster_id'])] = camps['Amplitude']
-        self._save_npy('clusters.amps.npy', cluster_amps)
 
     def make_cluster_waveforms(self):
         """Return the channel index with the highest template amplitude, for
@@ -229,7 +190,7 @@ class EphysAlfCreator(object):
             self._save_npy(waveform_duration_path.name, durations)
 
     def make_depths(self):
-        """Make spikes.depths.npy and clusters.depths.npy."""
+        """Make spikes.depths.npy, clusters.depths.npy."""
         channel_positions = self.model.channel_positions
         assert channel_positions.ndim == 2
 
@@ -250,14 +211,15 @@ class EphysAlfCreator(object):
         spikes_depths = clusters_depths[spike_clusters_rel]
         assert spikes_depths.shape == (n_spikes,)
 
-        if self.model.channel_probes is not None:
-            cluster_probes = np.int8(self.model.channel_probes[cluster_channels])
-        else:
-            cluster_probes = np.zeros(n_clusters, dtype=np.int8)
-
         self._save_npy('spikes.depths.npy', spikes_depths)
         self._save_npy('clusters.depths.npy', clusters_depths)
+
+        # Cluster probes and shanks.
+        cluster_probes = self.model.channel_probes[cluster_channels]
+        cluster_shanks = self.model.channel_shanks[cluster_channels]
+
         self._save_npy('clusters.probes.npy', cluster_probes)
+        self._save_npy('clusters.shanks.npy', cluster_shanks)
 
     def make_mean_waveforms(self):
         """Make the mean waveforms file."""

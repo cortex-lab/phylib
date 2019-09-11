@@ -319,13 +319,11 @@ class TemplateModel(object):
 
         # Channel shanks.
         self.channel_shanks = self._load_channel_shanks()
-        if self.channel_shanks is not None:
-            assert self.channel_shanks.shape == (nc,)
+        assert self.channel_shanks.shape == (nc,)
 
         # Channel probes.
         self.channel_probes = self._load_channel_probes()
-        if self.channel_probes is not None:
-            assert self.channel_probes.shape == (nc,)
+        assert self.channel_probes.shape == (nc,)
 
         # Ordering of the channels in the trace view.
         self.channel_vertical_order = np.argsort(self.channel_positions[:, 1], kind='mergesort')
@@ -458,15 +456,6 @@ class TemplateModel(object):
         assert out.dtype in (np.uint32, np.int32, np.int64)
         return out
 
-    def _load_channel_probes(self):
-        path = self._find_path('channel_probe.npy', 'channels.probes.npy')
-        if not path:
-            return
-        out = self._read_array(path)
-        out = np.atleast_1d(out)
-        assert out.ndim == 1
-        return out
-
     def _load_channel_positions(self):
         path = self._find_path('channel_positions.npy', 'channels.sitePositions.npy')
         out = self._read_array(path)
@@ -474,15 +463,25 @@ class TemplateModel(object):
         assert out.ndim == 2
         return out
 
+    def _load_channel_probes(self):
+        try:
+            path = self._find_path('channel_probe.npy', 'channels.probes.npy')
+            out = self._read_array(path)
+            out = np.atleast_1d(out)
+            assert out.ndim == 1
+            return out
+        except IOError:
+            return np.zeros(self.n_channels, dtype=np.int32)
+
     def _load_channel_shanks(self):
         try:
-            path = self._find_path('channel_shanks.npy')
+            path = self._find_path('channel_shanks.npy', 'channels.shanks.npy')
             out = self._read_array(path).reshape((-1,))
             assert out.ndim == 1
             return out
         except IOError:
             logger.debug("No channel shank file found.")
-            return
+            return np.zeros(self.n_channels, dtype=np.int32)
 
     def _load_traces(self, channel_map=None):
         if not self.dat_path:
@@ -496,8 +495,7 @@ class TemplateModel(object):
             load_raw_data(path, n_channels_dat=n, dtype=self.dtype, offset=self.offset)
             for path in paths]
         traces = [_ for _ in traces if _ is not None]
-        scaling = 1. / 255 if self.dtype == np.int16 else None
-        traces = _concatenate_virtual_arrays(traces, channel_map, scaling=scaling)
+        traces = _concatenate_virtual_arrays(traces, channel_map)
         return traces
 
     def _load_amplitudes(self):
