@@ -7,6 +7,8 @@
 #------------------------------------------------------------------------------
 
 import logging
+import os
+from pathlib import Path
 import warnings
 
 import matplotlib
@@ -36,4 +38,7 @@ warnings.filterwarnings("ignore", message="numpy.ufunc size changed")
 def tempdir(tmp_path):
     # Use the pytest fixture, which allows for --basetemp option to specify a specific temporary
     # directory when running the test suite.
-    return tmp_path
+    curdir = os.getcwd()
+    os.chdir(tmp_path)
+    yield Path(tmp_path)
+    os.chdir(curdir)
