@@ -87,7 +87,7 @@ class Merger(object):
         self.out_dir.mkdir(parents=True, exist_ok=True)
 
         # Default probe info if not provided: the label is the probe folder name.
-        self.probe_info = probe_info or [{'label': subdir.parts[-1]} for subdir in subdirs]
+        self.probe_info = probe_info or [{'label': subdir.parts[-1]} for subdir in self.subdirs]
         assert len(self.probe_info) == len(self.subdirs)
 
     def _save(self, name, arr):
