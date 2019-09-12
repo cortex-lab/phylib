@@ -353,12 +353,13 @@ class TemplateModel(object):
         try:
             self.wm = self._load_wm()
         except IOError:
-            logger.warning("Whitening matrix is not available.")
+            logger.debug("Whitening matrix file not found.")
             self.wm = np.eye(nc)
         assert self.wm.shape == (nc, nc)
         try:
             self.wmi = self._load_wmi()
         except IOError:
+            logger.debug("Whitening matrix inverse file not found, computing it.")
             self.wmi = self._compute_wmi(self.wm)
         assert self.wmi.shape == (nc, nc)
 

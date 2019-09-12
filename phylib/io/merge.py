@@ -10,6 +10,7 @@
 import logging
 from pathlib import Path
 
+from tqdm import tqdm
 import numpy as np
 from scipy.linalg import block_diag
 
@@ -92,7 +93,7 @@ class Merger(object):
 
     def _save(self, name, arr):
         """Save a npy array in the output directory."""
-        logger.info("Saving %s %s %s.", name, arr.dtype, arr.shape)
+        logger.debug("Saving %s %s %s.", name, arr.dtype, arr.shape)
         np.save(self.out_dir / name, arr)
 
     def write_params(self):
@@ -273,16 +274,27 @@ class Merger(object):
     def merge(self):
         """Merge the probes data and return a TemplateModel instance of the merged data."""
 
-        self.write_params()
-        self.write_probe_desc()
-        self.write_spike_times()
-        self.write_spike_data()
-        self.write_spike_clusters()
-        self.write_cluster_data()
-        self.write_channel_data()
-        self.write_channel_positions()
-        self.write_templates()
-        self.write_template_data()
-        self.write_misc()
+        with tqdm(desc="Merging", total=100) as bar:
+            self.write_params()
+            self.write_probe_desc()
+            bar.update(10)
+            self.write_spike_times()
+            bar.update(10)
+            self.write_spike_data()
+            bar.update(10)
+            self.write_spike_clusters()
+            bar.update(10)
+            self.write_cluster_data()
+            bar.update(10)
+            self.write_channel_data()
+            bar.update(10)
+            self.write_channel_positions()
+            bar.update(10)
+            self.write_templates()
+            bar.update(10)
+            self.write_template_data()
+            bar.update(10)
+            self.write_misc()
+            bar.update(10)
 
         return load_model(self.out_dir / 'params.py')

@@ -12,6 +12,7 @@ from pathlib import Path
 import shutil
 import ast
 
+from tqdm import tqdm
 import numpy as np
 
 from phylib.utils._misc import _read_tsv_simple, ensure_dir_exists
@@ -80,7 +81,7 @@ def _create_if_possible(path, new_path, force=False):
 def _copy_if_possible(path, new_path, force=False):
     if not _create_if_possible(path, new_path, force=force):
         return False
-    logger.info("Copying %s to %s.", path, new_path)
+    logger.debug("Copying %s to %s.", path, new_path)
     shutil.copy(path, new_path)
     return True
 
@@ -116,17 +117,20 @@ class EphysAlfCreator(object):
             raise IOError("The source and target directories cannot be the same.")
         if not self.out_path.exists():
             self.out_path.mkdir()
-        # Copy and symlink files.
-        self.copy_files(force=force)
 
-        # New files.
-        self.make_spike_times()
-        self.make_cluster_waveforms()
-        self.make_depths()
-        self.make_mean_waveforms()
-
-        # Clean up
-        self.rm_files()
+        with tqdm(desc="Converting to ALF", total=60) as bar:
+            self.copy_files(force=force)
+            bar.update(10)
+            self.make_spike_times()
+            bar.update(10)
+            self.make_cluster_waveforms()
+            bar.update(10)
+            self.make_depths()
+            bar.update(10)
+            self.make_mean_waveforms()
+            bar.update(10)
+            self.rm_files()
+            bar.update(10)
 
         # Return the TemplateModel of the converted ALF dataset if the params.py file exists.
         params_path = self.out_path / 'params.py'
