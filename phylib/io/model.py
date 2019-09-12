@@ -726,11 +726,13 @@ class TemplateModel(object):
         data, cols = self.sparse_templates.data, self.sparse_templates.cols
         assert cols is not None
         template_w, channel_ids = data[template_id], cols[template_id]
-        channel_ids = channel_ids.astype(np.uint32)
+
         # Remove unused channels = -1.
         used = channel_ids != -1
         template_w = template_w[:, used]
         channel_ids = channel_ids[used]
+        channel_ids = channel_ids.astype(np.uint32)
+
         # Unwhiten.
         template = self._unwhiten(template_w, channel_ids=channel_ids)
         template = template.astype(np.float32)
