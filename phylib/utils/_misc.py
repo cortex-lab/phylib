@@ -175,6 +175,28 @@ def read_python(path):
     return metadata
 
 
+def write_python(path, data):
+    """Write a dictionary in a Python file.
+
+    Parameters
+    ----------
+
+    path : str or Path
+        Path to the Python file to write.
+    data : dict
+        A key-value mapping to write as a Python file.
+
+    Returns
+    -------
+
+    """
+    with open(path, 'w') as f:
+        for k, v in data.items():
+            if isinstance(v, str):
+                v = '"%s"' % v
+            f.write('%s = %s\n' % (k, str(v)))
+
+
 def read_text(path):
     """Read a text file."""
     path = Path(path)
@@ -213,7 +235,7 @@ def read_tsv(path):
     path = Path(path)
     data = []
     if not path.exists():
-        logger.warning("%s does not exist, skipping.", path)
+        logger.debug("%s does not exist, skipping.", path)
         return data
     # Find whether the delimiter is tab or comma.
     with path.open('r') as f:
@@ -281,7 +303,7 @@ def _read_tsv_simple(path):
     path = Path(path)
     data = {}
     if not path.exists():
-        logger.warning("%s does not exist, skipping.", path)
+        logger.debug("%s does not exist, skipping.", path)
         return data
     # Find whether the delimiter is tab or comma.
     with path.open('r') as f:

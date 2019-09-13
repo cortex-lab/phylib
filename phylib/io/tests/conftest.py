@@ -12,7 +12,7 @@ import shutil
 import numpy as np
 from pytest import fixture
 
-from phylib.utils._misc import write_text
+from phylib.utils._misc import write_text, write_tsv
 from ..model import load_model, write_array
 from phylib.io.datasets import download_test_file
 
@@ -85,6 +85,7 @@ def _make_dataset(tempdir, param='dense', has_spike_attributes=True):
         # Remove some non-necessary files.
         _remove(tempdir / 'template_features.npy')
         _remove(tempdir / 'pc_features.npy')
+        _remove(tempdir / 'channel_probes.npy')
         _remove(tempdir / 'channel_shanks.npy')
         _remove(tempdir / 'amplitudes.npy')
         _remove(tempdir / 'whitening_mat.npy')
@@ -96,6 +97,11 @@ def _make_dataset(tempdir, param='dense', has_spike_attributes=True):
         write_array(tempdir / 'spike_fail.npy', np.full(10, np.nan))  # wrong number of spikes
         write_array(tempdir / 'spike_works.npy', np.random.rand(314))
         write_array(tempdir / 'spike_randn.npy', np.random.randn(314, 2))
+
+    # TSV file with cluster data.
+    write_tsv(
+        tempdir / 'cluster_Amplitude.tsv', [{'cluster_id': 1, 'Amplitude': 123.4}],
+        first_field='cluster_id')
 
     template_path = tempdir / paths[0].name
     return template_path

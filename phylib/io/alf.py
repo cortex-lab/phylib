@@ -9,13 +9,15 @@
 
 import logging
 from pathlib import Path
-import os
 import shutil
+import ast
 
+from tqdm import tqdm
 import numpy as np
 
 from phylib.utils._misc import _read_tsv_simple, ensure_dir_exists
 from phylib.io.array import _spikes_per_cluster, select_spikes, _unique, grouped_mean, _index_of
+from phylib.io.model import load_model
 
 logger = logging.getLogger(__name__)
 
@@ -25,77 +27,66 @@ logger = logging.getLogger(__name__)
 #------------------------------------------------------------------------------
 
 
-"""
-## Todo later
+# ## TODO
 
-clusters.probes
-probes.insertion
-probes.description
-probes.sitePositions
-probes.rawFilename
-channels.probe
-channels.brainLocation
-"""
+# probes.insertion
+# probes.sitePositions
+# probes.rawFilename
+# channels.brainLocation
 
-_FILE_RENAMES = [
-    ('spike_clusters.npy', 'spikes.clusters.npy'),
-    ('amplitudes.npy', 'spikes.amps.npy'),
-    ('channel_positions.npy', 'channels.sitePositions.npy'),
-    ('templates.npy', 'clusters.templateWaveforms.npy'),
-    ('cluster_Amplitude.tsv', 'clusters.amps.tsv'),
-    ('channel_map.npy', 'channels.rawRow.npy'),
-    ('spike_templates.npy', 'ks2/spikes.clusters.npy'),
-    ('cluster_ContamPct.tsv', 'ks2/clusters.ContamPct.tsv'),
-    ('cluster_group.tsv', 'ks2/clusters.phyAnnotation.tsv'),
-    ('cluster_KSLabel.tsv', 'ks2/clusters.group.tsv'),
+_FILE_RENAMES = [  # file_in, file_out, squeeze (bool to squeeze vector from matlab in npy)
+    ('params.py', 'params.py', None),
+    ('spike_clusters.npy', 'spikes.clusters.npy', True),
+    ('amplitudes.npy', 'spikes.amps.npy', True),
+    ('channel_positions.npy', 'channels.sitePositions.npy', False),
+    ('templates.npy', 'clusters.templateWaveforms.npy', False),
+    ('channel_map.npy', 'channels.rawRow.npy', True),
+    ('channel_map.npy', 'channels.rawRow.npy', True),
+    ('channel_probe.npy', 'channels.probes.npy', True),
+    ('cluster_probes.npy', 'clusters.probes.npy', True),
+    ('cluster_shanks.npy', 'clusters.shanks.npy', True),
+
+    # ('probes.description.txt', 'probes.description.txt', False),
+    # ('spike_templates.npy', 'ks2/spikes.clusters.npy', True),
+    # ('cluster_ContamPct.tsv', 'ks2/clusters.ContamPct.tsv', False),
+    # ('cluster_group.tsv', 'ks2/clusters.phyAnnotation.tsv', False),
+    # ('cluster_KSLabel.tsv', 'ks2/clusters.group.tsv', False),
+]
+
+FILE_DELETES = [
+    'temp_wh.dat',  # potentially large file that will clog the servers
 ]
 
 
-def _create_if_possible(path, new_path):
+def _read_npy_header(filename):
+    d = {}
+    with open(filename, 'rb') as fid:
+        d['magic_string'] = fid.read(6)
+        d['version'] = fid.read(2)
+        d['len'] = int.from_bytes(fid.read(2), byteorder='little')
+        d = {**d, **ast.literal_eval(fid.read(d['len']).decode())}
+    return d
+
+
+def _create_if_possible(path, new_path, force=False):
     """Prepare the copy/move/symlink of a file, by making sure the source exists
     while the destination does not."""
-    if not Path(path).exists():
+    if not Path(path).exists():  # pragma: no cover
         logger.warning("Path %s does not exist, skipping.", path)
         return False
-    if Path(new_path).exists():  # pragma: no cover
+    if Path(new_path).exists() and not force:  # pragma: no cover
         logger.warning("Path %s already exists, skipping.", new_path)
         return False
     ensure_dir_exists(new_path.parent)
     return True
 
 
-def _copy_if_possible(path, new_path):
-    if not _create_if_possible(path, new_path):
+def _copy_if_possible(path, new_path, force=False):
+    if not _create_if_possible(path, new_path, force=force):
         return False
-    logger.info("Copying %s to %s.", path, new_path)
+    logger.debug("Copying %s to %s.", path, new_path)
     shutil.copy(path, new_path)
     return True
-
-
-def _symlink_if_possible(path, new_path):
-    if not _create_if_possible(path, new_path):  # pragma: no cover
-        return False
-    logger.info("Symlinking %s to %s.", path, new_path)
-    os.symlink(str(path), str(new_path))
-    return True
-
-
-def _find_file_with_ext(path, ext):
-    """Find a file with a given extension in a directory.
-    Raises an exception if there are more than one file.
-    Return None if there is no such file.
-    """
-    p = Path(path)
-    assert p.is_dir()
-    files = list(p.glob('*' + ext))
-    if not files:
-        return
-    elif len(files) == 1:
-        return files[0]
-    raise RuntimeError(
-        "%d files with the extension %s were found in %s.",
-        len(files), ext, path
-    )  # pragma: no cover
 
 
 def _load(path):
@@ -121,48 +112,53 @@ class EphysAlfCreator(object):
         self.dir_path = Path(model.dir_path)
         self.spc = _spikes_per_cluster(model.spike_clusters)
 
-    def convert(self, out_path):
+    def convert(self, out_path, force=False):
         """Convert from KS/phy format to ALF."""
         logger.info("Converting dataset to ALF.")
         self.out_path = Path(out_path)
         if self.out_path.resolve() == self.dir_path.resolve():
             raise IOError("The source and target directories cannot be the same.")
+        if not self.out_path.exists():
+            self.out_path.mkdir()
 
-        # Copy and symlink files.
-        self.copy_files()
-        self.symlink_raw_data()
-        self.symlink_lfp_data()
+        with tqdm(desc="Converting to ALF", total=60) as bar:
+            self.copy_files(force=force)
+            bar.update(10)
+            self.make_spike_times()
+            bar.update(10)
+            self.make_cluster_waveforms()
+            bar.update(10)
+            self.make_depths()
+            bar.update(10)
+            self.make_mean_waveforms()
+            bar.update(10)
+            self.rm_files()
+            bar.update(10)
 
-        # New files.
-        self.make_spike_times()
-        self.make_cluster_waveforms()
-        self.make_depths()
-        self.make_mean_waveforms()
+        # Return the TemplateModel of the converted ALF dataset if the params.py file exists.
+        params_path = self.out_path / 'params.py'
+        if params_path.exists():
+            return load_model(params_path)
 
-    def copy_files(self):
-        """Make the file renames (actually copies into a new directory)."""
-        for fn0, fn1 in _FILE_RENAMES:
-            _copy_if_possible(self.dir_path / fn0, self.out_path / fn1)
+    def copy_files(self, force=False):
+        for fn0, fn1, squeeze in _FILE_RENAMES:
+            f0 = self.dir_path / fn0
+            f1 = self.out_path / fn1
+            _copy_if_possible(f0, f1, force=force)
+            if f0.exists() and squeeze and f0.suffix == '.npy':
+                h = _read_npy_header(f0)
+                # ks2 outputs vectors as multidimensional arrays. If there is no distinction
+                # for Matlab, there is one in Numpy
+                if len(h['shape']) == 2 and h['shape'][-1] == 1:
+                    d = np.load(f0)
+                    np.save(f1, d.squeeze())
+                    continue
 
-    def symlink_raw_data(self):
-        """Symlink the raw data files."""
-        # Raw data files.
-        assert isinstance(self.model.dat_path, (list, tuple))
-        for path in self.model.dat_path:
-            path = Path(path)
-            dst_path = self.out_path / ('ephys.raw' + path.suffix)
-            _symlink_if_possible(path, dst_path)
-
-    def symlink_lfp_data(self):
-        """Symlink the LFP data file."""
-        # LFP data file.
-        # TODO: support for different file extensions?
-        lfp_path = _find_file_with_ext(self.dir_path, '.lf.bin')
-        if not lfp_path:  # pragma: no cover
-            logger.info("No LFP file, skipping symlinking.")
-            return
-        dst_path = self.out_path / ('lfp.raw' + lfp_path.suffix)
-        _symlink_if_possible(lfp_path, dst_path)
+    def rm_files(self):
+        for fn0 in FILE_DELETES:
+            fn = self.dir_path.joinpath(fn0)
+            if fn.exists():  # pragma: no cover
+                fn.unlink()
 
     # File creation
     # -------------------------------------------------------------------------
@@ -174,6 +170,7 @@ class EphysAlfCreator(object):
     def make_spike_times(self):
         """We cannot just rename/copy spike_times.npy because it is in unit of
         *samples*, and not in seconds."""
+        self.dir_path
         self._save_npy('spikes.times.npy', self.model.spike_times)
 
     def make_cluster_waveforms(self):
@@ -202,7 +199,7 @@ class EphysAlfCreator(object):
             self._save_npy(waveform_duration_path.name, durations)
 
     def make_depths(self):
-        """Make spikes.depths.npy and clusters.depths.npy."""
+        """Make spikes.depths.npy, clusters.depths.npy."""
         channel_positions = self.model.channel_positions
         assert channel_positions.ndim == 2
 

@@ -41,7 +41,12 @@ class Dataset(object):
         np.save(p / 'templates.npy', np.random.normal(size=(self.nt, 50, self.nc)))
         np.save(p / 'similar_templates.npy', np.tile(np.arange(self.nt), (self.nt, 1)))
         np.save(p / 'channel_map.npy', np.c_[np.arange(self.nc)])
+        np.save(p / 'channel_probe.npy', np.zeros(self.nc))
         _write_tsv_simple(p / 'cluster_group.tsv', 'group', {2: 'good', 3: 'mua', 5: 'noise'})
+        _write_tsv_simple(p / 'cluster_Amplitude.tsv', field_name='Amplitude',
+                          data={str(n): np.random.rand() * 120 for n in np.arange(self.nt)})
+        with open(p / 'probes.description.txt', 'w+') as fid:
+            fid.writelines(['label\n'])
 
         # Raw data
         self.dat_path = p / 'rawdata.npy'
@@ -61,8 +66,7 @@ class Dataset(object):
 
 @fixture
 def dataset(tempdir):
-    d = Dataset(tempdir)
-    return d
+    return Dataset(tempdir)
 
 
 def test_ephys_1(dataset):
@@ -72,31 +76,39 @@ def test_ephys_1(dataset):
     assert dataset._load('channel_positions.npy').shape == (dataset.nc, 2)
     assert dataset._load('templates.npy').shape == (dataset.nt, 50, dataset.nc)
     assert dataset._load('channel_map.npy').shape == (dataset.nc, 1)
+    assert dataset._load('channel_probe.npy').shape == (dataset.nc,)
     assert len(dataset._load('cluster_group.tsv')) == 3
-
     assert dataset._load('rawdata.npy').shape == (1000, dataset.nc)
     assert dataset._load('mydata.lf.bin').shape == (1000 * dataset.nc,)
 
 
 def test_creator(dataset):
+    _FILE_CREATES = (
+        'spikes.times.npy',
+        'clusters.peakChannel.npy',
+        'clusters.waveformDuration.npy',
+        'spikes.depths.npy',
+        'clusters.depths.npy',
+        'clusters.meanWaveforms.npy',
+        # 'clusters.probes.npy',
+    )
     path = Path(dataset.tmp_dir)
     out_path = path / 'alf'
 
     model = TemplateModel(
-        dir_path=path, dat_path=dataset.dat_path, sample_rate=2000, n_channels_dat=dataset.ncd)
+        dir_path=path, dat_path=dataset.dat_path, sample_rate=2000, n_channels_dat=dataset.nc)
 
     c = EphysAlfCreator(model)
     with raises(IOError):
         c.convert(dataset.tmp_dir)
     c.convert(out_path)
 
-    # Check that the raw data has been renamed.
-    assert op.islink(str(out_path / 'ephys.raw.npy'))
-    assert op.exists(str(out_path / 'lfp.raw.bin'))
-
     # Check all renames.
-    for old, new in _FILE_RENAMES:
+    for old, new, _ in _FILE_RENAMES:
         if op.exists(str(path / old)):
             assert op.exists(str(out_path / new))
+
+    for new in _FILE_CREATES:
+        assert (out_path / new).exists()
 
     model.close()

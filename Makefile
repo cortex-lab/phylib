@@ -15,7 +15,7 @@ lint:
 	flake8 phylib
 
 test: lint
-	py.test -x --cov-report term-missing --cov=phylib phylib
+	py.test --cov-report term-missing --cov=phylib phylib
 
 coverage:
 	coverage --html
