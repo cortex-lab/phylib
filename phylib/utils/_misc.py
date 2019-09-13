@@ -235,7 +235,7 @@ def read_tsv(path):
     path = Path(path)
     data = []
     if not path.exists():
-        logger.warning("%s does not exist, skipping.", path)
+        logger.debug("%s does not exist, skipping.", path)
         return data
     # Find whether the delimiter is tab or comma.
     with path.open('r') as f:
@@ -303,7 +303,7 @@ def _read_tsv_simple(path):
     path = Path(path)
     data = {}
     if not path.exists():
-        logger.warning("%s does not exist, skipping.", path)
+        logger.debug("%s does not exist, skipping.", path)
         return data
     # Find whether the delimiter is tab or comma.
     with path.open('r') as f:

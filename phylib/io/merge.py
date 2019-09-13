@@ -135,22 +135,25 @@ class Merger(object):
     def write_spike_clusters(self):
         """Write the merged spike clusters, and register self.cluster_offsets."""
         spike_clusters_l = _load_multiple_files('spike_clusters.npy', self.subdirs)
+        # TODO: cluster shanks
         self.cluster_offsets = []
-        # cluster_probes = []
+        cluster_probes_l = []
         offset = 0
-        ind = 0
-        for subdir, sc in zip(self.subdirs, spike_clusters_l):
+        for i, (subdir, sc) in enumerate(zip(self.subdirs, spike_clusters_l)):
             sc += offset
             self.cluster_offsets.append(offset)
-            # cluster_probes.append(ind * np.ones(len(sc)))
+            # Number of clusters in each probe.
+            n_clu = len(np.unique(sc))
+            cluster_probes_l.append(i * np.ones(n_clu, dtype=np.int32))
             offset = sc.max() + 1
-            ind += 1
-        # cluster_probes = _concat(cluster_probes, axis=0)
         spike_clusters = _load_multiple_spike_arrays(
             *spike_clusters_l, spike_order=self.spike_order)
+        cluster_probes = _concat(cluster_probes_l)
+        assert len(np.unique(spike_clusters)) == len(cluster_probes)
 
         self._save('spike_clusters.npy', spike_clusters)
         self._save('spike_templates.npy', spike_clusters)
+        self._save('cluster_probes.npy', cluster_probes)
 
     def write_cluster_data(self):
         """We load all cluster metadata from TSV files, renumber the clusters,
@@ -267,7 +270,7 @@ class Merger(object):
             try:
                 concat = block_diag(*_load_multiple_files(fn, self.subdirs))
             except FileNotFoundError:
-                logger.warning("File %s not found, skipping.", fn)
+                logger.debug("File %s not found, skipping.", fn)
                 continue
             self._save(fn, concat)
 

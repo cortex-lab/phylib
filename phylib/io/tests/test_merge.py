@@ -11,6 +11,7 @@ import numpy as np
 
 from ..merge import Merger
 from phylib.io.alf import EphysAlfCreator
+from phylib.io.array import _index_of
 from phylib.io.model import load_model
 from phylib.io.tests.conftest import _make_dataset
 
@@ -75,6 +76,8 @@ def test_probe_merge_2(tempdir):
     alf = EphysAlfCreator(merged).convert(tempdir / 'alf')
 
     # Check that (almost) spike cluster probes are interleaved.
-    sp = alf.cluster_probes[alf.spike_clusters]
+    cluster_ids = np.unique(alf.spike_clusters)
+    sc_rel = _index_of(alf.spike_clusters, cluster_ids)
+    sp = alf.cluster_probes[sc_rel]
     assert (sp[::2] != 0).sum() <= 1
     assert (sp[1::2] != 1).sum() <= 1

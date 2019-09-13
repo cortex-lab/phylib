@@ -434,7 +434,7 @@ class TemplateModel(object):
             try:
                 field_name, values = load_metadata(filename)
             except Exception as e:
-                logger.warning("Could not load %s: %s.", filename, str(e))
+                logger.debug("Could not load %s: %s.", filename, str(e))
                 continue
             metadata[field_name] = values
         return metadata
@@ -490,7 +490,7 @@ class TemplateModel(object):
 
     def _load_cluster_probes(self):
         try:
-            path = self._find_path('clusters.probes.npy')
+            path = self._find_path('cluster_probes.npy', 'clusters.probes.npy')
             out = self._read_array(path)
             out = np.atleast_1d(out)
             assert out.ndim == 1
@@ -498,9 +498,9 @@ class TemplateModel(object):
         except IOError:
             return np.zeros(self.n_templates, dtype=np.int32)
 
-    def _load_cluster_shanks(self):
+    def _load_cluster_shanks(self):  # pragma: no cover
         try:
-            path = self._find_path('clusters.shanks.npy')
+            path = self._find_path('cluster_shanks.npy', 'clusters.shanks.npy')
             out = self._read_array(path)
             out = np.atleast_1d(out)
             assert out.ndim == 1

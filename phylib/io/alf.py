@@ -43,6 +43,9 @@ _FILE_RENAMES = [  # file_in, file_out, squeeze (bool to squeeze vector from mat
     ('channel_map.npy', 'channels.rawRow.npy', True),
     ('channel_map.npy', 'channels.rawRow.npy', True),
     ('channel_probe.npy', 'channels.probes.npy', True),
+    ('cluster_probes.npy', 'clusters.probes.npy', True),
+    ('cluster_shanks.npy', 'clusters.shanks.npy', True),
+
     # ('probes.description.txt', 'probes.description.txt', False),
     # ('spike_templates.npy', 'ks2/spikes.clusters.npy', True),
     # ('cluster_ContamPct.tsv', 'ks2/clusters.ContamPct.tsv', False),
@@ -219,13 +222,6 @@ class EphysAlfCreator(object):
 
         self._save_npy('spikes.depths.npy', spikes_depths)
         self._save_npy('clusters.depths.npy', clusters_depths)
-
-        # Cluster probes and shanks.
-        cluster_probes = self.model.channel_probes[cluster_channels]
-        cluster_shanks = self.model.channel_shanks[cluster_channels]
-
-        self._save_npy('clusters.probes.npy', cluster_probes)
-        self._save_npy('clusters.shanks.npy', cluster_shanks)
 
     def make_mean_waveforms(self):
         """Make the mean waveforms file."""

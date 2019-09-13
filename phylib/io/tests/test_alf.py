@@ -90,7 +90,7 @@ def test_creator(dataset):
         'spikes.depths.npy',
         'clusters.depths.npy',
         'clusters.meanWaveforms.npy',
-        'clusters.probes.npy',
+        # 'clusters.probes.npy',
     )
     path = Path(dataset.tmp_dir)
     out_path = path / 'alf'
