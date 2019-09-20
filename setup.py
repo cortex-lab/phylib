@@ -43,7 +43,7 @@ setup(
     description='Ephys data analysis for thousands of channels',
     long_description=readme,
     author='Cyrille Rossant',
-    author_email='cyrille.rossant at gmail.com',
+    author_email='cyrille.rossant@gmail.com',
     url='https://github.com/cortex-lab/phylib',
     packages=_package_tree('phylib'),
     package_dir={'phylib': 'phylib'},
