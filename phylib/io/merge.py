@@ -123,10 +123,9 @@ class Merger(object):
         spike_data = [
             'amplitudes.npy',
             'spike_templates.npy',
-            'pc_features.npy',
-            'template_features.npy',
+            # 'pc_features.npy',
+            # 'template_features.npy',
         ]
-
         for fn in spike_data:
             arrays = _load_multiple_files(fn, self.subdirs)
             concat = _load_multiple_spike_arrays(*arrays, spike_order=self.spike_order)
