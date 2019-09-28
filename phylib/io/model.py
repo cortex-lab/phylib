@@ -578,7 +578,7 @@ class TemplateModel(object):
             path = self.dir_path / 'spikes.times.npy'
             logger.info("Loading spikes.times.npy in seconds, converting to samples.")
             spike_times = self._read_array(path)
-            out = (spike_times * self.sample_rate).astype(np.uint64)
+            out = np.round(spike_times * self.sample_rate).astype(np.uint64)
         assert out.ndim == 1
         return out
 

@@ -139,16 +139,16 @@ class Merger(object):
         cluster_probes_l = []
         offset = 0
         for i, (subdir, sc) in enumerate(zip(self.subdirs, spike_clusters_l)):
+            n_clu = np.max(sc) + 1
             sc += offset
             self.cluster_offsets.append(offset)
-            # Number of clusters in each probe.
-            n_clu = len(np.unique(sc))
             cluster_probes_l.append(i * np.ones(n_clu, dtype=np.int32))
-            offset = sc.max() + 1
+            offset += n_clu
+
         spike_clusters = _load_multiple_spike_arrays(
             *spike_clusters_l, spike_order=self.spike_order)
         cluster_probes = _concat(cluster_probes_l)
-        assert len(np.unique(spike_clusters)) == len(cluster_probes)
+        assert np.max(spike_clusters) + 1 == cluster_probes.size
 
         self._save('spike_clusters.npy', spike_clusters)
         self._save('spike_templates.npy', spike_clusters)
