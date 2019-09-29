@@ -464,7 +464,7 @@ class TemplateModel(object):
         return spike_attributes
 
     def _load_channel_map(self):
-        path = self._find_path('channel_map.npy', 'channels.rawRow.npy')
+        path = self._find_path('channel_map.npy', 'channels.rawInd.npy')
         out = self._read_array(path)
         out = np.atleast_1d(out)
         assert out.ndim == 1
@@ -596,7 +596,7 @@ class TemplateModel(object):
 
         # Sparse structure: regular array with col indices.
         try:
-            path = self._find_path('templates.npy', 'clusters.templateWaveforms.npy')
+            path = self._find_path('templates.npy', 'templates.waveforms.npy')
             data = self._read_array(path, mmap_mode='r')
             data = np.atleast_3d(data)
             assert data.ndim == 3
