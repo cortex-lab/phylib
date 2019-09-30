@@ -45,11 +45,10 @@ _FILE_RENAMES = [  # file_in, file_out, squeeze (bool to squeeze vector from mat
     ('cluster_probes.npy', 'clusters.probes.npy', True),
     ('cluster_shanks.npy', 'clusters.shanks.npy', True),
     ('templates.npy', 'templates.waveforms.npy', False),
-    # ('cluster_ContamPct.tsv', 'clusters._ks2_contamication.tsv', False),
-    # ('probes.description.txt', 'probes.description.txt', False),
-    # ('cluster_group.tsv', 'ks2/clusters.phyAnnotation.tsv', False),
-
-    # ('cluster_KSLabel.tsv', 'ks2/clusters.group.tsv', False),
+    # ('cluster_ContamPct.tsv', 'clusters._ks2_contamication.tsv', False), #Todo convert to numpy
+    # ('probes.description.txt', 'probes.description.txt', False), #
+    # ('cluster_group.tsv', 'ks2/clusters.phyAnnotation.tsv', False), # todo check indexing, add2QC
+    # ('cluster_KSLabel.tsv', 'ks2/clusters.group.tsv', False), # todo check indexing, add2QC
 ]
 
 FILE_DELETES = [

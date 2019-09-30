@@ -13,6 +13,7 @@ from ..merge import Merger
 from phylib.io.alf import EphysAlfCreator
 from phylib.io.model import load_model
 from phylib.io.tests.conftest import _make_dataset
+from phylib.io.array import _index_of
 
 
 #------------------------------------------------------------------------------
@@ -80,8 +81,11 @@ def test_probe_merge_2(tempdir):
         # test spikes
         assert np.allclose(merged.spike_times[im1], single.spike_times[i1])
         assert np.allclose(merged.spike_times[im2], single.spike_times[i2] + 4e-5)
-        assert np.allclose(merged.spike_clusters[im2], single.spike_clusters[i2] + 64)
-        assert np.allclose(merged.spike_clusters[im1], single.spike_clusters[i1])
+        # the empty clusters are discarded during the merge or alf export
+        c1 = _index_of(single.spike_clusters[i1], np.unique(single.spike_clusters[i1]))
+        c2 = _index_of(single.spike_clusters[i2], np.unique(single.spike_clusters[i2]))
+        assert np.allclose(merged.spike_clusters[im2], c2 + 62)
+        assert np.allclose(merged.spike_clusters[im1], c1)
         # test clusters indices indexing via probes
         spike_probes = merged.cluster_probes[merged.spike_clusters]
         assert np.all(np.where(spike_probes == 0) == im1)

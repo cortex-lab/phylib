@@ -17,6 +17,7 @@ from scipy.linalg import block_diag
 from phylib.utils._misc import (
     _read_tsv_simple, _write_tsv_simple, write_tsv, read_python, write_python)
 from phylib.io.model import load_model
+from phylib.io.array import _index_of
 
 logger = logging.getLogger(__name__)
 
@@ -138,20 +139,20 @@ class Merger(object):
         self.cluster_offsets = []
         cluster_probes_l = []
         offset = 0
+        spike_clusters_l_out = []
         for i, (subdir, sc) in enumerate(zip(self.subdirs, spike_clusters_l)):
-            n_clu = np.max(sc) + 1
-            sc += offset
+            uc = np.unique(sc)
+            n_clu = uc.size
+            sc += n_clu
             self.cluster_offsets.append(offset)
             cluster_probes_l.append(i * np.ones(n_clu, dtype=np.int32))
+            spike_clusters_l_out.append(_index_of(sc, np.unique(sc)) + offset)
             offset += n_clu
-
         spike_clusters = _load_multiple_spike_arrays(
-            *spike_clusters_l, spike_order=self.spike_order)
+            *spike_clusters_l_out, spike_order=self.spike_order)
         cluster_probes = _concat(cluster_probes_l)
-        assert np.max(spike_clusters) + 1 == cluster_probes.size
-
+        assert np.unique(spike_clusters).size == cluster_probes.size
         self._save('spike_clusters.npy', spike_clusters)
-        self._save('spike_templates.npy', spike_clusters)
         self._save('cluster_probes.npy', cluster_probes)
 
     def write_cluster_data(self):
