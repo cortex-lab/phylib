@@ -174,7 +174,7 @@ class EphysAlfCreator(object):
     def make_cluster_waveforms(self):
         """Return the channel index with the highest template amplitude, for
         every template."""
-        peak_channel_path = self.dir_path / 'clusters.peakChannel.npy'
+        peak_channel_path = self.dir_path / 'clusters.channels.npy'
         if not peak_channel_path.exists():
             self._save_npy(peak_channel_path.name, self.model.templates_channels)
 
@@ -191,7 +191,7 @@ class EphysAlfCreator(object):
         assert spike_clusters.ndim == 1
         n_spikes = spike_clusters.shape[0]
 
-        cluster_channels = np.load(self.out_path / 'clusters.peakChannel.npy')
+        cluster_channels = np.load(self.out_path / 'clusters.channels.npy')
         assert cluster_channels.ndim == 1
         n_clusters = cluster_channels.shape[0]
 

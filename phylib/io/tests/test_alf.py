@@ -85,10 +85,10 @@ def test_ephys_1(dataset):
 def test_creator(dataset):
     _FILE_CREATES = (
         'spikes.times.npy',
-        'clusters.peakChannel.npy',
         'clusters.waveformDuration.npy',
         'spikes.depths.npy',
         'clusters.depths.npy',
+        'clusters.channels.npy',
         'clusters.meanWaveforms.npy',
     )
     path = Path(dataset.tmp_dir)
