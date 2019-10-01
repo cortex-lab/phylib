@@ -85,7 +85,7 @@ def test_ephys_1(dataset):
 def test_creator(dataset):
     _FILE_CREATES = (
         'spikes.times.npy',
-        'clusters.waveformDuration.npy',
+        'clusters.waveformsDuration.npy',
         'spikes.depths.npy',
         'clusters.depths.npy',
         'clusters.channels.npy',
@@ -115,3 +115,6 @@ def test_creator(dataset):
     sp_shape = [np.load(out_path / f).shape[0] for f in _FILE_CREATES if f.startswith('spikes.')]
     assert len(set(cl_shape)) == 1
     assert len(set(sp_shape)) == 1
+
+    dur = np.load(out_path / 'clusters.waveformsDuration.npy')
+    assert np.all(dur == np.array([-14., -24., -15., 8., -2.]) / 2)

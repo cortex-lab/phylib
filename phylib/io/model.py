@@ -957,15 +957,16 @@ class TemplateModel(object):
         return a / n
 
     @property
-    def templates_waveformDurations(self):
-        """Returns a vector of waveform durations for all templates"""
+    def templates_waveforms_durations(self):
+        """Returns a vector of waveform durations (ms) for all templates"""
         tmp = self.sparse_templates.data
         n_templates, n_samples, n_channels = tmp.shape
         # Compute the peak channels for each template.
         template_peak_channels = np.argmax(tmp.max(axis=1) - tmp.min(axis=1), axis=1)
-        waveforms = tmp[:, :, template_peak_channels]
-        durations = waveforms.argmax(axis=1) - waveforms.argmin(axis=1)
-        return durations
+        durations = tmp.argmax(axis=1) - tmp.argmin(axis=1)
+        ind = np.ravel_multi_index((np.arange(0, n_templates), template_peak_channels),
+                                   (n_templates, n_channels), mode='raise', order='C')
+        return durations.flatten()[ind].astype(np.float64) / self.sample_rate * 1e3
 
     #--------------------------------------------------------------------------
     # Saving methods
