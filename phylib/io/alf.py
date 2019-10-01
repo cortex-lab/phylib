@@ -183,8 +183,10 @@ class EphysAlfCreator(object):
             self._save_npy(waveform_duration_path.name, self.model.templates_waveforms_durations)
 
         # group by average over cluster number
+        camps = np.zeros(np.max(self.cluster_ids) - np.min(self.cluster_ids) + 1,) * np.nan
+        camps[self.cluster_ids - np.min(self.cluster_ids)] = self.model.templates_amplitudes
         amps_path = self.dir_path / 'clusters.amps.npy'
-        self._save_npy(amps_path, self.model.templates_amplitudes)
+        self._save_npy(amps_path.name, camps)
 
     def make_depths(self):
         """Make spikes.depths.npy, clusters.depths.npy."""
