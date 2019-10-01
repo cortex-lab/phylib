@@ -109,6 +109,7 @@ class EphysAlfCreator(object):
         self.model = model
         self.dir_path = Path(model.dir_path)
         self.spc = _spikes_per_cluster(model.spike_clusters)
+        self.cluster_ids = _unique(self.model.spike_clusters)
 
     def convert(self, out_path, force=False):
         """Convert from KS/phy format to ALF."""
@@ -168,33 +169,18 @@ class EphysAlfCreator(object):
     def make_spike_times(self):
         """We cannot just rename/copy spike_times.npy because it is in unit of
         *samples*, and not in seconds."""
-        self.dir_path
         self._save_npy('spikes.times.npy', self.model.spike_times)
 
     def make_cluster_waveforms(self):
         """Return the channel index with the highest template amplitude, for
         every template."""
-        p = self.dir_path
-        tmp = self.model.sparse_templates.data
-
-        peak_channel_path = p / 'clusters.peakChannel.npy'
+        peak_channel_path = self.dir_path / 'clusters.peakChannel.npy'
         if not peak_channel_path.exists():
-            # Create the cluster channels file.
-            n_templates, n_samples, n_channels = tmp.shape
+            self._save_npy(peak_channel_path.name, self.model.templates_channels)
 
-            # Compute the peak channels for each template.
-            template_peak_channels = np.argmax(tmp.max(axis=1) - tmp.min(axis=1), axis=1)
-            assert template_peak_channels.shape == (n_templates,)
-            self._save_npy(peak_channel_path.name, template_peak_channels)
-        else:  # pragma: no cover
-            template_peak_channels = np.load(peak_channel_path)
-
-        waveform_duration_path = p / 'clusters.waveformDuration.npy'
+        waveform_duration_path = self.dir_path / 'clusters.waveformDuration.npy'
         if not waveform_duration_path.exists():
-            # Compute the peak channel waveform for each template.
-            waveforms = tmp[:, :, template_peak_channels]
-            durations = waveforms.argmax(axis=1) - waveforms.argmin(axis=1)
-            self._save_npy(waveform_duration_path.name, durations)
+            self._save_npy(waveform_duration_path.name, self.model.templates_waveformDurations)
 
     def make_depths(self):
         """Make spikes.depths.npy, clusters.depths.npy."""
@@ -204,7 +190,6 @@ class EphysAlfCreator(object):
         spike_clusters = self.model.spike_clusters
         assert spike_clusters.ndim == 1
         n_spikes = spike_clusters.shape[0]
-        self.cluster_ids = _unique(self.model.spike_clusters)
 
         cluster_channels = np.load(self.out_path / 'clusters.peakChannel.npy')
         assert cluster_channels.ndim == 1

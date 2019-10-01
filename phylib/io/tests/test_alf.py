@@ -90,7 +90,6 @@ def test_creator(dataset):
         'spikes.depths.npy',
         'clusters.depths.npy',
         'clusters.meanWaveforms.npy',
-        # 'clusters.probes.npy',
     )
     path = Path(dataset.tmp_dir)
     out_path = path / 'alf'
@@ -111,4 +110,8 @@ def test_creator(dataset):
     for new in _FILE_CREATES:
         assert (out_path / new).exists()
 
-    model.close()
+    # makes sure the output dimensions match (especially clusters which should be 4)
+    cl_shape = [np.load(out_path / f).shape[0] for f in _FILE_CREATES if f.startswith('clusters.')]
+    sp_shape = [np.load(out_path / f).shape[0] for f in _FILE_CREATES if f.startswith('spikes.')]
+    assert len(set(cl_shape)) == 1
+    assert len(set(sp_shape)) == 1

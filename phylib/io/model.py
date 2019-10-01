@@ -345,10 +345,6 @@ class TemplateModel(object):
         if self.sparse_templates.cols is not None:
             assert self.sparse_templates.cols.shape == (self.n_templates, self.n_channels_loc)
 
-        # Cluster probes and shanks (only when loading an ALF dataset).
-        self.cluster_probes = self._load_cluster_probes()
-        self.cluster_shanks = self._load_cluster_shanks()
-
         # Whitening.
         try:
             self.wm = self._load_wm()
@@ -487,26 +483,6 @@ class TemplateModel(object):
             return out
         except IOError:
             return np.zeros(self.n_channels, dtype=np.int32)
-
-    def _load_cluster_probes(self):
-        try:
-            path = self._find_path('cluster_probes.npy', 'clusters.probes.npy')
-            out = self._read_array(path)
-            out = np.atleast_1d(out)
-            assert out.ndim == 1
-            return out
-        except IOError:
-            return np.zeros(self.n_templates, dtype=np.int32)
-
-    def _load_cluster_shanks(self):  # pragma: no cover
-        try:
-            path = self._find_path('cluster_shanks.npy', 'clusters.shanks.npy')
-            out = self._read_array(path)
-            out = np.atleast_1d(out)
-            assert out.ndim == 1
-            return out
-        except IOError:
-            return np.zeros(self.n_templates, dtype=np.int32)
 
     def _load_channel_shanks(self):
         try:
@@ -955,6 +931,32 @@ class TemplateModel(object):
         spike_ids = self.get_cluster_spikes(cluster_id)
         channel_ids = self.get_cluster_channels(cluster_id)
         return self.get_waveforms(spike_ids, channel_ids)
+
+    @property
+    def templates_channels(self):
+        """Returns a vector of peak channels for all templates"""
+        tmp = self.sparse_templates.data
+        n_templates, n_samples, n_channels = tmp.shape
+        # Compute the peak channels for each template.
+        template_peak_channels = np.argmax(tmp.max(axis=1) - tmp.min(axis=1), axis=1)
+        assert template_peak_channels.shape == (n_templates,)
+        return template_peak_channels
+
+    @property
+    def templates_probes(self):
+        """Returns a vector of probe index for all templates"""
+        return self.channel_probes[self.templates_channels]
+
+    @property
+    def templates_waveformDurations(self):
+        """Returns a vector of waveform durations for all templates"""
+        tmp = self.sparse_templates.data
+        n_templates, n_samples, n_channels = tmp.shape
+        # Compute the peak channels for each template.
+        template_peak_channels = np.argmax(tmp.max(axis=1) - tmp.min(axis=1), axis=1)
+        waveforms = tmp[:, :, template_peak_channels]
+        durations = waveforms.argmax(axis=1) - waveforms.argmin(axis=1)
+        return durations
 
     #--------------------------------------------------------------------------
     # Saving methods

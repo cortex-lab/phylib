@@ -13,7 +13,6 @@ from ..merge import Merger
 from phylib.io.alf import EphysAlfCreator
 from phylib.io.model import load_model
 from phylib.io.tests.conftest import _make_dataset
-from phylib.io.array import _index_of
 
 
 #------------------------------------------------------------------------------
@@ -58,8 +57,10 @@ def test_probe_merge_2(tempdir):
     np.save(st_path, single.spike_samples + 1)
     # make amplitudes unique and growing so they can serve as key and sorting indices
     single.amplitudes = np.linspace(5, 15, single.n_spikes)
+    # single.spike_clusters[single.spike_clusters == 0] = 12
     for m, subdir in enumerate(subdirs):
         np.save(subdir / 'amplitudes.npy', single.amplitudes + 20 * m)
+        np.save(subdir / 'spike_clusters.npy', single.spike_clusters)
 
     # Merge them.
     m = Merger(subdirs, out_dir)
@@ -82,12 +83,10 @@ def test_probe_merge_2(tempdir):
         assert np.allclose(merged.spike_times[im1], single.spike_times[i1])
         assert np.allclose(merged.spike_times[im2], single.spike_times[i2] + 4e-5)
         # the empty clusters are discarded during the merge or alf export
-        c1 = _index_of(single.spike_clusters[i1], np.unique(single.spike_clusters[i1]))
-        c2 = _index_of(single.spike_clusters[i2], np.unique(single.spike_clusters[i2]))
-        assert np.allclose(merged.spike_clusters[im2], c2 + 62)
-        assert np.allclose(merged.spike_clusters[im1], c1)
+        assert np.allclose(merged.spike_clusters[im2], single.spike_clusters[i2] + 64)
+        assert np.allclose(merged.spike_clusters[im1], single.spike_clusters[i1])
         # test clusters indices indexing via probes
-        spike_probes = merged.cluster_probes[merged.spike_clusters]
+        spike_probes = merged.templates_probes[merged.spike_templates]
         assert np.all(np.where(spike_probes == 0) == im1)
         assert np.all(np.where(spike_probes == 1) == im2)
         assert np.all(merged.amplitudes[spike_probes == 0] <= 15)
@@ -97,3 +96,11 @@ def test_probe_merge_2(tempdir):
     alf = EphysAlfCreator(merged).convert(tempdir / 'alf')
     test_merged_single(merged)
     test_merged_single(alf)
+
+    out_files = list(tempdir.joinpath('alf').glob('*.*'))
+    cl_shape = [np.load(f).shape[0] for f in out_files if f.name.startswith('clusters.')]
+    sp_shape = [np.load(f).shape[0] for f in out_files if f.name.startswith('spikes.')]
+    ch_shape = [np.load(f).shape[0] for f in out_files if f.name.startswith('channels.')]
+    assert len(set(cl_shape)) == 1
+    assert len(set(sp_shape)) == 1
+    assert len(set(ch_shape)) == 1
