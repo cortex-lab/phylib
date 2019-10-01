@@ -125,7 +125,7 @@ class EphysAlfCreator(object):
             bar.update(10)
             self.make_spike_times()
             bar.update(10)
-            self.make_cluster_waveforms()
+            self.make_cluster_objects()
             bar.update(10)
             self.make_depths()
             bar.update(10)
@@ -171,9 +171,9 @@ class EphysAlfCreator(object):
         *samples*, and not in seconds."""
         self._save_npy('spikes.times.npy', self.model.spike_times)
 
-    def make_cluster_waveforms(self):
-        """Return the channel index with the highest template amplitude, for
-        every template."""
+    def make_cluster_objects(self):
+        """Create clusters.channels, clusters.waveformDuration and clusters.amps"""
+
         peak_channel_path = self.dir_path / 'clusters.channels.npy'
         if not peak_channel_path.exists():
             self._save_npy(peak_channel_path.name, self.model.templates_channels)
@@ -181,6 +181,10 @@ class EphysAlfCreator(object):
         waveform_duration_path = self.dir_path / 'clusters.waveformDuration.npy'
         if not waveform_duration_path.exists():
             self._save_npy(waveform_duration_path.name, self.model.templates_waveformDurations)
+
+        # group by average over cluster number
+        amps_path = self.dir_path / 'clusters.amps.npy'
+        self._save_npy(amps_path, self.model.templates_amplitudes)
 
     def make_depths(self):
         """Make spikes.depths.npy, clusters.depths.npy."""

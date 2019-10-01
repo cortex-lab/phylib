@@ -948,6 +948,15 @@ class TemplateModel(object):
         return self.channel_probes[self.templates_channels]
 
     @property
+    def templates_amplitudes(self):
+        """Returns the average amplitude per cluster"""
+        tid = np.unique(self.spike_templates)
+        n = np.bincount(self.spike_templates)[tid]
+        a = np.bincount(self.spike_templates, weights=self.amplitudes)[tid]
+        n[np.isnan(n)] = 1
+        return a / n
+
+    @property
     def templates_waveformDurations(self):
         """Returns a vector of waveform durations for all templates"""
         tmp = self.sparse_templates.data
