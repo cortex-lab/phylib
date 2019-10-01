@@ -82,13 +82,18 @@ def test_probe_merge_2(tempdir):
         # test spikes
         assert np.allclose(merged.spike_times[im1], single.spike_times[i1])
         assert np.allclose(merged.spike_times[im2], single.spike_times[i2] + 4e-5)
-        # the empty clusters are discarded during the merge or alf export
+        # test clusters
         assert np.allclose(merged.spike_clusters[im2], single.spike_clusters[i2] + 64)
         assert np.allclose(merged.spike_clusters[im1], single.spike_clusters[i1])
-        # test clusters indices indexing via probes
+        # test templates
+        assert np.all(merged.spike_templates[im1] - single.spike_templates[i1] == 0)
+        assert np.all(merged.spike_templates[im2] - single.spike_templates[i2] == 64)
+        # test probes
+        assert np.all(merged.channel_probes == np.r_[single.channel_probes,
+                                                     single.channel_probes + 1])
+        assert np.all(merged.templates_channels[merged.templates_probes == 0] < single.n_channels)
+        assert np.all(merged.templates_channels[merged.templates_probes == 1] >= single.n_channels)
         spike_probes = merged.templates_probes[merged.spike_templates]
-        assert np.all(np.where(spike_probes == 0) == im1)
-        assert np.all(np.where(spike_probes == 1) == im2)
         assert np.all(merged.amplitudes[spike_probes == 0] <= 15)
         assert np.all(merged.amplitudes[spike_probes == 1] >= 20)
 
