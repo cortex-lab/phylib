@@ -27,19 +27,12 @@ logger = logging.getLogger(__name__)
 #------------------------------------------------------------------------------
 
 
-# ## TODO
-
-# probes.insertion
-# probes.sitePositions
-# probes.rawFilename
-# channels.brainLocation
-
 _FILE_RENAMES = [  # file_in, file_out, squeeze (bool to squeeze vector from matlab in npy)
     ('params.py', 'params.py', None),
     ('spike_clusters.npy', 'spikes.clusters.npy', True),
     ('spike_templates.npy', 'spikes.templates.npy', True),
     ('amplitudes.npy', 'spikes.amps.npy', True),
-    ('channel_positions.npy', 'channels.sitePositions.npy', False),
+    ('channel_positions.npy', 'channels.localCoordinates.npy', False),
     ('channel_map.npy', 'channels.rawInd.npy', True),
     ('channel_probe.npy', 'channels.probes.npy', True),
     ('cluster_probes.npy', 'clusters.probes.npy', True),

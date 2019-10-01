@@ -468,7 +468,7 @@ class TemplateModel(object):
         return out
 
     def _load_channel_positions(self):
-        path = self._find_path('channel_positions.npy', 'channels.sitePositions.npy')
+        path = self._find_path('channel_positions.npy', 'channels.localCoordinates.npy')
         out = self._read_array(path)
         out = np.atleast_2d(out)
         assert out.ndim == 2
