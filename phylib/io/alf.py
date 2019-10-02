@@ -33,7 +33,7 @@ _FILE_RENAMES = [  # file_in, file_out, squeeze (bool to squeeze vector from mat
     ('spike_templates.npy', 'spikes.templates.npy', True),
     ('amplitudes.npy', 'spikes.amps.npy', True),
     ('channel_positions.npy', 'channels.localCoordinates.npy', False),
-    ('channel_map.npy', 'channels.rawInd.npy', True),
+    ('channel_map.npy', 'channels._phy_ids.npy', True),
     ('channel_probe.npy', 'channels.probes.npy', True),
     ('cluster_probes.npy', 'clusters.probes.npy', True),
     ('cluster_shanks.npy', 'clusters.shanks.npy', True),
@@ -113,13 +113,15 @@ class EphysAlfCreator(object):
         if not self.out_path.exists():
             self.out_path.mkdir()
 
-        with tqdm(desc="Converting to ALF", total=60) as bar:
+        with tqdm(desc="Converting to ALF", total=65) as bar:
             self.copy_files(force=force)
             bar.update(10)
             self.make_spike_times()
             bar.update(10)
             self.make_cluster_objects()
             bar.update(10)
+            self.make_channel_objects()
+            bar.update(5)
             self.make_depths()
             bar.update(10)
             self.make_mean_waveforms()
@@ -180,6 +182,17 @@ class EphysAlfCreator(object):
         camps[self.cluster_ids - np.min(self.cluster_ids)] = self.model.templates_amplitudes
         amps_path = self.dir_path / 'clusters.amps.npy'
         self._save_npy(amps_path.name, camps)
+
+    def make_channel_objects(self):
+        """If there is no rawInd file, create it"""
+        rawInd_path = self.dir_path / 'channels.rawInd.npy'
+        rawInd = np.zeros_like(self.model.channel_probes).astype(np.int)
+        channel_offset = 0
+        for probe in np.unique(self.model.channel_probes):
+            ind = self.model.channel_probes == probe
+            rawInd[ind] = self.model.channel_mapping[ind] - channel_offset
+            channel_offset += np.max(self.model.channel_mapping[ind])
+        self._save_npy(rawInd_path.name, rawInd)
 
     def make_depths(self):
         """Make spikes.depths.npy, clusters.depths.npy."""

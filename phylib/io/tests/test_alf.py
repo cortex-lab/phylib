@@ -92,6 +92,8 @@ def test_creator(dataset):
         'clusters.meanWaveforms.npy',
         'clusters.amps.npy',
         'channels.localCoordinates.npy',
+        'channels.rawInd.npy',
+        'channels._phy_ids.npy',
     )
     path = Path(dataset.tmp_dir)
     out_path = path / 'alf'
@@ -115,8 +117,10 @@ def test_creator(dataset):
     # makes sure the output dimensions match (especially clusters which should be 4)
     cl_shape = [np.load(out_path / f).shape[0] for f in _FILE_CREATES if f.startswith('clusters.')]
     sp_shape = [np.load(out_path / f).shape[0] for f in _FILE_CREATES if f.startswith('spikes.')]
+    ch_shape = [np.load(out_path / f).shape[0] for f in _FILE_CREATES if f.startswith('channels.')]
     assert len(set(cl_shape)) == 1
     assert len(set(sp_shape)) == 1
+    assert len(set(ch_shape)) == 1
 
     dur = np.load(out_path / 'clusters.waveformsDuration.npy')
     assert np.all(dur == np.array([-14., -24., -15., 8., -2.]) / 2)

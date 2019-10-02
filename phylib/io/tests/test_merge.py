@@ -102,6 +102,11 @@ def test_probe_merge_2(tempdir):
     test_merged_single(merged)
     test_merged_single(alf)
 
+    # specific test channel ids only for ALF merge dataset: the raw indices are still individual
+    # file indices, the merged channel mapping is in `channels._phy_ids.npy`
+    chid = np.load(tempdir.joinpath('alf', 'channels.rawInd.npy'))
+    assert np.all(chid == np.r_[single.channel_mapping, single.channel_mapping])
+
     out_files = list(tempdir.joinpath('alf').glob('*.*'))
     cl_shape = [np.load(f).shape[0] for f in out_files if f.name.startswith('clusters.')]
     sp_shape = [np.load(f).shape[0] for f in out_files if f.name.startswith('spikes.')]
