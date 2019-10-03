@@ -165,6 +165,7 @@ class EphysAlfCreator(object):
         """We cannot just rename/copy spike_times.npy because it is in unit of
         *samples*, and not in seconds."""
         self._save_npy('spikes.times.npy', self.model.spike_times)
+        self._save_npy('spikes.samples.npy', self.model.spike_samples)
 
     def make_cluster_objects(self):
         """Create clusters.channels, clusters.waveformsDuration and clusters.amps"""

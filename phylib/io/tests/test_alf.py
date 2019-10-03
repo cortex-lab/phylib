@@ -87,6 +87,7 @@ def test_creator(dataset):
         'spikes.times.npy',
         'clusters.waveformsDuration.npy',
         'spikes.depths.npy',
+        'spikes.samples.npy',
         'clusters.depths.npy',
         'clusters.channels.npy',
         'clusters.meanWaveforms.npy',

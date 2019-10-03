@@ -294,8 +294,7 @@ class TemplateModel(object):
         sr = self.sample_rate
 
         # Spikes.
-        self.spike_samples = self._load_spike_samples()
-        self.spike_times = self.spike_samples / sr
+        self.spike_samples, self.spike_times = self._load_spike_samples()
         ns, = self.n_spikes, = self.spike_times.shape
 
         # Spike amplitudes.
@@ -548,15 +547,20 @@ class TemplateModel(object):
         # divide by the sampling rate to get spike times in seconds.
         path = self.dir_path / 'spike_times.npy'
         if path.exists():
-            out = self._read_array(path)
+            # WARNING: spikes_times.npy is in samples !
+            samples = self._read_array(path)
+            times = samples / self.sample_rate
         else:
             # WARNING: spikes.times.npy is in seconds, not samples !
             path = self.dir_path / 'spikes.times.npy'
-            logger.info("Loading spikes.times.npy in seconds, converting to samples.")
-            spike_times = self._read_array(path)
-            out = np.round(spike_times * self.sample_rate).astype(np.uint64)
-        assert out.ndim == 1
-        return out
+            times = self._read_array(path)
+            if (self.dir_path / 'spike.samples.npy').exists():
+                samples = self._read_array(self.dir_path / 'spike.samples.npy')
+            else:
+                logger.info("Loading spikes.times.npy in seconds, converting to samples.")
+                samples = np.round(times * self.sample_rate).astype(np.uint64)
+        assert samples.ndim == times.ndim == 1
+        return samples, times
 
     def _load_similar_templates(self):
         try:
