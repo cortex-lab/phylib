@@ -291,9 +291,7 @@ class TemplateModel(object):
 
     def _load_data(self):
         """Load all data."""
-        sr = self.sample_rate
-
-        # Spikes.
+        # Spikes
         self.spike_samples, self.spike_times = self._load_spike_samples()
         ns, = self.n_spikes, = self.spike_times.shape
 
@@ -403,8 +401,9 @@ class TemplateModel(object):
             )
 
     def _find_path(self, *names, multiple_ok=True):
-        return _find_first_existing_path(
-            *(self.dir_path / name for name in names), multiple_ok=multiple_ok)
+        """ several """
+        full_paths = list(l[0] for l in [list(self.dir_path.glob(name)) for name in names] if l)
+        return _find_first_existing_path(*full_paths, multiple_ok=multiple_ok)
 
     def _read_array(self, path, mmap_mode=None):
         if not path:
@@ -459,7 +458,7 @@ class TemplateModel(object):
         return spike_attributes
 
     def _load_channel_map(self):
-        path = self._find_path('channel_map.npy', 'channels._phy_ids.npy')
+        path = self._find_path('channel_map.npy', 'channels._phy_ids*.npy')
         out = self._read_array(path)
         out = np.atleast_1d(out)
         assert out.ndim == 1
@@ -467,7 +466,7 @@ class TemplateModel(object):
         return out
 
     def _load_channel_positions(self):
-        path = self._find_path('channel_positions.npy', 'channels.localCoordinates.npy')
+        path = self._find_path('channel_positions.npy', 'channels.localCoordinates*.npy')
         out = self._read_array(path)
         out = np.atleast_2d(out)
         assert out.ndim == 2
@@ -475,7 +474,7 @@ class TemplateModel(object):
 
     def _load_channel_probes(self):
         try:
-            path = self._find_path('channel_probe.npy', 'channels.probes.npy')
+            path = self._find_path('channel_probe.npy', 'channels.probes*.npy')
             out = self._read_array(path)
             out = np.atleast_1d(out)
             assert out.ndim == 1
@@ -485,7 +484,7 @@ class TemplateModel(object):
 
     def _load_channel_shanks(self):
         try:
-            path = self._find_path('channel_shanks.npy', 'channels.shanks.npy')
+            path = self._find_path('channel_shanks.npy', 'channels.shanks*.npy')
             out = self._read_array(path).reshape((-1,))
             assert out.ndim == 1
             return out
@@ -510,7 +509,7 @@ class TemplateModel(object):
 
     def _load_amplitudes(self):
         try:
-            out = self._read_array(self._find_path('amplitudes.npy', 'spikes.amps.npy'))
+            out = self._read_array(self._find_path('amplitudes.npy', 'spikes.amps*.npy'))
             assert out.ndim == 1
             return out
         except IOError:
@@ -518,7 +517,7 @@ class TemplateModel(object):
             return
 
     def _load_spike_templates(self):
-        path = self._find_path('spike_templates.npy', 'spikes.clusters.npy')
+        path = self._find_path('spike_templates.npy', 'spikes.templates*.npy')
         out = self._read_array(path)
         if out.dtype in (np.float32, np.float64):  # pragma: no cover
             out = out.astype(np.int32)
@@ -527,10 +526,10 @@ class TemplateModel(object):
         return out
 
     def _load_spike_clusters(self):
-        path = self._find_path('spike_clusters.npy', 'spikes.clusters.npy', multiple_ok=False)
+        path = self._find_path('spike_clusters.npy', 'spikes.clusters*.npy', multiple_ok=False)
         if path is None:
             # Create spike_clusters file if it doesn't exist.
-            tmp_path = self._find_path('spike_templates.npy', 'spikes.clusters.npy')
+            tmp_path = self._find_path('spike_templates.npy', 'spikes.clusters*.npy')
             path = self.dir_path / 'spike_clusters.npy'
             logger.debug("Copying from %s to %s.", tmp_path, path)
             shutil.copy(tmp_path, path)
@@ -552,10 +551,11 @@ class TemplateModel(object):
             times = samples / self.sample_rate
         else:
             # WARNING: spikes.times.npy is in seconds, not samples !
-            path = self.dir_path / 'spikes.times.npy'
-            times = self._read_array(path)
-            if (self.dir_path / 'spike.samples.npy').exists():
-                samples = self._read_array(self.dir_path / 'spike.samples.npy')
+            times_path = self._find_path('spikes.times*.npy')
+            times = self._read_array(times_path)
+            samples_path = self._find_path('spikes.samples*.npy')
+            if samples_path:
+                samples = self._read_array(samples_path)
             else:
                 logger.info("Loading spikes.times.npy in seconds, converting to samples.")
                 samples = np.round(times * self.sample_rate).astype(np.uint64)
@@ -576,7 +576,7 @@ class TemplateModel(object):
 
         # Sparse structure: regular array with col indices.
         try:
-            path = self._find_path('templates.npy', 'templates.waveforms.npy')
+            path = self._find_path('templates.npy', 'templates.waveforms*.npy')
             data = self._read_array(path, mmap_mode='r')
             data = np.atleast_3d(data)
             assert data.ndim == 3

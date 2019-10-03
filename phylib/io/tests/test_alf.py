@@ -8,7 +8,6 @@
 #------------------------------------------------------------------------------
 
 import os
-import os.path as op
 from pathlib import Path
 import shutil
 from pytest import fixture, raises
@@ -84,17 +83,17 @@ def test_ephys_1(dataset):
 
 def test_creator(dataset):
     _FILE_CREATES = (
-        'spikes.times.npy',
-        'clusters.waveformsDuration.npy',
-        'spikes.depths.npy',
-        'spikes.samples.npy',
-        'clusters.depths.npy',
-        'clusters.channels.npy',
-        'clusters.meanWaveforms.npy',
-        'clusters.amps.npy',
-        'channels.localCoordinates.npy',
-        'channels.rawInd.npy',
-        'channels._phy_ids.npy',
+        'spikes.times*.npy',
+        'clusters.waveformsDuration*.npy',
+        'spikes.depths*.npy',
+        'spikes.samples*.npy',
+        'clusters.depths*.npy',
+        'clusters.channels*.npy',
+        'clusters.meanWaveforms*.npy',
+        'clusters.amps*.npy',
+        'channels.localCoordinates*.npy',
+        'channels.rawInd*.npy',
+        'channels._phy_ids*.npy',
     )
     path = Path(dataset.tmp_dir)
     out_path = path / 'alf'
@@ -105,23 +104,45 @@ def test_creator(dataset):
     c = EphysAlfCreator(model)
     with raises(IOError):
         c.convert(dataset.tmp_dir)
+
+    def check_conversion_output():
+        # Check all renames.
+        for old, new, _ in _FILE_RENAMES:
+            if (path / old).exists():
+                pattern = f'{Path(new).stem}*{Path(new).suffix}'
+                assert next(out_path.glob(pattern)).exists()
+
+        new_files = []
+        for new in _FILE_CREATES:
+            f = next(out_path.glob(new))
+            new_files.append(f)
+            assert f.exists()
+
+        # makes sure the output dimensions match (especially clusters which should be 4)
+        cl_shape = [np.load(f).shape[0] for f in new_files if f.name.startswith('clusters.')]
+        sp_shape = [np.load(f).shape[0] for f in new_files if f.name.startswith('spikes.')]
+        ch_shape = [np.load(f).shape[0] for f in new_files if f.name.startswith('channels.')]
+        assert len(set(cl_shape)) == 1
+        assert len(set(sp_shape)) == 1
+        assert len(set(ch_shape)) == 1
+
+        dur = np.load(next(out_path.glob('clusters.waveformsDuration*.npy')))
+        assert np.all(dur == np.array([-14., -24., -15., 8., -2.]) / 2)
+
+    def read_after_write():
+        model = TemplateModel(dir_path=out_path, dat_path=dataset.dat_path,
+                              sample_rate=2000, n_channels_dat=dataset.nc)
+        np.all(model.spike_templates == c.model.spike_templates)
+        np.all(model.spike_times == c.model.spike_times)
+        np.all(model.spike_samples == c.model.spike_samples)
+
+    # test a straight export, make sure we can reload the data
     c.convert(out_path)
+    check_conversion_output()
+    read_after_write()
 
-    # Check all renames.
-    for old, new, _ in _FILE_RENAMES:
-        if op.exists(str(path / old)):
-            assert op.exists(str(out_path / new))
-
-    for new in _FILE_CREATES:
-        assert (out_path / new).exists()
-
-    # makes sure the output dimensions match (especially clusters which should be 4)
-    cl_shape = [np.load(out_path / f).shape[0] for f in _FILE_CREATES if f.startswith('clusters.')]
-    sp_shape = [np.load(out_path / f).shape[0] for f in _FILE_CREATES if f.startswith('spikes.')]
-    ch_shape = [np.load(out_path / f).shape[0] for f in _FILE_CREATES if f.startswith('channels.')]
-    assert len(set(cl_shape)) == 1
-    assert len(set(sp_shape)) == 1
-    assert len(set(ch_shape)) == 1
-
-    dur = np.load(out_path / 'clusters.waveformsDuration.npy')
-    assert np.all(dur == np.array([-14., -24., -15., 8., -2.]) / 2)
+    # test with a label after the attribute name
+    shutil.rmtree(out_path)
+    c.convert(out_path, label='probe00')
+    check_conversion_output()
+    read_after_write()

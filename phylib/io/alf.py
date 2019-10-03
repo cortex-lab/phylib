@@ -104,10 +104,11 @@ class EphysAlfCreator(object):
         self.spc = _spikes_per_cluster(model.spike_clusters)
         self.cluster_ids = _unique(self.model.spike_clusters)
 
-    def convert(self, out_path, force=False):
+    def convert(self, out_path, force=False, label=''):
         """Convert from KS/phy format to ALF."""
         logger.info("Converting dataset to ALF.")
         self.out_path = Path(out_path)
+        self.label = label
         if self.out_path.resolve() == self.dir_path.resolve():
             raise IOError("The source and target directories cannot be the same.")
         if not self.out_path.exists():
@@ -128,6 +129,7 @@ class EphysAlfCreator(object):
             bar.update(10)
             self.rm_files()
             bar.update(10)
+            self.rename_with_label()
 
         # Return the TemplateModel of the converted ALF dataset if the params.py file exists.
         params_path = self.out_path / 'params.py'
@@ -232,3 +234,12 @@ class EphysAlfCreator(object):
             self._save_npy('clusters.meanWaveforms.npy', mean_waveforms)
         except IndexError as e:  # pragma: no cover
             logger.warning("Failed to create the mean waveforms file: %s.", e)
+
+    def rename_with_label(self):
+        """add the label as an ALF part name before the extension if any label provided"""
+        if not self.label:
+            return
+        glob_patterns = ['channels.*', 'clusters.*', 'spikes.*', 'templates.*']
+        for pattern in glob_patterns:
+            for f in self.out_path.glob(pattern):
+                f.rename(f.with_suffix(f'.{self.label}{f.suffix}'))
