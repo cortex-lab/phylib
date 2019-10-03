@@ -84,7 +84,7 @@ def test_ephys_1(dataset):
 def test_creator(dataset):
     _FILE_CREATES = (
         'spikes.times*.npy',
-        'clusters.waveformsDuration*.npy',
+        'clusters.peakToThrough*.npy',
         'spikes.depths*.npy',
         'spikes.samples*.npy',
         'clusters.depths*.npy',
@@ -126,7 +126,7 @@ def test_creator(dataset):
         assert len(set(sp_shape)) == 1
         assert len(set(ch_shape)) == 1
 
-        dur = np.load(next(out_path.glob('clusters.waveformsDuration*.npy')))
+        dur = np.load(next(out_path.glob('clusters.peakToThrough*.npy')))
         assert np.all(dur == np.array([-14., -24., -15., 8., -2.]) / 2)
 
     def read_after_write():
