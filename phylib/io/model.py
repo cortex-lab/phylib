@@ -291,11 +291,8 @@ class TemplateModel(object):
 
     def _load_data(self):
         """Load all data."""
-        sr = self.sample_rate
-
-        # Spikes.
-        self.spike_samples = self._load_spike_samples()
-        self.spike_times = self.spike_samples / sr
+        # Spikes
+        self.spike_samples, self.spike_times = self._load_spike_samples()
         ns, = self.n_spikes, = self.spike_times.shape
 
         # Spike amplitudes.
@@ -344,10 +341,6 @@ class TemplateModel(object):
             self.sparse_templates.data.shape
         if self.sparse_templates.cols is not None:
             assert self.sparse_templates.cols.shape == (self.n_templates, self.n_channels_loc)
-
-        # Cluster probes and shanks (only when loading an ALF dataset).
-        self.cluster_probes = self._load_cluster_probes()
-        self.cluster_shanks = self._load_cluster_shanks()
 
         # Whitening.
         try:
@@ -408,8 +401,9 @@ class TemplateModel(object):
             )
 
     def _find_path(self, *names, multiple_ok=True):
-        return _find_first_existing_path(
-            *(self.dir_path / name for name in names), multiple_ok=multiple_ok)
+        """ several """
+        full_paths = list(l[0] for l in [list(self.dir_path.glob(name)) for name in names] if l)
+        return _find_first_existing_path(*full_paths, multiple_ok=multiple_ok)
 
     def _read_array(self, path, mmap_mode=None):
         if not path:
@@ -464,7 +458,7 @@ class TemplateModel(object):
         return spike_attributes
 
     def _load_channel_map(self):
-        path = self._find_path('channel_map.npy', 'channels.rawRow.npy')
+        path = self._find_path('channel_map.npy', 'channels._phy_ids*.npy')
         out = self._read_array(path)
         out = np.atleast_1d(out)
         assert out.ndim == 1
@@ -472,7 +466,7 @@ class TemplateModel(object):
         return out
 
     def _load_channel_positions(self):
-        path = self._find_path('channel_positions.npy', 'channels.sitePositions.npy')
+        path = self._find_path('channel_positions.npy', 'channels.localCoordinates*.npy')
         out = self._read_array(path)
         out = np.atleast_2d(out)
         assert out.ndim == 2
@@ -480,7 +474,7 @@ class TemplateModel(object):
 
     def _load_channel_probes(self):
         try:
-            path = self._find_path('channel_probe.npy', 'channels.probes.npy')
+            path = self._find_path('channel_probe.npy', 'channels.probes*.npy')
             out = self._read_array(path)
             out = np.atleast_1d(out)
             assert out.ndim == 1
@@ -488,29 +482,9 @@ class TemplateModel(object):
         except IOError:
             return np.zeros(self.n_channels, dtype=np.int32)
 
-    def _load_cluster_probes(self):
-        try:
-            path = self._find_path('cluster_probes.npy', 'clusters.probes.npy')
-            out = self._read_array(path)
-            out = np.atleast_1d(out)
-            assert out.ndim == 1
-            return out
-        except IOError:
-            return np.zeros(self.n_templates, dtype=np.int32)
-
-    def _load_cluster_shanks(self):  # pragma: no cover
-        try:
-            path = self._find_path('cluster_shanks.npy', 'clusters.shanks.npy')
-            out = self._read_array(path)
-            out = np.atleast_1d(out)
-            assert out.ndim == 1
-            return out
-        except IOError:
-            return np.zeros(self.n_templates, dtype=np.int32)
-
     def _load_channel_shanks(self):
         try:
-            path = self._find_path('channel_shanks.npy', 'channels.shanks.npy')
+            path = self._find_path('channel_shanks.npy', 'channels.shanks*.npy')
             out = self._read_array(path).reshape((-1,))
             assert out.ndim == 1
             return out
@@ -535,7 +509,7 @@ class TemplateModel(object):
 
     def _load_amplitudes(self):
         try:
-            out = self._read_array(self._find_path('amplitudes.npy', 'spikes.amps.npy'))
+            out = self._read_array(self._find_path('amplitudes.npy', 'spikes.amps*.npy'))
             assert out.ndim == 1
             return out
         except IOError:
@@ -543,7 +517,7 @@ class TemplateModel(object):
             return
 
     def _load_spike_templates(self):
-        path = self._find_path('spike_templates.npy', 'spikes.clusters.npy')
+        path = self._find_path('spike_templates.npy', 'spikes.templates*.npy')
         out = self._read_array(path)
         if out.dtype in (np.float32, np.float64):  # pragma: no cover
             out = out.astype(np.int32)
@@ -552,10 +526,10 @@ class TemplateModel(object):
         return out
 
     def _load_spike_clusters(self):
-        path = self._find_path('spike_clusters.npy', 'spikes.clusters.npy', multiple_ok=False)
+        path = self._find_path('spike_clusters.npy', 'spikes.clusters*.npy', multiple_ok=False)
         if path is None:
             # Create spike_clusters file if it doesn't exist.
-            tmp_path = self._find_path('spike_templates.npy', 'spikes.clusters.npy')
+            tmp_path = self._find_path('spike_templates.npy', 'spikes.clusters*.npy')
             path = self.dir_path / 'spike_clusters.npy'
             logger.debug("Copying from %s to %s.", tmp_path, path)
             shutil.copy(tmp_path, path)
@@ -572,15 +546,21 @@ class TemplateModel(object):
         # divide by the sampling rate to get spike times in seconds.
         path = self.dir_path / 'spike_times.npy'
         if path.exists():
-            out = self._read_array(path)
+            # WARNING: spikes_times.npy is in samples !
+            samples = self._read_array(path)
+            times = samples / self.sample_rate
         else:
             # WARNING: spikes.times.npy is in seconds, not samples !
-            path = self.dir_path / 'spikes.times.npy'
-            logger.info("Loading spikes.times.npy in seconds, converting to samples.")
-            spike_times = self._read_array(path)
-            out = (spike_times * self.sample_rate).astype(np.uint64)
-        assert out.ndim == 1
-        return out
+            times_path = self._find_path('spikes.times*.npy')
+            times = self._read_array(times_path)
+            samples_path = self._find_path('spikes.samples*.npy')
+            if samples_path:
+                samples = self._read_array(samples_path)
+            else:
+                logger.info("Loading spikes.times.npy in seconds, converting to samples.")
+                samples = np.round(times * self.sample_rate).astype(np.uint64)
+        assert samples.ndim == times.ndim == 1
+        return samples, times
 
     def _load_similar_templates(self):
         try:
@@ -596,7 +576,7 @@ class TemplateModel(object):
 
         # Sparse structure: regular array with col indices.
         try:
-            path = self._find_path('templates.npy', 'clusters.templateWaveforms.npy')
+            path = self._find_path('templates.npy', 'templates.waveforms*.npy')
             data = self._read_array(path, mmap_mode='r')
             data = np.atleast_3d(data)
             assert data.ndim == 3
@@ -955,6 +935,42 @@ class TemplateModel(object):
         spike_ids = self.get_cluster_spikes(cluster_id)
         channel_ids = self.get_cluster_channels(cluster_id)
         return self.get_waveforms(spike_ids, channel_ids)
+
+    @property
+    def templates_channels(self):
+        """Returns a vector of peak channels for all templates"""
+        tmp = self.sparse_templates.data
+        n_templates, n_samples, n_channels = tmp.shape
+        # Compute the peak channels for each template.
+        template_peak_channels = np.argmax(tmp.max(axis=1) - tmp.min(axis=1), axis=1)
+        assert template_peak_channels.shape == (n_templates,)
+        return template_peak_channels
+
+    @property
+    def templates_probes(self):
+        """Returns a vector of probe index for all templates"""
+        return self.channel_probes[self.templates_channels]
+
+    @property
+    def templates_amplitudes(self):
+        """Returns the average amplitude per cluster"""
+        tid = np.unique(self.spike_templates)
+        n = np.bincount(self.spike_templates)[tid]
+        a = np.bincount(self.spike_templates, weights=self.amplitudes)[tid]
+        n[np.isnan(n)] = 1
+        return a / n
+
+    @property
+    def templates_waveforms_durations(self):
+        """Returns a vector of waveform durations (ms) for all templates"""
+        tmp = self.sparse_templates.data
+        n_templates, n_samples, n_channels = tmp.shape
+        # Compute the peak channels for each template.
+        template_peak_channels = np.argmax(tmp.max(axis=1) - tmp.min(axis=1), axis=1)
+        durations = tmp.argmax(axis=1) - tmp.argmin(axis=1)
+        ind = np.ravel_multi_index((np.arange(0, n_templates), template_peak_channels),
+                                   (n_templates, n_channels), mode='raise', order='C')
+        return durations.flatten()[ind].astype(np.float64) / self.sample_rate * 1e3
 
     #--------------------------------------------------------------------------
     # Saving methods

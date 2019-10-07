@@ -132,26 +132,35 @@ class Merger(object):
             self._save(fn, concat)
 
     def write_spike_clusters(self):
-        """Write the merged spike clusters, and register self.cluster_offsets."""
+        """Write the merged spike clusters, and register self.cluster_offsets.
+           Write the merged spike templates, and register self.template_offsets.
+        """
         spike_clusters_l = _load_multiple_files('spike_clusters.npy', self.subdirs)
-        # TODO: cluster shanks
+        spike_templates_l = _load_multiple_files('spike_templates.npy', self.subdirs)
         self.cluster_offsets = []
+        self.template_offsets = []
         cluster_probes_l = []
-        offset = 0
-        for i, (subdir, sc) in enumerate(zip(self.subdirs, spike_clusters_l)):
-            sc += offset
-            self.cluster_offsets.append(offset)
-            # Number of clusters in each probe.
-            n_clu = len(np.unique(sc))
+        coffset = 0
+        toffset = 0
+        for i, (subdir, sc, st) in enumerate(
+                zip(self.subdirs, spike_clusters_l, spike_templates_l)):
+            n_clu = np.max(sc) + 1
+            n_tmp = np.max(st) + 1
+            sc += coffset
+            st += toffset
+            self.cluster_offsets.append(coffset)
+            self.template_offsets.append(toffset)
             cluster_probes_l.append(i * np.ones(n_clu, dtype=np.int32))
-            offset = sc.max() + 1
+            coffset += n_clu
+            toffset += n_tmp
         spike_clusters = _load_multiple_spike_arrays(
             *spike_clusters_l, spike_order=self.spike_order)
+        spike_templates = _load_multiple_spike_arrays(
+            *spike_templates_l, spike_order=self.spike_order)
         cluster_probes = _concat(cluster_probes_l)
-        assert len(np.unique(spike_clusters)) == len(cluster_probes)
-
+        assert np.max(spike_clusters) + 1 == cluster_probes.size
         self._save('spike_clusters.npy', spike_clusters)
-        self._save('spike_templates.npy', spike_clusters)
+        self._save('spike_templates.npy', spike_templates)
         self._save('cluster_probes.npy', cluster_probes)
 
     def write_cluster_data(self):
