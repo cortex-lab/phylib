@@ -98,6 +98,9 @@ def _make_dataset(tempdir, param='dense', has_spike_attributes=True):
         write_array(tempdir / 'spike_works.npy', np.random.rand(314))
         write_array(tempdir / 'spike_randn.npy', np.random.randn(314, 2))
 
+    # Spike permutation.
+    write_array(tempdir / 'spike_reorder.npy', np.random.permutation(314))
+
     # TSV file with cluster data.
     write_tsv(
         tempdir / 'cluster_Amplitude.tsv', [{'cluster_id': 1, 'Amplitude': 123.4}],

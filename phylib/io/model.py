@@ -308,6 +308,11 @@ class TemplateModel(object):
         self.spike_clusters = self._load_spike_clusters()
         assert self.spike_clusters.shape == (ns,)
 
+        # Spike reordering.
+        self.spike_reorder = self._load_spike_reorder()
+        if self.spike_reorder is not None:
+            assert self.spike_reorder.shape == (ns,)
+
         # Channels.
         self.channel_mapping = self._load_channel_map()
         self.n_channels = nc = self.channel_mapping.shape[0]
@@ -445,7 +450,7 @@ class TemplateModel(object):
             # The part after spike_***
             n = filename.stem[6:]
             # Skip known files.
-            if n in ('clusters', 'templates', 'samples', 'times', 'amplitudes'):
+            if n in ('clusters', 'templates', 'samples', 'times', 'amplitudes', 'reorder'):
                 continue
             try:
                 arr = self._read_array(filename)
@@ -538,6 +543,15 @@ class TemplateModel(object):
         # NOTE: we make a copy in memory so that we can update this array
         # during manual clustering.
         out = self._read_array(path).astype(np.int32)
+        assert out.ndim == 1
+        return out
+
+    def _load_spike_reorder(self):
+        path = self._find_path('spike_reorder.npy', multiple_ok=False)
+        if path is None:
+            return
+        logger.debug("Loading spike reorder.")
+        out = self._read_array(path).astype(np.int64)
         assert out.ndim == 1
         return out
 
