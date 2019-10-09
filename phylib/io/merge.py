@@ -229,19 +229,19 @@ class Merger(object):
         n_channels = sum(tmp.shape[2] for tmp in templates_l)
         shape = (n_templates, n_samples, n_channels)
 
-        # Create the merged templates.npy on disk and memmap it for writing.
         np.save(path, np.empty(shape, dtype=templates_l[0].dtype))
-        templates = np.load(path, mmap_mode='r+')
-
-        for i in range(len(self.subdirs)):
-            i0 = templates_l[i - 1].shape[0] if i > 0 else 0
-            i1 = i0 + templates_l[i].shape[0]
-            j0 = templates_l[i - 1].shape[2] if i > 0 else 0
-            j1 = j0 + templates_l[i].shape[2]
-            templates[i0:i1, :, j0:j1] = templates_l[i]
-
-        # Close the memmap once we're done with writing it.
-        templates._mmap.close()
+        offset = 0
+        with open(path, 'r+b') as fid:
+            fid.seek(8)
+            offset = int.from_bytes(fid.read(2), byteorder='little')
+            fid.seek(offset, 1)
+            for i in range(len(self.subdirs)):
+                j0 = templates_l[i - 1].shape[2] if i > 0 else 0
+                j1 = j0 + templates_l[i].shape[2]
+                for it in np.arange(templates_l[i].shape[0]):
+                    one_template = np.zeros((n_samples, n_channels), dtype=templates_l[0].dtype)
+                    one_template[:, j0:j1] = templates_l[i][it, :]
+                    fid.write(one_template.tobytes())
 
     def write_template_data(self):
         template_data = [
