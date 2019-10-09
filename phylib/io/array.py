@@ -8,7 +8,7 @@
 
 import logging
 import math
-from math import floor, exp
+from math import floor, exp, ceil
 from operator import itemgetter
 from pathlib import Path
 
@@ -359,6 +359,42 @@ class ConcatenatedArrays(object):
 def _concatenate_virtual_arrays(arrs, cols=None, scaling=None):
     """Return a virtual concatenate of several NumPy arrays."""
     return None if not len(arrs) else ConcatenatedArrays(arrs, cols, scaling=scaling)
+
+
+class RandomVirtualArray(object):
+    """An object that represents a virtual array of arbitrary size. Slicing it returns
+    random values."""
+    def __init__(self, shape, dtype=np.float64):
+        assert shape and isinstance(shape, tuple)
+        self.shape = shape
+        self.dtype = dtype
+
+    def _generate_array(self, n):
+        shape = (n,) + self.shape[1:]
+        return np.random.normal(size=shape).astype(self.dtype)
+
+    def __getitem__(self, item):
+        if isinstance(item, slice):
+            start = item.start or 0
+            stop = item.stop or self.shape[0]
+            if stop < 0:
+                stop += self.shape[0]
+            if stop > self.shape[0]:
+                stop = self.shape[0]
+            step = item.step or 1
+            n = ceil((stop - start) / float(step))
+            return self._generate_array(n)
+        elif isinstance(item, (list, np.ndarray)):
+            n = len(item)
+            return self._generate_array(n)
+        elif isinstance(item, tuple):
+            s = item[1:]
+            if not isinstance(item[0], (int, np.generic)):
+                s = (slice(None, None, None),) + s
+            return self[item[0]][s]
+        elif isinstance(item, (int, np.generic)):
+            return self._generate_array(1)[0]
+        raise NotImplementedError()
 
 
 # -----------------------------------------------------------------------------

@@ -16,7 +16,7 @@ from ..array import (
     _flatten_per_cluster, get_closest_clusters, _get_data_lim, _flatten, _start_stop,
     select_spikes, Selector, chunk_bounds, regular_subset, excerpts, data_chunk, grouped_mean,
     get_excerpts, _concatenate_virtual_arrays, _range_from_slice, _pad, _get_padded,
-    read_array, write_array)
+    read_array, write_array, RandomVirtualArray)
 from phylib.utils._types import _as_array
 from phylib.utils.testing import _assert_equal as ae
 from ..mock import artificial_spike_clusters
@@ -252,6 +252,33 @@ def test_concatenate_virtual_arrays_3():
     arrs = [np.zeros((2, 2)), np.ones((3, 2))]
     c = _concatenate_virtual_arrays(arrs, scaling=2)
     ae(c[3], 2 * np.ones((1, 2)))
+
+
+def test_random_virtual_array():
+    shape = (1000, 12)
+    arr0 = np.random.normal(size=shape)
+    arr1 = RandomVirtualArray(shape)
+
+    for step in (None, 1, 2, 3, 10, 500, 1000, 2000):
+        for item in (
+            slice(None, None, step),
+            slice(0, -1, step),
+            slice(1, -1, step),
+            slice(10, None, step),
+            slice(10, 20, step),
+            slice(10, 1010, step),
+            np.arange(10),
+            [10, 0, -1],
+            0
+        ):
+            assert arr0[item].shape == arr1[item].shape
+            for item1 in (
+                slice(None, None, step),
+                slice(0, None, step),
+                slice(0, -1, step),
+                slice(1, -1, step),
+            ):
+                assert arr0[item, item1].shape == arr1[item, item1].shape
 
 
 #------------------------------------------------------------------------------

@@ -8,6 +8,7 @@
 #------------------------------------------------------------------------------
 
 import logging
+import os
 import os.path as op
 from operator import itemgetter
 from pathlib import Path
@@ -16,7 +17,7 @@ import shutil
 import numpy as np
 import scipy.io as sio
 
-from .array import _concatenate_virtual_arrays, _index_of, _spikes_in_clusters
+from .array import _concatenate_virtual_arrays, _index_of, _spikes_in_clusters, RandomVirtualArray
 from phylib.traces import WaveformLoader
 from phylib.utils import Bunch
 from phylib.utils._misc import _write_tsv_simple, _read_tsv_simple, read_python
@@ -499,6 +500,9 @@ class TemplateModel(object):
 
     def _load_traces(self, channel_map=None):
         if not self.dat_path:
+            if os.environ.get('PHY_VIRTUAL_RAW_DATA', None):  # pragma: no cover
+                n_samples = int((self.spike_times[-1] + 1) * self.sample_rate)
+                return RandomVirtualArray((n_samples, len(channel_map)))
             return
         paths = self.dat_path
         # Make sure we have a list of paths (virtually-concatenated).
