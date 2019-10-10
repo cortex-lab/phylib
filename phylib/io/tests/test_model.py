@@ -140,3 +140,16 @@ def test_model_spike_attributes(template_model_full):
     assert set(model.spike_attributes.keys()) == set(('randn', 'works'))
     assert model.spike_attributes.works.shape == (model.n_spikes,)
     assert model.spike_attributes.randn.shape == (model.n_spikes, 2)
+
+
+def test_model_filter(template_model):
+    m = template_model
+
+    @m.add_filter
+    def double(arr):
+        return arr * 2
+
+    assert m.current_filter == 'double'
+
+    arr = np.random.rand(10)
+    ae(m.filter_raw_data(arr), arr * 2)
