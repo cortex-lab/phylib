@@ -338,9 +338,6 @@ class TemplateModel(object):
         self.probes = np.unique(self.channel_probes)
         self.n_probes = len(self.probes)
 
-        # Ordering of the channels in the trace view.
-        self.channel_vertical_order = np.argsort(self.channel_positions[:, 1], kind='mergesort')
-
         # Templates.
         self.sparse_templates = self._load_templates()
         self.n_templates, self.n_samples_waveforms, self.n_channels_loc = \
