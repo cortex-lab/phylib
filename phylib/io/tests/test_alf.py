@@ -26,6 +26,7 @@ from ..model import TemplateModel
 
 class Dataset(object):
     def __init__(self, tempdir):
+        np.random.seed(42)
         self.tmp_dir = tempdir
         p = Path(self.tmp_dir)
         self.ns = 100
@@ -100,6 +101,8 @@ def test_creator(dataset):
 
     model = TemplateModel(
         dir_path=path, dat_path=dataset.dat_path, sample_rate=2000, n_channels_dat=dataset.nc)
+    print(model.templates_channels)
+    print(model.templates_waveforms_durations)
 
     c = EphysAlfCreator(model)
     with raises(IOError):
@@ -127,7 +130,7 @@ def test_creator(dataset):
         assert len(set(ch_shape)) == 1
 
         dur = np.load(next(out_path.glob('clusters.peakToThrough*.npy')))
-        assert np.all(dur == np.array([-14., -24., -15., 8., -2.]) / 2)
+        assert np.all(dur == np.array([18., -1., 9.5, 2.5, -2.]))
 
     def read_after_write():
         model = TemplateModel(dir_path=out_path, dat_path=dataset.dat_path,
@@ -137,6 +140,7 @@ def test_creator(dataset):
         np.all(model.spike_samples == c.model.spike_samples)
 
     # test a straight export, make sure we can reload the data
+    shutil.rmtree(out_path, ignore_errors=True)
     c.convert(out_path)
     check_conversion_output()
     read_after_write()
