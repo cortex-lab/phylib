@@ -18,7 +18,6 @@ import numpy as np
 import scipy.io as sio
 
 from .array import _concatenate_virtual_arrays, _index_of, _spikes_in_clusters, RandomVirtualArray
-from phylib.traces import WaveformLoader
 from phylib.utils import Bunch
 from phylib.utils._misc import _write_tsv_simple, _read_tsv_simple, read_python
 from phylib.utils.geometry import linear_positions
@@ -284,7 +283,6 @@ class TemplateModel(object):
         self.filter_order = None if getattr(self, 'hp_filtered', False) else 3
 
         self._load_data()
-        self.waveform_loader = self._create_waveform_loader()
 
     #--------------------------------------------------------------------------
     # Internal loading methods
@@ -390,18 +388,6 @@ class TemplateModel(object):
 
         # Metadata.
         self.metadata = self._load_metadata()
-
-    def _create_waveform_loader(self):
-        # Number of time samples in the templates.
-        nsw = self.n_samples_waveforms
-        if self.traces is not None:
-            return WaveformLoader(
-                traces=self.traces,
-                spike_samples=self.spike_samples,
-                n_samples_waveforms=nsw,
-                filter_order=self.filter_order,
-                sample_rate=self.sample_rate,
-            )
 
     def _find_path(self, *names, multiple_ok=True):
         """ several """
@@ -806,13 +792,36 @@ class TemplateModel(object):
 
     def get_waveforms(self, spike_ids, channel_ids=None):
         """Return spike waveforms on specified channels."""
-        if self.waveform_loader is None:
+        if self.traces is None:
             return
-        out = self.waveform_loader.get(spike_ids, channel_ids)
-        assert out.dtype in (np.float32, np.float64)
-        assert out.shape[0] == len(spike_ids)
-        if channel_ids is not None:
-            assert out.shape[2] == len(channel_ids)
+
+        # Create the output array.
+        ns = len(spike_ids)
+        nsw = self.n_samples_waveforms
+        nc = len(channel_ids) if channel_ids is not None else self.n_channels
+        dur = self.traces.shape[0]
+        out = np.empty((ns, nsw, nc), dtype=np.float64)
+
+        # Extract the spike waveforms.
+        a = nsw // 2
+        b = nsw - a
+        assert a + b == nsw
+        if channel_ids is None:  # pragma: no cover
+            channel_ids = slice(None, None, None)
+        for i, ts in enumerate(self.spike_samples[spike_ids]):
+            t0, t1 = int(ts - a), int(ts + b)
+            t0, t1 = np.clip(t0, 0, dur), np.clip(t1, 0, dur)
+            w = self.traces[t0:t1][:, channel_ids]
+            # Pad with zeros.
+            bef = aft = 0
+            if t0 == 0:  # pragma: no cover
+                bef = nsw - w.shape[0]
+            if t1 == dur:  # pragma: no cover
+                aft = nsw - w.shape[0]
+            assert bef + w.shape[0] + aft == nsw
+            w = np.pad(w, ((bef, aft), (0, 0)))
+            assert w.shape[0] == nsw
+            out[i, ...] = w - np.median(w, axis=0)
         return out
 
     def get_features(self, spike_ids, channel_ids):
