@@ -60,6 +60,8 @@ def _remove(path):
 
 
 def _make_dataset(tempdir, param='dense', has_spike_attributes=True):
+    np.random.seed(0)
+
     # Download the dataset.
     paths = list(map(download_test_file, _FILES))
     # Copy the dataset to a temporary directory.
