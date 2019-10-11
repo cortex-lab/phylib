@@ -275,8 +275,6 @@ class TemplateModel(object):
         assert self.sample_rate > 0
         self.offset = getattr(self, 'offset', 0)
 
-        self._filters = {'raw': lambda x: x}
-        self._current_filter = 'raw'
         self._load_data()
 
     #--------------------------------------------------------------------------
@@ -778,31 +776,6 @@ class TemplateModel(object):
     # Data access methods
     #--------------------------------------------------------------------------
 
-    def add_filter(self, fun, name=None):
-        """Add a raw data filter."""
-        name = name or fun.__name__
-        self._filters[name] = fun
-        self.set_filter(name)
-
-    def set_filter(self, name):
-        """Set the raw data filter by specifying its name."""
-        if name in self._filters:
-            self._current_filter = name
-
-    @property
-    def current_filter(self):
-        """Return the current filter name."""
-        return self._current_filter
-
-    def filter_raw_data(self, arr, name=None):
-        """Filter raw data."""
-        self._current_filter = name or self._current_filter
-        fun = self._filters.get(self._current_filter, None)
-        if fun:
-            logger.debug("Applying filter %s to raw data.", self._current_filter)
-            arr = fun(arr)
-        return arr
-
     def get_template(self, template_id, channel_ids=None):
         """Get data about a template."""
         if self.sparse_templates.cols is not None:
@@ -831,8 +804,9 @@ class TemplateModel(object):
         for i, ts in enumerate(self.spike_samples[spike_ids]):
             t0, t1 = int(ts - a), int(ts + b)
             t0, t1 = np.clip(t0, 0, dur), np.clip(t1, 0, dur)
-            # Filter the waveforms.
-            w = self.filter_raw_data(self.traces[t0:t1][:, channel_ids])
+            # Extract the waveforms.
+            w = self.traces[t0:t1][:, channel_ids]
+            assert w.shape == w.shape
             # Pad with zeros.
             bef = aft = 0
             if t0 == 0:  # pragma: no cover
