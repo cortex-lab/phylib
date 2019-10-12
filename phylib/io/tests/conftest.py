@@ -79,7 +79,11 @@ def _make_dataset(tempdir, param='dense', has_spike_attributes=True):
         _remove(tempdir / 'spike_clusters.npy')
         # Replace spike_times.npy, in samples, by spikes.times.npy, in seconds.
         if (tempdir / 'spike_times.npy').exists():
-            st = np.load(tempdir / 'spike_times.npy')
+            st = np.load(tempdir / 'spike_times.npy').squeeze()
+            st_r = st + np.random.randint(low=-20000, high=+20000, size=st.size)
+            assert st_r.shape == st.shape
+            # Reordered spikes.
+            np.save(tempdir / 'spike_times_reordered.npy', st_r)
             np.save(tempdir / 'spikes.times.npy', st / 25000.)  # sample rate
             _remove(tempdir / 'spike_times.npy')
         # Buggy TSV file should not cause a crash.
@@ -99,9 +103,6 @@ def _make_dataset(tempdir, param='dense', has_spike_attributes=True):
         write_array(tempdir / 'spike_fail.npy', np.full(10, np.nan))  # wrong number of spikes
         write_array(tempdir / 'spike_works.npy', np.random.rand(314))
         write_array(tempdir / 'spike_randn.npy', np.random.randn(314, 2))
-
-    # Spike permutation.
-    write_array(tempdir / 'spike_reorder.npy', np.random.permutation(314))
 
     # TSV file with cluster data.
     write_tsv(

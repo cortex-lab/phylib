@@ -219,6 +219,10 @@ def _close_memmap(name, obj):
 # Template model
 #------------------------------------------------------------------------------
 
+# Special spike_*.npy files that should not be considered as "spike attributes".
+SKIP_SPIKE_ATTRS = ('clusters', 'templates', 'samples', 'times', 'times_reordered', 'amplitudes')
+
+
 class TemplateModel(object):
     """Object holding all data of a KiloSort/phy dataset.
 
@@ -301,9 +305,9 @@ class TemplateModel(object):
         assert self.spike_clusters.shape == (ns,)
 
         # Spike reordering.
-        self.spike_reorder = self._load_spike_reorder()
-        if self.spike_reorder is not None:
-            assert self.spike_reorder.shape == (ns,)
+        self.spike_times_reordered = self._load_spike_reorder()
+        if self.spike_times_reordered is not None:
+            assert self.spike_times_reordered.shape == (ns,)
 
         # Channels.
         self.channel_mapping = self._load_channel_map()
@@ -427,7 +431,7 @@ class TemplateModel(object):
             # The part after spike_***
             n = filename.stem[6:]
             # Skip known files.
-            if n in ('clusters', 'templates', 'samples', 'times', 'amplitudes', 'reorder'):
+            if n in SKIP_SPIKE_ATTRS:
                 continue
             try:
                 arr = self._read_array(filename)
@@ -527,13 +531,16 @@ class TemplateModel(object):
         return out
 
     def _load_spike_reorder(self):
-        path = self._find_path('spike_reorder.npy', multiple_ok=False)
-        if path is None:
-            return
-        logger.debug("Loading spike reorder.")
-        out = self._read_array(path).astype(np.int64)
-        assert out.ndim == 1
-        return out
+        """Load spike_times_reordered.npy, a 1D array with alternative spike times, in number of
+        samples (not in seconds)."""
+        path = self.dir_path / 'spike_times_reordered.npy'
+        if path.exists():
+            logger.debug("Loading spike times reordered.")
+            samples = self._read_array(path).squeeze()
+            times = samples / self.sample_rate
+            print(times.shape, self.n_spikes)
+            assert times.shape == (self.n_spikes,)
+            return times
 
     def _load_spike_samples(self):
         # WARNING: "spike_times.npy" is in units of samples. Need to
