@@ -93,7 +93,7 @@ class EventEmitter(object):
 
         """
         if func is None:
-            return partial(self.connect, sender=sender)
+            return partial(self.connect, event=event, sender=sender, **kwargs)
 
         # Get the event name from the function.
         if event is None:

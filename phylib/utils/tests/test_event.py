@@ -63,8 +63,8 @@ def test_event_single():
 
     l = []
 
-    @ev.connect
-    def on_test(sender):
+    @ev.connect(event='test')
+    def on_test_bou(sender):
         l.append(0)
 
     @ev.connect  # noqa
