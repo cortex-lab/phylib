@@ -538,7 +538,6 @@ class TemplateModel(object):
             logger.debug("Loading spike times reordered.")
             samples = self._read_array(path).squeeze()
             times = samples / self.sample_rate
-            print(times.shape, self.n_spikes)
             assert times.shape == (self.n_spikes,)
             return times
 
