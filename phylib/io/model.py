@@ -820,7 +820,7 @@ class TemplateModel(object):
             if t1 == dur:  # pragma: no cover
                 aft = nsw - w.shape[0]
             assert bef + w.shape[0] + aft == nsw
-            w = np.pad(w, ((bef, aft), (0, 0)))
+            w = np.pad(w, ((bef, aft), (0, 0)), 'constant')
             assert w.shape[0] == nsw
             out[i, ...] = w - np.median(w, axis=0)
         return out
