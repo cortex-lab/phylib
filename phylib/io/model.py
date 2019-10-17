@@ -642,7 +642,7 @@ class TemplateModel(object):
         try:
             logger.debug("Loading features.")
             data = self._read_array(
-                self._find_path('pc_features.npy'))
+                self._find_path('pc_features.npy'), mmap_mode='r')
             if data.ndim == 2:  # pragma: no cover
                 # Deal with npcs = 1.
                 data = data.reshape(data.shape + (1,))
@@ -654,7 +654,7 @@ class TemplateModel(object):
             return
 
         try:
-            cols = self._read_array(self._find_path('pc_feature_ind.npy'))
+            cols = self._read_array(self._find_path('pc_feature_ind.npy'), mmap_mode='r')
             logger.debug("Features are sparse.")
             if cols.ndim == 1:  # pragma: no cover
                 # Deal with npcs = 1.
