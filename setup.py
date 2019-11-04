@@ -42,6 +42,7 @@ setup(
     license="BSD",
     description='Ephys data analysis for thousands of channels',
     long_description=readme,
+    long_description_content_type='text/markdown',
     author='Cyrille Rossant',
     author_email='cyrille.rossant@gmail.com',
     url='https://github.com/cortex-lab/phylib',
