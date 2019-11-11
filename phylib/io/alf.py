@@ -176,7 +176,7 @@ class EphysAlfCreator(object):
         if not peak_channel_path.exists():
             self._save_npy(peak_channel_path.name, self.model.templates_channels)
 
-        waveform_duration_path = self.dir_path / 'clusters.peakToThrough.npy'
+        waveform_duration_path = self.dir_path / 'clusters.peakToTrough.npy'
         if not waveform_duration_path.exists():
             self._save_npy(waveform_duration_path.name, self.model.templates_waveforms_durations)
 
