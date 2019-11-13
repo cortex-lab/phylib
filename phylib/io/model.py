@@ -136,15 +136,16 @@ def _dat_n_samples(filename, dtype=None, n_channels=None, offset=None):
     return n_samples
 
 
-def _dat_to_traces(dat_path, n_channels=None, dtype=None, offset=None):
+def _dat_to_traces(dat_path, n_channels=None, dtype=None, offset=None, order=None):
     """Memmap a dat file."""
     assert dtype is not None
     assert n_channels is not None
     n_samples = _dat_n_samples(dat_path, n_channels=n_channels, dtype=dtype, offset=offset)
-    return np.memmap(str(dat_path), dtype=dtype, shape=(n_samples, n_channels), offset=offset)
+    return np.memmap(
+        str(dat_path), dtype=dtype, shape=(n_samples, n_channels), offset=offset, order=order)
 
 
-def load_raw_data(path=None, n_channels_dat=None, dtype=None, offset=None):
+def load_raw_data(path=None, n_channels_dat=None, dtype=None, offset=None, order=None):
     """Load raw data at a given path."""
     if not path:
         return
@@ -158,7 +159,7 @@ def load_raw_data(path=None, n_channels_dat=None, dtype=None, offset=None):
     assert path.exists()
     logger.debug("Loading traces at `%s`.", path)
     dtype = dtype if dtype is not None else np.int16
-    return _dat_to_traces(path, n_channels=n_channels_dat, dtype=dtype, offset=offset)
+    return _dat_to_traces(path, n_channels=n_channels_dat, dtype=dtype, offset=offset, order=order)
 
 
 #------------------------------------------------------------------------------
@@ -291,6 +292,10 @@ class TemplateModel(object):
         self.spike_samples, self.spike_times = self._load_spike_samples()
         ns, = self.n_spikes, = self.spike_times.shape
 
+        # Make sure the spike times are increasing.
+        if not np.all(np.diff(self.spike_times) >= 0):
+            raise ValueError("The spike times must be increasing.")
+
         # Spike amplitudes.
         self.amplitudes = self._load_amplitudes()
         if self.amplitudes is not None:
@@ -335,10 +340,15 @@ class TemplateModel(object):
 
         # Templates.
         self.sparse_templates = self._load_templates()
-        self.n_templates, self.n_samples_waveforms, self.n_channels_loc = \
-            self.sparse_templates.data.shape
-        if self.sparse_templates.cols is not None:
-            assert self.sparse_templates.cols.shape == (self.n_templates, self.n_channels_loc)
+        if self.sparse_templates is not None:
+            self.n_templates, self.n_samples_waveforms, self.n_channels_loc = \
+                self.sparse_templates.data.shape
+            if self.sparse_templates.cols is not None:
+                assert self.sparse_templates.cols.shape == (self.n_templates, self.n_channels_loc)
+        else:  # pragma: no cover
+            self.n_templates = self.spike_templates.max() + 1
+            self.n_samples_waveforms = 0
+            self.n_channels_loc = 0
 
         # Whitening.
         try:
@@ -737,6 +747,8 @@ class TemplateModel(object):
 
     def _get_template_dense(self, template_id, channel_ids=None):
         """Return data for one template."""
+        if not self.sparse_templates:
+            return
         template_w = self.sparse_templates.data[template_id, ...]
         template = self._unwhiten(template_w).astype(np.float32)
         assert template.ndim == 2
@@ -784,7 +796,7 @@ class TemplateModel(object):
 
     def get_template(self, template_id, channel_ids=None):
         """Get data about a template."""
-        if self.sparse_templates.cols is not None:
+        if self.sparse_templates and self.sparse_templates.cols is not None:
             return self._get_template_sparse(template_id)
         else:
             return self._get_template_dense(template_id, channel_ids=channel_ids)
@@ -947,7 +959,7 @@ class TemplateModel(object):
     def get_template_waveforms(self, template_id):
         """Return the waveforms of a template on the most relevant channels."""
         template = self.get_template(template_id)
-        return template.template
+        return template.template if template else None
 
     def get_template_spike_waveforms(self, template_id):
         """Return all spike waveforms of a template, on the most relevant channels."""
