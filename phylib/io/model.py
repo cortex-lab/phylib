@@ -158,6 +158,16 @@ def load_raw_data(path=None, n_channels_dat=None, dtype=None, offset=None, order
             return None
     assert path.exists()
     logger.debug("Loading traces at `%s`.", path)
+    if str(path).endswith('.cbin'):  # pragma: no cover
+        try:
+            from mtscomp import decompress
+            logger.debug("Decompressing %s on the fly with mtscomp.", path)
+            return decompress(path)
+        except ImportError:
+            logger.warning(
+                "The mtscomp package is not available, %s cannot be decompressed. "
+                "In the meantime, the raw data will not be available.", path)
+            return
     dtype = dtype if dtype is not None else np.int16
     return _dat_to_traces(path, n_channels=n_channels_dat, dtype=dtype, offset=offset, order=order)
 
@@ -375,7 +385,7 @@ class TemplateModel(object):
         else:
             self.duration = self.spike_times[-1]
         if self.spike_times[-1] > self.duration:  # pragma: no cover
-            logger.debug(
+            logger.warning(
                 "There are %d/%d spikes after the end of the recording.",
                 np.sum(self.spike_times > self.duration), self.n_spikes)
 
