@@ -2,7 +2,7 @@ language: python
 dist: xenial
 sudo: false
 python:
-  - "3.7"
+  - "$TRAVIS_PYTHON_VERSION"
 before_install:
   - pip install codecov
 install:
