@@ -653,7 +653,11 @@ class TemplateModel(object):
             mat = mat[np.ix_(channel_ids, channel_ids)]
             assert mat.shape == (len(channel_ids),) * 2
         assert x.shape[1] == mat.shape[0]
-        return np.dot(np.ascontiguousarray(x), np.ascontiguousarray(mat))
+        # WARNING: there is an unexplained scaling discrepancy between raw waveforms and
+        # template waveforms. Multiplying the templates by 20 seems to reduce
+        # the discrepancy. I don't know where this factor comes from.
+        out = np.dot(x, mat) * 20
+        return np.ascontiguousarray(out)
 
     def _load_features(self):
 
