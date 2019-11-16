@@ -1,6 +1,6 @@
 name: phylib
 dependencies:
-  - python
+  - python=3.7
   - pip
   - numpy
   - scipy
