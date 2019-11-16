@@ -653,8 +653,7 @@ class TemplateModel(object):
             mat = mat[np.ix_(channel_ids, channel_ids)]
             assert mat.shape == (len(channel_ids),) * 2
         assert x.shape[1] == mat.shape[0]
-        return np.dot(np.ascontiguousarray(x),
-                      np.ascontiguousarray(mat))
+        return np.dot(np.ascontiguousarray(x), np.ascontiguousarray(mat))
 
     def _load_features(self):
 
@@ -778,6 +777,12 @@ class TemplateModel(object):
         data, cols = self.sparse_templates.data, self.sparse_templates.cols
         assert cols is not None
         template_w, channel_ids = data[template_id], cols[template_id]
+
+        # HACK: dense templates may have been saved as sparse arrays (with all channels),
+        # we need to remove channels with no signal.
+        channel_ids = channel_ids[
+            np.abs(template_w.mean(axis=0)) > np.abs(template_w).max() * .001]
+        template_w = template_w[:, channel_ids]
 
         # Remove unused channels = -1.
         used = channel_ids != -1
