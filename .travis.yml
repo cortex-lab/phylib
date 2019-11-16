@@ -2,7 +2,7 @@ language: python
 dist: xenial
 sudo: false
 python:
-  - "3.8"
+  - "3.7"
 before_install:
   - pip install codecov
 install:
@@ -15,7 +15,7 @@ install:
   - conda info -a
   # Create the environment.
   - conda install pyyaml
-  - conda env create python=$TRAVIS_PYTHON_VERSION
+  - conda env create python=3.7
   - source activate phylib
   - conda install pyqt
   # Dev requirements
