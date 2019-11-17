@@ -33,7 +33,6 @@ _FILE_RENAMES = [  # file_in, file_out, squeeze (bool to squeeze vector from mat
     ('spike_templates.npy', 'spikes.templates.npy', True),
     ('amplitudes.npy', 'spikes.amps.npy', True),
     ('channel_positions.npy', 'channels.localCoordinates.npy', False),
-    ('channel_map.npy', 'channels._phy_ids.npy', True),
     ('channel_probe.npy', 'channels.probes.npy', True),
     ('cluster_probes.npy', 'clusters.probes.npy', True),
     ('cluster_shanks.npy', 'clusters.shanks.npy', True),
