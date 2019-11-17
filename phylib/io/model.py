@@ -602,7 +602,8 @@ class TemplateModel(object):
 
         # Sparse structure: regular array with col indices.
         try:
-            path = self._find_path('templates.npy', 'templates.waveforms*.npy')
+            path = self._find_path('templates.npy', 'templates.waveforms.npy',
+                                   'templates.waveforms.*.npy')
             data = self._read_array(path, mmap_mode='r')
             data = np.atleast_3d(data)
             assert data.ndim == 3
@@ -617,7 +618,7 @@ class TemplateModel(object):
             # That means templates.npy is considered as a dense array.
             # Proper fix would be to save templates.npy as a true sparse array, with proper
             # template_ind.npy (without an s).
-            path = self._find_path('template_ind.npy')
+            path = self._find_path('template_ind.npy', 'templates.waveformsChannels*.npy')
             cols = self._read_array(path)
             cols = np.atleast_2d(cols)
             assert cols.ndim == 2
@@ -1003,8 +1004,11 @@ class TemplateModel(object):
         """Returns a vector of peak channels for all templates"""
         tmp = self.sparse_templates.data
         n_templates, n_samples, n_channels = tmp.shape
-        # Compute the peak channels for each template.
-        template_peak_channels = np.argmax(tmp.max(axis=1) - tmp.min(axis=1), axis=1)
+        if self.sparse_templates.cols is None:
+            template_peak_channels = np.argmax(tmp.max(axis=1) - tmp.min(axis=1), axis=1)
+        else:
+            # when the templates are sparse, the first channel is the highest amplitude channel
+            template_peak_channels = self.sparse_templates.cols[:, 0]
         assert template_peak_channels.shape == (n_templates,)
         return template_peak_channels
 
