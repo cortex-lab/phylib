@@ -228,7 +228,7 @@ class EphysAlfCreator(object):
             n_templates, n_wavsamps, nchall = self.model.sparse_templates.data.shape
             ncw = min(NCH_WAVEFORMS, nchall)  # for some datasets, 32 may be too much
             assert(n_templates == self.model.n_templates)
-            templates = np.zeros((n_templates, n_wavsamps, ncw), dtype=np.float)
+            templates = np.zeros((n_templates, n_wavsamps, ncw), dtype=np.float32)
             templates_inds = np.zeros((n_templates, ncw), dtype=np.int32)
             # for each template, find the nearest channels to keep (one the same probe...)
             for t in np.arange(n_templates):
