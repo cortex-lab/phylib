@@ -464,7 +464,7 @@ class TemplateModel(object):
         return spike_attributes
 
     def _load_channel_map(self):
-        path = self._find_path('channel_map.npy', 'channels._phy_ids*.npy')
+        path = self._find_path('channel_map.npy', 'channels.rawInd*.npy')
         out = self._read_array(path)
         out = np.atleast_1d(out)
         assert out.ndim == 1
@@ -530,6 +530,9 @@ class TemplateModel(object):
         out = self._read_array(path)
         if out.dtype in (np.float32, np.float64):  # pragma: no cover
             out = out.astype(np.int32)
+        uc = np.unique(out)
+        if np.max(uc) - np.min(uc) + 1 != uc.size:
+            logger.warning("Warning: unreferenced clusters found in templates !")
         assert out.dtype in (np.uint32, np.int32, np.int64)
         assert out.ndim == 1
         return out
@@ -547,6 +550,9 @@ class TemplateModel(object):
         # NOTE: we make a copy in memory so that we can update this array
         # during manual clustering.
         out = self._read_array(path).astype(np.int32)
+        uc = np.unique(out)
+        if np.max(uc) - np.min(uc) + 1 != uc.size:
+            logger.warning("Warning: unreferenced clusters found in spike_clusters !")
         assert out.ndim == 1
         return out
 
@@ -596,7 +602,8 @@ class TemplateModel(object):
 
         # Sparse structure: regular array with col indices.
         try:
-            path = self._find_path('templates.npy', 'templates.waveforms*.npy')
+            path = self._find_path('templates.npy', 'templates.waveforms.npy',
+                                   'templates.waveforms.*.npy')
             data = self._read_array(path, mmap_mode='r')
             data = np.atleast_3d(data)
             assert data.ndim == 3
@@ -611,7 +618,7 @@ class TemplateModel(object):
             # That means templates.npy is considered as a dense array.
             # Proper fix would be to save templates.npy as a true sparse array, with proper
             # template_ind.npy (without an s).
-            path = self._find_path('template_ind.npy')
+            path = self._find_path('template_ind.npy', 'templates.waveformsChannels*.npy')
             cols = self._read_array(path)
             cols = np.atleast_2d(cols)
             assert cols.ndim == 2
@@ -997,8 +1004,11 @@ class TemplateModel(object):
         """Returns a vector of peak channels for all templates"""
         tmp = self.sparse_templates.data
         n_templates, n_samples, n_channels = tmp.shape
-        # Compute the peak channels for each template.
-        template_peak_channels = np.argmax(tmp.max(axis=1) - tmp.min(axis=1), axis=1)
+        if self.sparse_templates.cols is None:
+            template_peak_channels = np.argmax(tmp.max(axis=1) - tmp.min(axis=1), axis=1)
+        else:
+            # when the templates are sparse, the first channel is the highest amplitude channel
+            template_peak_channels = self.sparse_templates.cols[:, 0]
         assert template_peak_channels.shape == (n_templates,)
         return template_peak_channels
 

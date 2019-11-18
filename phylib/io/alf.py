@@ -26,22 +26,19 @@ logger = logging.getLogger(__name__)
 # File utils
 #------------------------------------------------------------------------------
 
+NCH_WAVEFORMS = 32  # number of channels to be saved in templates.waveforms and channels.waveforms
 
 _FILE_RENAMES = [  # file_in, file_out, squeeze (bool to squeeze vector from matlab in npy)
     ('params.py', 'params.py', None),
+    ('cluster_metrics.csv', 'clusters.metrics.csv', None),
     ('spike_clusters.npy', 'spikes.clusters.npy', True),
     ('spike_templates.npy', 'spikes.templates.npy', True),
     ('amplitudes.npy', 'spikes.amps.npy', True),
     ('channel_positions.npy', 'channels.localCoordinates.npy', False),
-    ('channel_map.npy', 'channels._phy_ids.npy', True),
     ('channel_probe.npy', 'channels.probes.npy', True),
     ('cluster_probes.npy', 'clusters.probes.npy', True),
     ('cluster_shanks.npy', 'clusters.shanks.npy', True),
-    ('templates.npy', 'templates.waveforms.npy', False),
-    # ('cluster_ContamPct.tsv', 'clusters._ks2_contamication.tsv', False), #Todo convert to numpy
-    # ('probes.description.txt', 'probes.description.txt', False), #
     # ('cluster_group.tsv', 'ks2/clusters.phyAnnotation.tsv', False), # todo check indexing, add2QC
-    # ('cluster_KSLabel.tsv', 'ks2/clusters.group.tsv', False), # todo check indexing, add2QC
 ]
 
 FILE_DELETES = [
@@ -125,7 +122,7 @@ class EphysAlfCreator(object):
             bar.update(5)
             self.make_depths()
             bar.update(10)
-            self.make_mean_waveforms()
+            self.make_template_object()
             bar.update(10)
             self.rm_files()
             bar.update(10)
@@ -220,6 +217,32 @@ class EphysAlfCreator(object):
 
         self._save_npy('spikes.depths.npy', spikes_depths)
         self._save_npy('clusters.depths.npy', clusters_depths)
+
+    def make_template_object(self):
+        """Creates the template waveforms sparse object
+        Without manual curation, it also corresponds to clusters waveforms objects.
+        """
+        if self.model.sparse_templates.cols:
+            raise(NotImplementedError("Sparse template export to ALF not implemented yet"))
+        else:
+            n_templates, n_wavsamps, nchall = self.model.sparse_templates.data.shape
+            ncw = min(NCH_WAVEFORMS, nchall)  # for some datasets, 32 may be too much
+            assert(n_templates == self.model.n_templates)
+            templates = np.zeros((n_templates, n_wavsamps, ncw), dtype=np.float32)
+            templates_inds = np.zeros((n_templates, ncw), dtype=np.int32)
+            # for each template, find the nearest channels to keep (one the same probe...)
+            for t in np.arange(n_templates):
+                current_probe = self.model.channel_probes[self.model.templates_channels[t]]
+                channel_distance = np.sum(np.abs(
+                    self.model.channel_positions -
+                    self.model.channel_positions[self.model.templates_channels[t]]), axis=1)
+                channel_distance[self.model.channel_probes != current_probe] += np.inf
+                templates_inds[t, :] = np.argsort(channel_distance)[:ncw]
+                templates[t, ...] = self.model.sparse_templates.data[t, :][:, templates_inds[t, :]]
+            np.save(self.out_path.joinpath('templates.waveforms'), templates)
+            np.save(self.out_path.joinpath('templates.waveformsChannels'), templates_inds)
+            np.save(self.out_path.joinpath('clusters.waveforms'), templates)
+            np.save(self.out_path.joinpath('clusters.waveformsChannels'), templates_inds)
 
     def make_mean_waveforms(self):
         """Make the mean waveforms file."""

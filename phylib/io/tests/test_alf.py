@@ -85,16 +85,18 @@ def test_ephys_1(dataset):
 def test_creator(dataset):
     _FILE_CREATES = (
         'spikes.times*.npy',
-        'clusters.peakToTrough*.npy',
         'spikes.depths*.npy',
         'spikes.samples*.npy',
-        'clusters.depths*.npy',
-        'clusters.channels*.npy',
-        'clusters.meanWaveforms*.npy',
         'clusters.amps*.npy',
+        'clusters.channels*.npy',
+        'clusters.depths*.npy',
+        'clusters.peakToTrough*.npy',
+        'clusters.waveforms*.npy',
+        'clusters.waveformsChannels*.npy',
         'channels.localCoordinates*.npy',
         'channels.rawInd*.npy',
-        'channels._phy_ids*.npy',
+        'templates.waveforms*.npy',
+        'templates.waveformsChannels*.npy',
     )
     path = Path(dataset.tmp_dir)
     out_path = path / 'alf'
