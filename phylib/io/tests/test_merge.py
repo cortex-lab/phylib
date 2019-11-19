@@ -111,7 +111,8 @@ def test_probe_merge_2(tempdir):
     assert np.all(chid == np.r_[single.channel_mapping, single.channel_mapping])
 
     out_files = list(tempdir.joinpath('alf').glob('*.*'))
-    cl_shape = [np.load(f).shape[0] for f in out_files if f.name.startswith('clusters.')]
+    cl_shape = [np.load(f).shape[0] for f in out_files if f.name.startswith('clusters.') and
+                f.name.endswith('.npy')]
     sp_shape = [np.load(f).shape[0] for f in out_files if f.name.startswith('spikes.')]
     ch_shape = [np.load(f).shape[0] for f in out_files if f.name.startswith('channels.')]
     assert len(set(cl_shape)) == 1

@@ -11,6 +11,7 @@ import logging
 from pathlib import Path
 import shutil
 import ast
+import uuid
 
 from tqdm import tqdm
 import numpy as np
@@ -182,6 +183,11 @@ class EphysAlfCreator(object):
         camps[self.cluster_ids - np.min(self.cluster_ids)] = self.model.templates_amplitudes
         amps_path = self.dir_path / 'clusters.amps.npy'
         self._save_npy(amps_path.name, camps)
+
+        # clusters uuids
+        uuid_list = [str(uuid.uuid4()) for _ in range(camps.size)]
+        with open(self.out_path / 'clusters.uuids.csv', 'w+') as fid:
+            fid.write('\n'.join(uuid_list))
 
     def make_channel_objects(self):
         """If there is no rawInd file, create it"""

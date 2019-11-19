@@ -123,6 +123,7 @@ def test_creator(dataset):
         'spikes.times*.npy',
         'spikes.depths*.npy',
         'spikes.samples*.npy',
+        'clusters.uuids*.csv',
         'clusters.amps*.npy',
         'clusters.channels*.npy',
         'clusters.depths*.npy',
@@ -158,7 +159,8 @@ def test_creator(dataset):
             assert f.exists()
 
         # makes sure the output dimensions match (especially clusters which should be 4)
-        cl_shape = [np.load(f).shape[0] for f in new_files if f.name.startswith('clusters.')]
+        cl_shape = [np.load(f).shape[0] for f in new_files if f.name.startswith('clusters.') and
+                    f.name.endswith('.npy')]
         sp_shape = [np.load(f).shape[0] for f in new_files if f.name.startswith('spikes.')]
         ch_shape = [np.load(f).shape[0] for f in new_files if f.name.startswith('channels.')]
         assert len(set(cl_shape)) == 1
