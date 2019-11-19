@@ -82,6 +82,42 @@ def test_ephys_1(dataset):
     assert dataset._load('mydata.lf.bin').shape == (1000 * dataset.nc,)
 
 
+def test_spike_depths(dataset):
+    path = Path(dataset.tmp_dir)
+    out_path = path / 'alf'
+
+    mtemp = TemplateModel(
+        dir_path=path, dat_path=dataset.dat_path, sample_rate=2000, n_channels_dat=dataset.nc)
+
+    # create some sparse PC features
+    n_subch = int(np.round(mtemp.n_channels / 2) - 1)
+    pc_features = np.zeros((mtemp.n_spikes, n_subch, 3))
+    close_channels = np.meshgrid(np.ones(mtemp.n_templates), np.arange(n_subch))[1]
+    chind = mtemp.templates_channels
+    chind = mtemp.templates_channels + close_channels * ((chind < 5) * 2 - 1)
+    pc_features_ind = chind.transpose()
+    # all PCs max between first and second channel
+    pc_features[:, 0, 0] = 1
+    pc_features[:, 1, 0] = 0.5
+    print(mtemp.templates_channels)
+    print(mtemp.templates_waveforms_durations)
+    # add some depth information
+    mtemp.channel_positions[:, 1] = mtemp.channel_positions[:, 0] + 10
+    np.save(path / 'pc_features.npy', np.swapaxes(pc_features, 2, 1))
+    np.save(path / 'pc_feature_ind.npy', pc_features_ind)
+    np.save(path / 'channel_positions.npy', mtemp.channel_positions)
+
+    model = TemplateModel(
+        dir_path=path, dat_path=dataset.dat_path, sample_rate=2000, n_channels_dat=dataset.nc)
+
+    c = EphysAlfCreator(model)
+    shutil.rmtree(out_path, ignore_errors=True)
+    c.convert(out_path)
+    sd = np.load(next(out_path.glob('spikes.depths.npy')))
+    sd_ = model.channel_positions[model.templates_channels[model.spike_templates], 1]
+    assert np.all(np.abs(sd - sd_) <= 0.5)
+
+
 def test_creator(dataset):
     _FILE_CREATES = (
         'spikes.times*.npy',
@@ -103,8 +139,6 @@ def test_creator(dataset):
 
     model = TemplateModel(
         dir_path=path, dat_path=dataset.dat_path, sample_rate=2000, n_channels_dat=dataset.nc)
-    print(model.templates_channels)
-    print(model.templates_waveforms_durations)
 
     c = EphysAlfCreator(model)
     with raises(IOError):
@@ -137,6 +171,7 @@ def test_creator(dataset):
     def read_after_write():
         model = TemplateModel(dir_path=out_path, dat_path=dataset.dat_path,
                               sample_rate=2000, n_channels_dat=dataset.nc)
+
         np.all(model.spike_templates == c.model.spike_templates)
         np.all(model.spike_times == c.model.spike_times)
         np.all(model.spike_samples == c.model.spike_samples)
