@@ -185,7 +185,8 @@ class EphysAlfCreator(object):
         self._save_npy(amps_path.name, camps)
 
         # clusters uuids
-        uuid_list = [str(uuid.uuid4()) for _ in range(camps.size)]
+        uuid_list = ['uuids']
+        uuid_list.extend([str(uuid.uuid4()) for _ in range(camps.size)])
         with open(self.out_path / 'clusters.uuids.csv', 'w+') as fid:
             fid.write('\n'.join(uuid_list))
 
