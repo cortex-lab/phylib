@@ -34,7 +34,7 @@ class Dataset(object):
         self.nt = 5
         self.ncd = 1000
         np.save(p / 'spike_times.npy', .01 * np.cumsum(nr.exponential(size=self.ns)))
-        np.save(p / 'spike_clusters.npy', nr.randint(low=10, high=10 + self.nt, size=self.ns))
+        np.save(p / 'spike_clusters.npy', nr.randint(low=0, high=self.nt, size=self.ns))
         shutil.copy(p / 'spike_clusters.npy', p / 'spike_templates.npy')
         np.save(p / 'amplitudes.npy', nr.uniform(low=0.5, high=1.5, size=self.ns))
         np.save(p / 'channel_positions.npy', np.c_[np.arange(self.nc), np.zeros(self.nc)])

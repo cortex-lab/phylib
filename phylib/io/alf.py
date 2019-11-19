@@ -16,7 +16,7 @@ from tqdm import tqdm
 import numpy as np
 
 from phylib.utils._misc import _read_tsv_simple, ensure_dir_exists
-from phylib.io.array import _spikes_per_cluster, select_spikes, _unique, grouped_mean, _index_of
+from phylib.io.array import _spikes_per_cluster, select_spikes, _unique, grouped_mean
 from phylib.io.model import load_model
 
 logger = logging.getLogger(__name__)
@@ -201,7 +201,6 @@ class EphysAlfCreator(object):
 
         spike_clusters = self.model.spike_clusters
         assert spike_clusters.ndim == 1
-        n_spikes = spike_clusters.shape[0]
 
         cluster_channels = np.load(self.out_path / 'clusters.channels.npy')
         assert cluster_channels.ndim == 1
@@ -210,10 +209,8 @@ class EphysAlfCreator(object):
         clusters_depths = channel_positions[cluster_channels, 1]
         assert clusters_depths.shape == (n_clusters,)
 
-        spike_clusters_rel = _index_of(spike_clusters, self.cluster_ids)
-        assert spike_clusters_rel.max() < clusters_depths.shape[0]
-        spikes_depths = clusters_depths[spike_clusters_rel]
-        assert spikes_depths.shape == (n_spikes,)
+        if self.model.sparse_features is None:
+            spikes_depths = clusters_depths[spike_clusters]
 
         self._save_npy('spikes.depths.npy', spikes_depths)
         self._save_npy('clusters.depths.npy', clusters_depths)
