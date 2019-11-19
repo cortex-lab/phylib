@@ -106,7 +106,7 @@ class EphysAlfCreator(object):
         logger.info("Converting dataset to ALF.")
         self.out_path = Path(out_path)
         self.label = label
-        self.ampfactor = 1
+        self.ampfactor = ampfactor
         if self.out_path.resolve() == self.dir_path.resolve():
             raise IOError("The source and target directories cannot be the same.")
         if not self.out_path.exists():
