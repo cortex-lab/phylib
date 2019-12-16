@@ -143,14 +143,16 @@ def get_non_overlapping_boxes(box_pos):
     box_pos = range_transform([[mx, my, Mx, My]], [[-1, -1, +1, +1]], box_pos)
     # Compute box size.
     x, y = box_pos.T
-    w, h = _find_box_size(x, y, margin=.25)
+    w, h = _find_box_size(x, y, margin=.1)
     # Renormalize again so that the boxes fit inside the view.
     mx, my = np.min(box_pos - np.array([[w, h]]), axis=0)
     Mx, My = np.max(box_pos + np.array([[w, h]]), axis=0)
     b1 = [[mx, my, Mx, My]]
-    b2 = [[-.9, -.9, +.9, +.9]]
+    b2 = [[-1, -1, 1, 1]]
     box_pos = range_transform(b1, b2, box_pos)
     w, h = range_transform(b1, b2, [[w, h]], do_offset=False).ravel()
+    w *= .95
+    h *= .9
     logger.debug("Found box size %s.", (w, h))
     return box_pos, (w, h)
 

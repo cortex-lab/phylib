@@ -112,7 +112,7 @@ def test_get_non_overlapping_boxes_1(n_channels):
 def test_get_non_overlapping_boxes_2():
     pos = staggered_positions(32)
     box_pos, box_size = get_non_overlapping_boxes(pos)
-    assert box_size[0] >= .5
+    assert box_size[0] >= .05
 
     s = np.array([box_size])
     box_bounds = np.c_[box_pos - s, box_pos + s]
