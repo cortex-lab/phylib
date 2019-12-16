@@ -143,7 +143,7 @@ class EphysAlfCreator(object):
                 h = _read_npy_header(f0)
                 # ks2 outputs vectors as multidimensional arrays. If there is no distinction
                 # for Matlab, there is one in Numpy
-                if len(h['shape']) == 2 and h['shape'][-1] == 1:
+                if len(h['shape']) == 2 and h['shape'][-1] == 1:  # pragma: no cover
                     d = np.load(f0)
                     np.save(f1, d.squeeze())
                     continue
