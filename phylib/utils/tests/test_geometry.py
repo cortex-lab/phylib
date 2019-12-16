@@ -10,6 +10,7 @@
 import numpy as np
 from numpy.testing import assert_array_equal as ae
 from numpy.testing import assert_allclose as ac
+import pytest
 
 from ..geometry import (
     linear_positions,
@@ -17,6 +18,8 @@ from ..geometry import (
     _get_data_bounds,
     _boxes_overlap,
     _binary_search,
+    _find_box_size,
+    get_non_overlapping_boxes,
 )
 
 
@@ -80,6 +83,41 @@ def test_binary_search():
     ac(_binary_search(f, 0, 1), .4)
     ac(_binary_search(f, 0, .3), .3)
     ac(_binary_search(f, .5, 1), .5)
+
+
+def test_find_box_size():
+    x = np.zeros(5)
+    y = np.linspace(-1, 1, 5)
+    w, h = _find_box_size(x, y, margin=0)
+    ac(w, .5, atol=1e-8)
+    ac(h, .25, atol=1e-8)
+
+
+@pytest.mark.parametrize('n_channels', [5, 500])
+def test_get_non_overlapping_boxes_1(n_channels):
+    x = np.zeros(n_channels)
+    y = np.linspace(-1, 1, n_channels)
+    box_pos, box_size = get_non_overlapping_boxes(np.c_[x, y])
+    ac(box_pos[:, 0], 0, atol=1e-8)
+    ac(box_pos[:, 1], -box_pos[::-1, 1], atol=1e-8)
+
+    assert box_size[0] >= .8
+
+    s = np.array([box_size])
+    box_bounds = np.c_[box_pos - s, box_pos + s]
+    assert box_bounds.min() >= -1
+    assert box_bounds.max() <= +1
+
+
+def test_get_non_overlapping_boxes_2():
+    pos = staggered_positions(32)
+    box_pos, box_size = get_non_overlapping_boxes(pos)
+    assert box_size[0] >= .5
+
+    s = np.array([box_size])
+    box_bounds = np.c_[box_pos - s, box_pos + s]
+    assert box_bounds.min() >= -1
+    assert box_bounds.max() <= +1
 
 
 def test_positions():

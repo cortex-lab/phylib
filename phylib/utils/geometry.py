@@ -132,6 +132,29 @@ def _find_box_size(x, y, ar=.5, margin=0):
     return w, h
 
 
+def get_non_overlapping_boxes(box_pos):
+    """Normalize box positions and return a convenient half box size."""
+    box_pos = np.asarray(box_pos)
+    assert box_pos.ndim == 2
+    assert box_pos.shape[1] == 2
+    # Renormalize box_pos.
+    mx, my = box_pos.min(axis=0)
+    Mx, My = box_pos.max(axis=0)
+    box_pos = range_transform([[mx, my, Mx, My]], [[-1, -1, +1, +1]], box_pos)
+    # Compute box size.
+    x, y = box_pos.T
+    w, h = _find_box_size(x, y, margin=.25)
+    # Renormalize again so that the boxes fit inside the view.
+    mx, my = np.min(box_pos - np.array([[w, h]]), axis=0)
+    Mx, My = np.max(box_pos + np.array([[w, h]]), axis=0)
+    b1 = [[mx, my, Mx, My]]
+    b2 = [[-.9, -.9, +.9, +.9]]
+    box_pos = range_transform(b1, b2, box_pos)
+    w, h = range_transform(b1, b2, [[w, h]], do_offset=False).ravel()
+    logger.debug("Found box size %s.", (w, h))
+    return box_pos, (w, h)
+
+
 #------------------------------------------------------------------------------
 # Data bounds utilities
 #------------------------------------------------------------------------------
