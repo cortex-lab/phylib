@@ -17,8 +17,6 @@ from ..geometry import (
     _get_data_bounds,
     _boxes_overlap,
     _binary_search,
-    _get_boxes,
-    _get_box_pos_size,
 )
 
 
@@ -67,6 +65,14 @@ def test_boxes_overlap():
     x0, y0, x1, y1 = _get_args(boxes)
     assert _boxes_overlap(x0, y0, x1, y1)
 
+    x = np.zeros((5, 1))
+    x0 = x - .1
+    x1 = x + .1
+    y = np.linspace(-1, 1, 5)[:, np.newaxis]
+    y0 = y - .2
+    y1 = y + .2
+    assert not _boxes_overlap(x0, y0, x1, y1)
+
 
 def test_binary_search():
     def f(x):
@@ -74,39 +80,6 @@ def test_binary_search():
     ac(_binary_search(f, 0, 1), .4)
     ac(_binary_search(f, 0, .3), .3)
     ac(_binary_search(f, .5, 1), .5)
-
-
-def test_get_boxes():
-    positions = [[-1, 0], [1, 0]]
-    boxes = _get_boxes(positions)
-    ac(boxes, [[-1, -.25, 0, .25],
-               [+0, -.25, 1, .25]], atol=1e-4)
-
-    positions = [[-1, 0], [1, 0]]
-    boxes = _get_boxes(positions, keep_aspect_ratio=False)
-    ac(boxes, [[-1, -1, 0, 1],
-               [0, -1, 1, 1]], atol=1e-4)
-
-    positions = linear_positions(4)
-    boxes = _get_boxes(positions)
-    ac(boxes, [[-0.5, -1.0, +0.5, -0.5],
-               [-0.5, -0.5, +0.5, +0.0],
-               [-0.5, +0.0, +0.5, +0.5],
-               [-0.5, +0.5, +0.5, +1.0],
-               ], atol=1e-4)
-
-    positions = staggered_positions(8)
-    boxes = _get_boxes(positions)
-    ac(boxes[:, 1], np.arange(.75, -1.1, -.25), atol=1e-6)
-    ac(boxes[:, 3], np.arange(1, -.76, -.25), atol=1e-7)
-
-
-def test_get_box_pos_size():
-    bounds = [[-1, -.25, 0, .25],
-              [+0, -.25, 1, .25]]
-    pos, size = _get_box_pos_size(bounds)
-    ae(pos, [[-.5, 0], [.5, 0]])
-    assert size == (.5, .25)
 
 
 def test_positions():

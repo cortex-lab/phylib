@@ -7,6 +7,7 @@
 # Imports
 #------------------------------------------------------------------------------
 
+from functools import partial
 import logging
 
 import numpy as np
@@ -36,28 +37,41 @@ def staggered_positions(n_channels):
 # Box positioning
 #------------------------------------------------------------------------------
 
-def range_transform(from_bounds, to_bounds, positions):
+def range_transform(from_bounds, to_bounds, positions, do_offset=True):
     """Transform for a rectangle to another."""
     from_bounds = np.asarray(from_bounds)
     to_bounds = np.asarray(to_bounds)
     positions = np.asarray(positions)
+
+    assert from_bounds.ndim == to_bounds.ndim == positions.ndim == 2
 
     f0 = from_bounds[..., :2]
     f1 = from_bounds[..., 2:]
     t0 = to_bounds[..., :2]
     t1 = to_bounds[..., 2:]
 
+    # Degenerate axes are extended maximally.
+    for z0, z1 in ((f0, f1), (t0, t1)):
+        for i in range(2):
+            ind = np.abs(z0[:, i] - z1[:, i]) < 1e-3
+            z0[ind, i] = -1
+            z1[ind, i] = +1
+
     d = (f1 - f0)
     d[d == 0] = 1
 
     out = positions.copy()
-    out -= f0
+    if do_offset:
+        out -= f0
     out *= (t1 - t0) / d
-    out += t0
+    if do_offset:
+        out += t0
     return out
 
 
 def _boxes_overlap(x0, y0, x1, y1):
+    """Return whether a set of boxes, defined by their 2D corners, overlap or  not."""
+    assert x0.ndim == y0.ndim == y0.ndim == y1.ndim == 2
     n = len(x0)
     overlap_matrix = ((x0 < x1.T) & (x1 > x0.T) & (y0 < y1.T) & (y1 > y0.T))
     overlap_matrix[np.arange(n), np.arange(n)] = False
@@ -81,7 +95,13 @@ def _binary_search(f, xmin, xmax, eps=1e-9):
     return middle
 
 
-def _get_box_size(x, y, ar=.5, margin=0):
+def _find_box_size(x, y, ar=.5, margin=0):
+    """Return the maximum (half) box size such that boxes centered around box positions
+    do not overlap."""
+    if x.ndim == 1:
+        x = x[:, np.newaxis]
+    if y.ndim == 1:
+        y = y[:, np.newaxis]
     logger.log(5, "Get box size for %d points.", len(x))
     # Deal with degenerate x case.
     xmin, xmax = x.min(), x.max()
@@ -91,11 +111,12 @@ def _get_box_size(x, y, ar=.5, margin=0):
     else:
         wmax = xmax - xmin
 
-    def f1(w):
+    def f1(w, keep_aspect_ratio=True, h=None):
         """Return true if the configuration with the current box size
         is non-overlapping."""
         # NOTE: w|h are the *half* width|height.
-        h = w * ar  # fixed aspect ratio
+        if keep_aspect_ratio:
+            h = w * ar  # fixed aspect ratio
         return not _boxes_overlap(x - w, y - h, x + w, y + h)
 
     # Find the largest box size leading to non-overlapping boxes.
@@ -104,64 +125,16 @@ def _get_box_size(x, y, ar=.5, margin=0):
     # Clip the half-width.
     h = w * ar  # aspect ratio
 
+    # Extend the boxes horizontally as much as possible.
+    w = _binary_search(partial(f1, keep_aspect_ratio=False, h=h), w, wmax)
+    w = w * (1 - margin)  # margin
+
     return w, h
 
 
-def _get_boxes(pos, size=None, margin=0, keep_aspect_ratio=True):
-    """Generate non-overlapping boxes in NDC from a set of positions."""
-
-    # Margin.
-    a = margin
-
-    # Get x, y.
-    pos = np.asarray(pos, dtype=np.float64)
-    x, y = pos.T
-    x = x[:, np.newaxis]
-    y = y[:, np.newaxis]
-
-    w, h = size if size is not None else _get_box_size(x, y, margin=margin)
-
-    x0, y0 = x - w, y - h
-    x1, y1 = x + w, y + h
-
-    # Renormalize the whole thing by keeping the aspect ratio.
-    x0min, y0min, x1max, y1max = x0.min(), y0.min(), x1.max(), y1.max()
-    if not keep_aspect_ratio:
-        b = (x0min, y0min, x1max, y1max)
-    else:
-        dx = x1max - x0min
-        dy = y1max - y0min
-        if dx > dy:
-            b = (x0min, (y1max + y0min) / 2. - dx / 2.,
-                 x1max, (y1max + y0min) / 2. + dx / 2.)
-        else:
-            b = ((x1max + x0min) / 2. - dy / 2., y0min,
-                 (x1max + x0min) / 2. + dy / 2., y1max)
-    fb = np.asarray(b)
-    tb = np.asarray((-1 + a, -1 + a, 1 - a, 1 - a))
-    return np.c_[
-        range_transform(fb, tb, np.c_[x0, y0]),
-        range_transform(fb, tb, np.c_[x1, y1])
-    ]
-
-
-def _get_box_pos_size(box_bounds):
-    box_bounds = np.asarray(box_bounds)
-    x0, y0, x1, y1 = box_bounds.T
-    w = (x1 - x0) * .5
-    h = (y1 - y0) * .5
-    x = (x0 + x1) * .5
-    y = (y0 + y1) * .5
-    return np.c_[x, y], (w.mean(), h.mean())
-
-
-def _check_data_bounds(data_bounds):
-    """Check that a data bounds is a valid."""
-    assert data_bounds.ndim == 2
-    assert data_bounds.shape[1] == 4
-    assert np.all(data_bounds[:, 0] < data_bounds[:, 2])
-    assert np.all(data_bounds[:, 1] < data_bounds[:, 3])
-
+#------------------------------------------------------------------------------
+# Data bounds utilities
+#------------------------------------------------------------------------------
 
 def _get_data_bounds(data_bounds, pos=None, length=None):
     """"Prepare data bounds, possibly using min/max of the data."""
@@ -191,5 +164,9 @@ def _get_data_bounds(data_bounds, pos=None, length=None):
     # Check the shape of data_bounds.
     assert data_bounds.shape == (length, 4)
 
-    _check_data_bounds(data_bounds)
+    assert data_bounds.ndim == 2
+    assert data_bounds.shape[1] == 4
+    assert np.all(data_bounds[:, 0] < data_bounds[:, 2])
+    assert np.all(data_bounds[:, 1] < data_bounds[:, 3])
+
     return data_bounds
