@@ -791,9 +791,9 @@ class TemplateModel(object):
 
         # HACK: dense templates may have been saved as sparse arrays (with all channels),
         # we need to remove channels with no signal.
-        channel_ids = channel_ids[
-            np.abs(template_w.mean(axis=0)) > np.abs(template_w).max() * .001]
-        template_w = template_w[:, channel_ids]
+        has_signal = np.abs(template_w.mean(axis=0)) > np.abs(template_w).max() * .001
+        channel_ids = channel_ids[has_signal]
+        template_w = template_w[:, has_signal]
 
         # Remove unused channels = -1.
         used = channel_ids != -1
