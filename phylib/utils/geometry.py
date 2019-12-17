@@ -53,7 +53,7 @@ def range_transform(from_bounds, to_bounds, positions, do_offset=True):
     # Degenerate axes are extended maximally.
     for z0, z1 in ((f0, f1), (t0, t1)):
         for i in range(2):
-            ind = np.abs(z0[:, i] - z1[:, i]) < 1e-3
+            ind = np.abs(z0[:, i] - z1[:, i]) < 1e-8
             z0[ind, i] = -1
             z1[ind, i] = +1
 
@@ -153,7 +153,7 @@ def get_non_overlapping_boxes(box_pos):
     w, h = range_transform(b1, b2, [[w, h]], do_offset=False).ravel()
     w *= .95
     h *= .9
-    logger.debug("Found box size %s.", (w, h))
+    logger.log(5, "Found box size %s.", (w, h))
     return box_pos, (w, h)
 
 

@@ -406,14 +406,16 @@ class TemplateModel(object):
         # Metadata.
         self.metadata = self._load_metadata()
 
-    def _find_path(self, *names, multiple_ok=True):
-        """ several """
+    def _find_path(self, *names, multiple_ok=True, mandatory=True):
         full_paths = list(l[0] for l in [list(self.dir_path.glob(name)) for name in names] if l)
-        return _find_first_existing_path(*full_paths, multiple_ok=multiple_ok)
+        path = _find_first_existing_path(*full_paths, multiple_ok=multiple_ok)
+        if mandatory and not path:
+            raise IOError("None of these files could be found: %s." % ', '.join(names))
+        return path
 
     def _read_array(self, path, mmap_mode=None):
         if not path:
-            raise IOError(path)
+            raise IOError()
         return read_array(path, mmap_mode=mmap_mode).squeeze()
 
     def _write_array(self, path, arr):
@@ -538,7 +540,8 @@ class TemplateModel(object):
         return out
 
     def _load_spike_clusters(self):
-        path = self._find_path('spike_clusters.npy', 'spikes.clusters*.npy', multiple_ok=False)
+        path = self._find_path(
+            'spike_clusters.npy', 'spikes.clusters*.npy', multiple_ok=False, mandatory=False)
         if path is None:
             # Create spike_clusters file if it doesn't exist.
             tmp_path = self._find_path('spike_templates.npy', 'spikes.clusters*.npy')
@@ -577,9 +580,9 @@ class TemplateModel(object):
             times = samples / self.sample_rate
         else:
             # WARNING: spikes.times.npy is in seconds, not samples !
-            times_path = self._find_path('spikes.times*.npy')
+            times_path = self._find_path('spikes.times*.npy', mandatory=False)
             times = self._read_array(times_path)
-            samples_path = self._find_path('spikes.samples*.npy')
+            samples_path = self._find_path('spikes.samples*.npy', mandatory=False)
             if samples_path:
                 samples = self._read_array(samples_path)
             else:
@@ -602,8 +605,8 @@ class TemplateModel(object):
 
         # Sparse structure: regular array with col indices.
         try:
-            path = self._find_path('templates.npy', 'templates.waveforms.npy',
-                                   'templates.waveforms.*.npy')
+            path = self._find_path(
+                'templates.npy', 'templates.waveforms.npy', 'templates.waveforms.*.npy')
             data = self._read_array(path, mmap_mode='r')
             data = np.atleast_3d(data)
             assert data.ndim == 3
@@ -786,9 +789,12 @@ class TemplateModel(object):
         assert cols is not None
         template_w, channel_ids = data[template_id], cols[template_id]
 
-        # HACK: dense templates may have been saved as sparse arrays (with all channels),
+        # KS2 HACK: dense templates may have been saved as sparse arrays (with all channels),
         # we need to remove channels with no signal.
-        has_signal = np.abs(template_w.mean(axis=0)) > np.abs(template_w).max() * .001
+
+        # template_w is (n_samples, n_channels)
+        template_max = np.abs(template_w).max(axis=0)  # n_channels
+        has_signal = template_max > template_max.max() * 1e-6
         channel_ids = channel_ids[has_signal]
         template_w = template_w[:, has_signal]
 
@@ -806,12 +812,13 @@ class TemplateModel(object):
         # Compute the amplitude and the channel with max amplitude.
         amplitude = template.max(axis=0) - template.min(axis=0)
         best_channel = channel_ids[np.argmax(amplitude)]
-        return Bunch(
+        out = Bunch(
             template=template,
             amplitude=amplitude,
             best_channel=best_channel,
             channel_ids=channel_ids,
         )
+        return out
 
     #--------------------------------------------------------------------------
     # Data access methods
