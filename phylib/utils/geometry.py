@@ -157,6 +157,19 @@ def get_non_overlapping_boxes(box_pos):
     return box_pos, (w, h)
 
 
+def get_closest_box(pos, box_pos, box_size):
+    """Return the box closest to a given point."""
+    # box_size is the half size
+    # see https://gamedev.stackexchange.com/a/44496
+    w, h = box_size
+    x, y = pos
+    px, py = box_pos.T
+    dx = np.maximum(np.abs(px - x) - w, 0)
+    dy = np.maximum(np.abs(py - y) - h, 0)
+    d = dx * dx + dy * dy
+    return np.argmin(d)
+
+
 #------------------------------------------------------------------------------
 # Data bounds utilities
 #------------------------------------------------------------------------------

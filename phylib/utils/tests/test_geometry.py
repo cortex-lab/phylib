@@ -20,6 +20,7 @@ from ..geometry import (
     _binary_search,
     _find_box_size,
     get_non_overlapping_boxes,
+    get_closest_box,
 )
 
 
@@ -118,6 +119,26 @@ def test_get_non_overlapping_boxes_2():
     box_bounds = np.c_[box_pos - s, box_pos + s]
     assert box_bounds.min() >= -1
     assert box_bounds.max() <= +1
+
+
+def test_get_closest_box():
+    n = 10
+    px = np.zeros(n)
+    py = np.linspace(-1, 1, n)
+    box_pos = np.c_[px, py]
+    w, h = (1, .9 / n)
+    expected = []
+    for x in (0, -1, 1, -2, +2):
+        for i in range(n):
+            expected.extend([
+                (x, py[i], i),
+                (x, py[i] - h, i),
+                (x, py[i] + h, i),
+                (x, py[i] - 1.25 * h, max(0, min(i - 1, n - 1))),
+                (x, py[i] + 1.25 * h, max(0, min(i + 1, n - 1))),
+            ])
+    for x, y, i in expected:
+        assert get_closest_box((x, y), box_pos, (w, h)) == i
 
 
 def test_positions():
