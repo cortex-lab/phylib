@@ -294,6 +294,10 @@ class ConcatenatedArrays(object):
                  else self.arrs[0].shape[1])
         return (self.offsets[-1], ncols)
 
+    @property
+    def ndim(self):
+        return len(self.shape)
+
     def _get_recording(self, index):
         """Return the recording that contains a given index."""
         assert index >= 0
