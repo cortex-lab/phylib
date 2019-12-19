@@ -109,7 +109,8 @@ class EventEmitter(object):
         self._callbacks = [
             (event, sender, f, kwargs)
             for (event, sender, f, kwargs) in self._callbacks
-            if f not in items and sender not in items]
+            if f not in items and sender not in items and
+            getattr(f, '__self__', None) not in items]
 
     def emit(self, event, sender, *args, **kwargs):
         """Call all callback functions registered with an event.
