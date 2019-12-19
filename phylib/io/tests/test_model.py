@@ -112,6 +112,7 @@ def test_model_save(template_model_full):
     m.save_mean_waveforms({1: Bunch(
         channel_ids=np.arange(m.n_channels),
         data=np.zeros((1, m.n_samples_waveforms, m.n_channels)))})
+    m.save_spike_waveforms()
 
 
 def test_model_metadata_1(template_model_full):
