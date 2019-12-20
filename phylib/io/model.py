@@ -883,22 +883,32 @@ class TemplateModel(object):
 
     def get_waveforms(self, spike_ids, channel_ids=None):
         """Return spike waveforms on specified channels."""
-        if self.traces is None:
+        if self.traces is None and self.spike_waveforms is None:
             return
-        if self.spike_waveforms is not None:
-            # TODO
-            pass
-
         # Create the output array.
         ns = len(spike_ids)
         nsw = self.n_samples_waveforms
-        nc = len(channel_ids) if channel_ids is not None else self.n_channels
-        out = np.empty((ns, nsw, nc), dtype=np.float64)
+        channel_ids = np.arange(self.n_channels) if channel_ids is None else channel_ids
+
+        nc = len(channel_ids)
+        out = np.zeros((ns, nsw, nc), dtype=np.float64)
 
         # Extract the spike waveforms.
         for i, ts in enumerate(self.spike_samples[spike_ids]):
-            out[i, ...] = _extract_waveforms(
-                self.traces, ts, channel_ids=channel_ids, n_samples_waveforms=nsw)
+            if self.spike_waveforms is not None:  # pragma: no cover
+                # NOTE: this has not be extensively tested yet.
+                # Precomputed waveforms in spikes.waveforms.npy
+                ind = self.spike_waveforms.channel_ids[i, :]
+                channel_common = np.intersect1d(channel_ids, ind)
+                if len(channel_ids) > 0:
+                    cols0 = _index_of(channel_common, channel_ids)
+                    cols1 = _index_of(channel_common, ind)
+                    assert len(cols0) == len(cols1)
+                    out[i, :, cols0] = self.spike_waveforms.waveforms[i, :, cols1]
+            else:
+                # Extract waveforms on the fly from raw data.
+                out[i, ...] = _extract_waveforms(
+                    self.traces, ts, channel_ids=channel_ids, n_samples_waveforms=nsw)
             out[i, ...] -= np.median(out[i, ...], axis=0)
         return out
 
@@ -913,7 +923,7 @@ class TemplateModel(object):
 
         # Initialize the output array.
         features = np.empty((ns, n_channels_loc, n_pcs))
-        features[:] = np.NAN
+        features[:] = np.nan
 
         if sf.rows is not None:
             s = np.intersect1d(spike_ids, sf.rows)
