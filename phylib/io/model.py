@@ -570,7 +570,8 @@ class TemplateModel(object):
             out = out.astype(np.int32)
         uc = np.unique(out)
         if np.max(uc) - np.min(uc) + 1 != uc.size:
-            logger.warning("Warning: unreferenced clusters found in templates !")
+            logger.warning(
+                "Unreferenced clusters found in templates (generally not a problem)")
         assert out.dtype in (np.uint32, np.int32, np.int64)
         assert out.ndim == 1
         return out
@@ -591,7 +592,8 @@ class TemplateModel(object):
         out = self._read_array(path).astype(np.int32)
         uc = np.unique(out)
         if np.max(uc) - np.min(uc) + 1 != uc.size:
-            logger.warning("Warning: unreferenced clusters found in spike_clusters !")
+            logger.warning(
+                "Unreferenced clusters found in spike_clusters (generally not a problem)")
         assert out.ndim == 1
         return out
 
