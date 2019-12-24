@@ -1,7 +1,5 @@
 numpy
 scipy
-matplotlib
-colorcet
 requests
 tqdm
 joblib

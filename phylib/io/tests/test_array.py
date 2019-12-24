@@ -12,7 +12,7 @@ import numpy as np
 from pytest import raises
 
 from ..array import (
-    _unique, _normalize, _index_of, _in_polygon, _spikes_in_clusters, _spikes_per_cluster,
+    _unique, _normalize, _index_of, _spikes_in_clusters, _spikes_per_cluster,
     _flatten_per_cluster, get_closest_clusters, _get_data_lim, _flatten, _start_stop,
     select_spikes, Selector, chunk_bounds, regular_subset, excerpts, data_chunk, grouped_mean,
     get_excerpts, _concatenate_virtual_arrays, _range_from_slice, _pad, _get_padded,
@@ -172,17 +172,6 @@ def test_as_array():
 
     with raises(ValueError):
         _as_array(map)
-
-
-def test_in_polygon():
-    polygon = [[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]
-    points = np.random.uniform(size=(100, 2), low=-1, high=1)
-    idx_expected = np.nonzero((points[:, 0] > 0) &
-                              (points[:, 1] > 0) &
-                              (points[:, 0] < 1) &
-                              (points[:, 1] < 1))[0]
-    idx = np.nonzero(_in_polygon(points, polygon))[0]
-    ae(idx, idx_expected)
 
 
 def test_flatten():

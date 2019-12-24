@@ -5,7 +5,6 @@ dependencies:
   - numpy
   - scipy
   - pip:
-    - colorcet
     - requests
     - tqdm
     - joblib

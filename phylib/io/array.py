@@ -179,19 +179,6 @@ def _get_padded(data, start, end):
         return data[start:end]
 
 
-def _in_polygon(points, polygon):
-    """Return the points that are inside a polygon."""
-    from matplotlib.path import Path
-    points = _as_array(points)
-    polygon = _as_array(polygon)
-    assert points.ndim == 2
-    assert polygon.ndim == 2
-    if len(polygon):
-        polygon = np.vstack((polygon, polygon[0]))
-    path = Path(polygon, closed=True)
-    return path.contains_points(points)
-
-
 def _get_data_lim(arr, n_spikes=None):
     n = arr.shape[0]
     k = max(1, n // n_spikes) if n_spikes else 1
