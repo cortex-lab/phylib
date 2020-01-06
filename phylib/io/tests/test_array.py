@@ -16,7 +16,7 @@ from ..array import (
     _flatten_per_cluster, get_closest_clusters, _get_data_lim, _flatten, _start_stop,
     select_spikes, Selector, chunk_bounds, regular_subset, excerpts, data_chunk, grouped_mean,
     get_excerpts, _concatenate_virtual_arrays, _range_from_slice, _pad, _get_padded,
-    read_array, write_array, RandomVirtualArray)
+    select_spikes_from_chunked, read_array, write_array, RandomVirtualArray)
 from phylib.utils._types import _as_array
 from phylib.utils.testing import _assert_equal as ae
 from ..mock import artificial_spike_clusters
@@ -441,3 +441,17 @@ def test_select_spikes_random():
                       )
     assert len(s) == 2
     assert np.all(np.in1d(s, [2, 3, 4]))
+
+
+def test_spikes_from_chunked():
+    chunk_offsets = [0,      4,       9,   12,    20]  # noqa
+    spike_times =  [   1, 3, 4, 5, 7,         15]  # noqa
+
+    ae(select_spikes_from_chunked(spike_times, chunk_offsets, 0), [])
+    ae(select_spikes_from_chunked(spike_times, chunk_offsets, 1), [4])
+    ae(select_spikes_from_chunked(spike_times, chunk_offsets, 2), [4, 5])
+    ae(select_spikes_from_chunked(spike_times, chunk_offsets, 3), [4, 5, 7])
+    ae(select_spikes_from_chunked(spike_times, chunk_offsets, 4), [1, 4, 5, 7])
+    ae(select_spikes_from_chunked(spike_times, chunk_offsets, 5), [1, 3, 4, 5, 7])
+    ae(select_spikes_from_chunked(spike_times, chunk_offsets, 6), spike_times)
+    ae(select_spikes_from_chunked(spike_times, chunk_offsets, 10), spike_times)

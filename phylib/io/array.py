@@ -599,6 +599,32 @@ def select_spikes(
     return _flatten_per_cluster(selection)
 
 
+def select_spikes_from_chunked(spike_times, chunk_offsets, max_n_spikes):
+    """Select a maximum number of spikes among the specified ones so as to minimize the
+    number of chunks that contain those spikes."""
+    if len(spike_times) <= max_n_spikes:
+        return spike_times
+    spike_times = _as_array(spike_times)
+    chunk_offsets = _as_array(chunk_offsets)
+    spike_chunks = np.searchsorted(chunk_offsets, spike_times, side='right') - 1
+    chunk_sizes = np.bincount(spike_chunks)
+    best_chunks = np.argsort(chunk_sizes)[::-1]
+    keep = np.zeros(len(spike_times), dtype=np.bool)
+    total = 0
+    for chunk_idx in best_chunks:
+        in_chunks = np.isin(spike_chunks, chunk_idx)
+        n_spikes_chunk = np.sum(in_chunks)
+        if total + n_spikes_chunk > max_n_spikes:
+            # Truncate to get the exact number of requested spikes.
+            last = np.nonzero(np.cumsum(in_chunks) <= max_n_spikes - total)[0][-1]
+            in_chunks[last + 1:] = False
+        keep[in_chunks] = True
+        total += n_spikes_chunk
+        if total >= max_n_spikes:
+            break
+    return spike_times[keep]
+
+
 class Selector(object):
     """This object is passed with the `select` event when clusters are
     selected. It allows to make selections of spikes."""
