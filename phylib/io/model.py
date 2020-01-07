@@ -19,7 +19,8 @@ from numpy.lib.format import open_memmap
 import scipy.io as sio
 from tqdm import tqdm
 
-from .array import _concatenate_virtual_arrays, _index_of, _spikes_in_clusters, RandomVirtualArray
+from .array import (
+    _concatenate_virtual_arrays, _index_of, _spikes_in_clusters, RandomVirtualArray, _clip)
 from phylib.utils import Bunch
 from phylib.utils._misc import _write_tsv_simple, _read_tsv_simple, read_python
 from phylib.utils.geometry import linear_positions
@@ -226,10 +227,6 @@ def _close_memmap(name, obj):
         [_close_memmap('%s[]' % name, item) for item in obj]
     elif isinstance(obj, dict):
         [_close_memmap('%s.%s' % (name, n), item) for n, item in obj.items()]
-
-
-def _clip(x, a, b):
-    return max(a, min(b, x))
 
 
 def _extract_waveforms(traces, sample, channel_ids=None, n_samples_waveforms=None):

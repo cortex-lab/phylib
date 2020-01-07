@@ -24,6 +24,10 @@ logger = logging.getLogger(__name__)
 # Utility functions
 #------------------------------------------------------------------------------
 
+def _clip(x, a, b):
+    return max(a, min(b, x))
+
+
 def _range_from_slice(myslice, start=None, stop=None, step=None, length=None):
     """Convert a slice to an array of integers."""
     assert isinstance(myslice, slice)
@@ -359,6 +363,7 @@ class RandomVirtualArray(object):
         assert shape and isinstance(shape, tuple)
         self.shape = shape
         self.dtype = dtype
+        self.ndim = len(shape)
 
     def _generate_array(self, n):
         shape = (n,) + self.shape[1:]
