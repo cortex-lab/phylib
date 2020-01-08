@@ -604,14 +604,14 @@ def select_spikes(
     return _flatten_per_cluster(selection)
 
 
-def select_spikes_from_chunked(spike_times, chunk_offsets, max_n_spikes, skip_chunks=0):
+def select_spikes_from_chunked(spike_times, chunk_bounds, max_n_spikes, skip_chunks=0):
     """Select a maximum number of spikes among the specified ones so as to minimize the
     number of chunks that contain those spikes."""
     if len(spike_times) <= max_n_spikes:
         return spike_times
     spike_times = _as_array(spike_times)
-    chunk_offsets = _as_array(chunk_offsets)
-    spike_chunks = np.searchsorted(chunk_offsets, spike_times, side='right') - 1
+    chunk_bounds = _as_array(chunk_bounds)
+    spike_chunks = np.searchsorted(chunk_bounds, spike_times, side='right') - 1
     chunk_sizes = np.bincount(spike_chunks)
     best_chunks = np.argsort(chunk_sizes)[::-1][skip_chunks:]
     keep = np.zeros(len(spike_times), dtype=np.bool)

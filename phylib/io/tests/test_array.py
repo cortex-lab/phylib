@@ -444,14 +444,14 @@ def test_select_spikes_random():
 
 
 def test_spikes_from_chunked():
-    chunk_offsets = [0,      4,       9,   12,    20]  # noqa
+    chunk_bounds = [0,      4,       9,   12,    20]  # noqa
     spike_times =  [   1, 3, 4, 5, 7,         15]  # noqa
 
-    ae(select_spikes_from_chunked(spike_times, chunk_offsets, 0), [])
-    ae(select_spikes_from_chunked(spike_times, chunk_offsets, 1), [4])
-    ae(select_spikes_from_chunked(spike_times, chunk_offsets, 2), [4, 5])
-    ae(select_spikes_from_chunked(spike_times, chunk_offsets, 3), [4, 5, 7])
-    ae(select_spikes_from_chunked(spike_times, chunk_offsets, 4), [1, 4, 5, 7])
-    ae(select_spikes_from_chunked(spike_times, chunk_offsets, 5), [1, 3, 4, 5, 7])
-    ae(select_spikes_from_chunked(spike_times, chunk_offsets, 6), spike_times)
-    ae(select_spikes_from_chunked(spike_times, chunk_offsets, 10), spike_times)
+    ae(select_spikes_from_chunked(spike_times, chunk_bounds, 0), [])
+    ae(select_spikes_from_chunked(spike_times, chunk_bounds, 1), [4])
+    ae(select_spikes_from_chunked(spike_times, chunk_bounds, 2), [4, 5])
+    ae(select_spikes_from_chunked(spike_times, chunk_bounds, 3), [4, 5, 7])
+    ae(select_spikes_from_chunked(spike_times, chunk_bounds, 4), [1, 4, 5, 7])
+    ae(select_spikes_from_chunked(spike_times, chunk_bounds, 5), [1, 3, 4, 5, 7])
+    ae(select_spikes_from_chunked(spike_times, chunk_bounds, 6), spike_times)
+    ae(select_spikes_from_chunked(spike_times, chunk_bounds, 10), spike_times)

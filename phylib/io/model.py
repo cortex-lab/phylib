@@ -20,7 +20,8 @@ import scipy.io as sio
 from tqdm import tqdm
 
 from .array import (
-    _concatenate_virtual_arrays, _index_of, _spikes_in_clusters, RandomVirtualArray, _clip)
+    _concatenate_virtual_arrays, _index_of, _spikes_in_clusters, RandomVirtualArray)
+from .traces import _extract_waveforms
 from phylib.utils import Bunch
 from phylib.utils._misc import _write_tsv_simple, _read_tsv_simple, read_python
 from phylib.utils.geometry import linear_positions
@@ -227,33 +228,6 @@ def _close_memmap(name, obj):
         [_close_memmap('%s[]' % name, item) for item in obj]
     elif isinstance(obj, dict):
         [_close_memmap('%s.%s' % (name, n), item) for n, item in obj.items()]
-
-
-def _extract_waveforms(traces, sample, channel_ids=None, n_samples_waveforms=None):
-    nsw = n_samples_waveforms
-    dur = traces.shape[0]
-    a = nsw // 2
-    b = nsw - a
-    assert traces.ndim == 2
-    assert nsw > 0
-    assert a + b == nsw
-    if channel_ids is None:  # pragma: no cover
-        channel_ids = slice(None, None, None)
-    t0, t1 = int(sample - a), int(sample + b)
-    t0, t1 = _clip(t0, 0, dur), _clip(t1, 0, dur)
-    # Extract the waveforms.
-    w = traces[t0:t1][:, channel_ids]
-    # Pad with zeros.
-    bef = aft = 0
-    if t0 == 0:  # pragma: no cover
-        bef = nsw - w.shape[0]
-    if t1 == dur:  # pragma: no cover
-        aft = nsw - w.shape[0]
-    assert bef + w.shape[0] + aft == nsw
-    if bef > 0 or aft > 0:  # pragma: no cover
-        w = np.pad(w, ((bef, aft), (0, 0)), 'constant')
-    assert w.shape[0] == nsw
-    return w
 
 
 #------------------------------------------------------------------------------
