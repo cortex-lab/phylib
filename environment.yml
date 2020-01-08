@@ -4,6 +4,7 @@ dependencies:
   - pip
   - numpy
   - scipy
+  - dask
   - pip:
     - requests
     - tqdm
