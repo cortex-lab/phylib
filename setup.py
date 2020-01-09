@@ -35,6 +35,8 @@ readme = (Path(__file__).parent / 'README.md').read_text()
 with (Path(__file__).parent / 'phylib/__init__.py').open('r') as f:
     version = re.search(r"__version__ = '([^']+)'", f.read()).group(1)
 
+with open('requirements.txt') as f:
+    require = [x.strip() for x in f.readlines() if not x.startswith('git+')]
 
 setup(
     name='phylib',
