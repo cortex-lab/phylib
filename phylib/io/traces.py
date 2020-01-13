@@ -54,6 +54,27 @@ def _extract_waveforms(traces, sample, channel_ids=None, n_samples_waveforms=Non
 #------------------------------------------------------------------------------
 
 class EphysTraces(da.Array):
+    """A class representing raw data, an arbitrarily large array (n_samples, n_channels).
+    Derives from dask.array.Array, has a few convenient methods and properties.
+    Can be used as a NumPy array, but one needs to call `.compute()` eventually to get
+    actual values (lazy evaluation).
+
+    Properties
+    ----------
+
+    - format: for now, either 'flat' or 'mtscomp
+    - sample_rate: float
+    - duration: float
+
+    Methods
+    -------
+
+    - extract_waveforms(spike_times, channel_ids): with mtscomp, load chunks in parallel.
+      Most efficient when the spikes are selected from a limited number of chunks.
+    - subset_time_range(t0, t1): return a view of the object, with a smaller time interval
+
+    """
+
     def __new__(cls, *args, **kwargs):
         format = kwargs.pop('format', 'flat')
         sample_rate = kwargs.pop('sample_rate', None)
@@ -133,7 +154,7 @@ def from_array(arr, sample_rate):
     return from_dask(dask_arr, sample_rate=sample_rate)
 
 
-def create_traces(obj, sample_rate=None):
+def get_ephys_traces(obj, sample_rate=None):
     """Get an EphysTraces instance."""
     if isinstance(obj, mtscomp.Reader):
         return from_mtscomp(obj)

@@ -13,7 +13,7 @@ from numpy.testing import assert_equal as ae
 import dask.array as da
 import mtscomp
 
-from ..traces import create_traces, EphysTraces
+from ..traces import get_ephys_traces, EphysTraces
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 def test_ephys_traces_1():
     data = np.random.randn(1000, 10)
-    traces = create_traces(data, 100)
+    traces = get_ephys_traces(data, 100)
 
     assert isinstance(traces, EphysTraces)
     assert isinstance(traces, da.Array)
@@ -58,7 +58,7 @@ def test_ephys_traces_2(tempdir):
         n_threads=1, check_after_compress=False, quiet=True)
     reader = mtscomp.decompress(out, outmeta, check_after_decompress=False, quiet=True)
 
-    traces = create_traces(reader)
+    traces = get_ephys_traces(reader)
 
     assert isinstance(traces, EphysTraces)
     assert isinstance(traces, da.Array)
