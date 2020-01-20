@@ -835,11 +835,14 @@ class TemplateModel(object):
         # Compute the amplitude and the channel with max amplitude.
         amplitude = template.max(axis=0) - template.min(axis=0)
         best_channel = channel_ids[np.argmax(amplitude)]
+        # NOTE: it is expected that the channel_ids are reordered by decreasing amplitude.
+        # To each column of the template array corresponds the channel id given by channel_ids.
+        channels_reordered = np.argsort(amplitude)[::-1]
         out = Bunch(
-            template=template,
+            template=template[..., channels_reordered],
             amplitude=amplitude,
             best_channel=best_channel,
-            channel_ids=channel_ids,
+            channel_ids=channel_ids[channels_reordered],
         )
         return out
 
