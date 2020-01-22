@@ -63,7 +63,7 @@ def range_transform(from_bounds, to_bounds, positions, do_offset=True):
     out = positions.copy()
     if do_offset:
         out -= f0
-    out *= (t1 - t0) / d
+    out = out * ((t1 - t0) / d)
     if do_offset:
         out += t0
     return out
