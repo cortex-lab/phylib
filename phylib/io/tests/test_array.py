@@ -13,10 +13,10 @@ from pytest import raises
 
 from ..array import (
     _unique, _normalize, _index_of, _spikes_in_clusters, _spikes_per_cluster,
-    _flatten_per_cluster, get_closest_clusters, _get_data_lim, _flatten, _start_stop,
+    _flatten_per_cluster, get_closest_clusters, _get_data_lim, _flatten,
     select_spikes, Selector, chunk_bounds, regular_subset, excerpts, data_chunk, grouped_mean,
-    get_excerpts, _concatenate_virtual_arrays, _range_from_slice, _pad, _get_padded,
-    select_spikes_from_chunked, read_array, write_array, RandomVirtualArray)
+    get_excerpts, _range_from_slice, _pad, _get_padded,
+    select_spikes_from_chunked, read_array, write_array)
 from phylib.utils._types import _as_array
 from phylib.utils.testing import _assert_equal as ae
 from ..mock import artificial_spike_clusters
@@ -178,13 +178,6 @@ def test_flatten():
     assert _flatten([[0, 1], [2]]) == [0, 1, 2]
 
 
-def test_start_stop():
-    assert _start_stop(slice(0, 3, None)) == (0, 3)
-    with raises(NotImplementedError):
-        _start_stop(slice(0, 3, 2))
-    assert _start_stop([0, 1, 2]) == (0, 2)
-
-
 def test_get_closest_clusters():
     out = get_closest_clusters(1, [0, 1, 2], lambda c, d: (d - c))
     assert [_ for _, __ in out] == [2, 1, 0]
@@ -202,72 +195,6 @@ def test_read_write(tempdir):
     write_array(path, arr)
     ae(read_array(path), arr)
     ae(read_array(path, mmap_mode='r'), arr)
-
-
-#------------------------------------------------------------------------------
-# Test virtual concatenation
-#------------------------------------------------------------------------------
-
-def test_concatenate_virtual_arrays_1():
-    arrs = [np.arange(5), np.arange(10, 12), np.array([0])]
-    c = _concatenate_virtual_arrays(arrs, scaling=1)
-    assert c.shape == (8,)
-    assert len(c) == 8
-    assert c._get_recording(3) == 0
-    assert c._get_recording(5) == 1
-
-    ae(c[:], [0, 1, 2, 3, 4, 10, 11, 0])
-    ae(c[0], [0])
-    ae(c[4], [4])
-    ae(c[5], [10])
-    ae(c[6], [11])
-
-    ae(c[4:6], [4, 10])
-
-    ae(c[:6], [0, 1, 2, 3, 4, 10])
-    ae(c[4:], [4, 10, 11, 0])
-    ae(c[4:-1], [4, 10, 11])
-
-
-def test_concatenate_virtual_arrays_2():
-    arrs = [np.zeros((2, 2)), np.ones((3, 2))]
-    c = _concatenate_virtual_arrays(arrs)
-    assert c.shape == (5, 2)
-    ae(c[:, :], np.vstack((np.zeros((2, 2)), np.ones((3, 2)))))
-    ae(c[0:4, 0], [0, 0, 1, 1])
-
-
-def test_concatenate_virtual_arrays_3():
-    arrs = [np.zeros((2, 2)), np.ones((3, 2))]
-    c = _concatenate_virtual_arrays(arrs, scaling=2)
-    ae(c[3], 2 * np.ones((1, 2)))
-
-
-def test_random_virtual_array():
-    shape = (1000, 12)
-    arr0 = np.random.normal(size=shape)
-    arr1 = RandomVirtualArray(shape)
-
-    for step in (None, 1, 2, 3, 10, 500, 1000, 2000):
-        for item in (
-            slice(None, None, step),
-            slice(0, -1, step),
-            slice(1, -1, step),
-            slice(10, None, step),
-            slice(10, 20, step),
-            slice(10, 1010, step),
-            np.arange(10),
-            [10, 0, -1],
-            0
-        ):
-            assert arr0[item].shape == arr1[item].shape
-            for item1 in (
-                slice(None, None, step),
-                slice(0, None, step),
-                slice(0, -1, step),
-                slice(1, -1, step),
-            ):
-                assert arr0[item, item1].shape == arr1[item, item1].shape
 
 
 #------------------------------------------------------------------------------

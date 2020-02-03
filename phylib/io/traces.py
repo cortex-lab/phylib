@@ -8,6 +8,7 @@
 #------------------------------------------------------------------------------
 
 import logging
+from pathlib import Path
 
 import numpy as np
 import dask.array as da
@@ -65,6 +66,8 @@ class EphysTraces(da.Array):
     - format: for now, either 'flat' or 'mtscomp
     - sample_rate: float
     - duration: float
+    - chunk_bounds : array
+    - n_chunks : int
 
     Methods
     -------
@@ -72,17 +75,18 @@ class EphysTraces(da.Array):
     - extract_waveforms(spike_times, channel_ids): with mtscomp, load chunks in parallel.
       Most efficient when the spikes are selected from a limited number of chunks.
     - subset_time_range(t0, t1): return a view of the object, with a smaller time interval
+    - iter_chunks(): yield tuples (i0, i1, chunk)
+    - get_chunk(chunk_idx)
 
     """
 
     def __new__(cls, *args, **kwargs):
         format = kwargs.pop('format', 'flat')
-        sample_rate = kwargs.pop('sample_rate', None)
+        sample_rate = kwargs.pop('sample_rate', None) or 0
         assert sample_rate > 0
         self = super(EphysTraces, cls).__new__(cls, *args, **kwargs)
         self.format = format
         self.sample_rate = sample_rate
-        self.duration = self.shape[0] / self.sample_rate
         return self
 
     @property
@@ -93,6 +97,10 @@ class EphysTraces(da.Array):
     @property
     def n_chunks(self):
         return len(self.chunk_bounds) - 1
+
+    @property
+    def duration(self):
+        return self.shape[0] / float(self.sample_rate)
 
     def iter_chunks(self):
         """Iterate over tuples (i0, i1, chunk_data)."""
@@ -122,6 +130,9 @@ class EphysTraces(da.Array):
         if self.format == 'mtscomp':
             # Find the time chunks where the spikes belong.
             chunks = np.unique(self._get_time_chunks(spike_times))
+            # NOTE: make sure the cache is large enough to keep all required chunks in memory.
+            # This will make the step below (for loop for waveform extraction) faster.
+            self.reader.set_cache_size(len(chunks))
             pool = self.reader.start_thread_pool()
             self.reader.decompress_chunks(chunks, pool=pool)
             self.reader.stop_thread_pool()
@@ -139,6 +150,10 @@ class EphysTraces(da.Array):
         i0, i1 = int(round(t0 * self.sample_rate)), int(round(t1 * self.sample_rate))
         return from_dask(self[i0:i1, :], sample_rate=self.sample_rate, format=self.format)
 
+    def __getitem__(self, item):
+        out = super(EphysTraces, self).__getitem__(item)
+        return from_dask(out, format=self.format, sample_rate=self.sample_rate)
+
 
 def from_dask(arr, **kwargs):
     """From dask.array.Array instance to EphysTraces instance."""
@@ -146,7 +161,7 @@ def from_dask(arr, **kwargs):
 
 
 def from_mtscomp(reader):
-    """From a mtscomp-compressed array to EphysTraces."""
+    """Convert an mtscomp-compressed array to an EphysTraces instance."""
     name = 'mtscomp_traces'
     # Use the compression chunks as dask chunks.
     chunks = (tuple(np.diff(reader.chunk_bounds)), (reader.n_channels,))
@@ -163,18 +178,78 @@ def from_mtscomp(reader):
 
 
 def from_array(arr, sample_rate):
-    """From any NumPy-like array to EphysTraces instance."""
+    """Convert any NumPy-like array to an EphysTraces instance, using an 1 second chunk size."""
     n_samples, n_channels = arr.shape
-    chunk_shape = (int(sample_rate), n_channels)
+    chunk_shape = (int(sample_rate or n_samples), n_channels)  # 1 second chunk
     dask_arr = da.from_array(arr, chunk_shape, name='traces')
     return from_dask(dask_arr, sample_rate=sample_rate)
 
 
-def get_ephys_traces(obj, sample_rate=None):
-    """Get an EphysTraces instance."""
+def from_flat_file(path, n_channels_dat=None, dtype=None, offset=None, sample_rate=None):
+    """Memmap a flat binary file and return an EphysTraces instance."""
+    path = Path(path)
+    # Accept mtscomp files.
+    # Default dtype and offset.
+    dtype = dtype if dtype is not None else np.int16
+    offset = offset or 0
+    # TODO: support order
+    # assert order not in ('F', 'fortran')
+    # Find the number of samples.
+    assert n_channels_dat > 0
+    fsize = path.stat().st_size
+    item_size = np.dtype(dtype).itemsize
+    n_samples = (fsize - offset) // (item_size * n_channels_dat)
+    shape = (n_samples, n_channels_dat)
+    return from_array(np.memmap(
+        str(path), dtype=dtype, shape=shape, offset=offset), sample_rate)
+
+
+def get_ephys_traces(obj, sample_rate=None, **kwargs):
+    """Get an EphysTraces instance from any NumPy-like object of file path.
+
+    Return None if data file(s) not available.
+
+    """
     if isinstance(obj, mtscomp.Reader):
+        logger.debug("Loading mtscomp traces from `%s`.", obj)
         return from_mtscomp(obj)
+    elif isinstance(obj, (str, Path)):
+        path = Path(obj)
+        if not path.exists():  # pragma: no cover
+            logger.warning("File %s does not exist.", path)
+            return
+        assert path.exists()
+        ext = path.suffix
+        # mtscomp file
+        if ext == '.cbin':
+            logger.debug("Loading mtscomp traces from `%s`.", path)
+            r = mtscomp.Reader()
+            r.open(path)
+            return from_mtscomp(r)
+        # flat binary file
+        elif ext in ('.dat', '.bin'):
+            logger.debug("Loading traces from flat file `%s`.", path)
+            return from_flat_file(path, sample_rate=sample_rate, **kwargs)
+        elif ext == '.npy':
+            return from_array(np.load(obj, mmap_mode='r'), sample_rate)
+        # TODO: other standard binary formats
+        else:  # pragma: no cover
+            raise IOError("Unknown file extension: %s.", ext)
+    elif isinstance(obj, (tuple, list)):
+        # Concatenation along the time axis of multiple raw data files/objects.
+        arrs = [get_ephys_traces(o, sample_rate=sample_rate, **kwargs) for o in obj]
+        arrs = [arr for arr in arrs if arr is not None and len(arr) > 0]
+        if not arrs:
+            return
+        arrs = da.concatenate(arrs, axis=0)
+        return from_dask(arrs, sample_rate=sample_rate)
     else:
+        logger.debug("Loading traces from array.")
         assert sample_rate, "Please specify a sample rate."
         assert sample_rate > 0, "Please specify a sample rate as a strictly positive number."
-        return from_array(obj, sample_rate)
+        return from_array(obj, sample_rate=sample_rate)
+
+
+def random_ephys_traces(n_samples, n_channels, sample_rate=None):
+    """Return random ephys traces."""
+    return from_dask(da.random.normal(size=(n_samples, n_channels)), sample_rate=sample_rate)
