@@ -443,7 +443,7 @@ def select_spikes_from_chunked(spike_times, chunk_bounds, max_n_spikes, skip_chu
     """Select a maximum number of spikes among the specified ones so as to minimize the
     number of chunks that contain those spikes."""
     if len(spike_times) <= max_n_spikes:
-        return np.arange(len(spike_times))
+        return np.arange(len(spike_times)).astype(np.int64)
     spike_times = _as_array(spike_times)
     chunk_bounds = _as_array(chunk_bounds)
     spike_chunks = np.searchsorted(chunk_bounds, spike_times, side='right') - 1

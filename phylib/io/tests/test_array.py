@@ -371,8 +371,8 @@ def test_select_spikes_random():
 
 
 def test_spikes_from_chunked():
-    chunk_bounds = [0,      4,       9,   12,    20]  # noqa
-    spike_times =  [   1, 3, 4, 5, 7,         15]  # noqa
+    chunk_bounds = np.array([0,      4,       9,   12,    20])  # noqa
+    spike_times =  np.array([   1, 3, 4, 5, 7,         15])  # noqa
 
     def f(*args):
         spike_ids = select_spikes_from_chunked(*args)

@@ -819,6 +819,7 @@ class TemplateModel(object):
         nsw = self.n_samples_waveforms
         channel_ids = np.arange(self.n_channels) if channel_ids is None else channel_ids
 
+        # Load from precomputed spikes.
         if self.spike_waveforms is not None:  # pragma: no cover
             nc = len(channel_ids)
             out = np.zeros((ns, nsw, nc), dtype=np.float64)
@@ -834,8 +835,11 @@ class TemplateModel(object):
                     assert len(cols0) == len(cols1)
                     out[i, :, cols0] = self.spike_waveforms.waveforms[i, :, cols1]
             return out
-        spike_samples = self.spike_samples[spike_ids]
-        return extract_waveforms(self.traces, spike_samples, channel_ids, n_samples_waveforms=None)
+        # Or load directly from raw data (slower).
+        else:
+            spike_samples = self.spike_samples[spike_ids]
+            return extract_waveforms(
+                self.traces, spike_samples, channel_ids, n_samples_waveforms=nsw)
 
     def get_features(self, spike_ids, channel_ids):
         """Return sparse features for given spikes."""
