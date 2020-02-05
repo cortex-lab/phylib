@@ -13,7 +13,7 @@ from numpy.testing import assert_equal as ae
 import dask.array as da
 import mtscomp
 
-from ..traces import get_ephys_traces, EphysTraces, random_ephys_traces
+from ..traces import get_ephys_traces, EphysTraces, random_ephys_traces, extract_waveforms
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ def test_ephys_traces_1():
     assert traces.shape == data.shape
     assert traces.chunks == ((100,) * 10, (10,))
 
-    waveforms = traces.extract_waveforms([5, 50, 100, 900], [1, 4, 7], 10)
+    waveforms = extract_waveforms(traces, [5, 50, 100, 900], [1, 4, 7], n_samples_waveforms=10)
     assert waveforms.shape == (4, 10, 3)
 
     traces_sub = traces.subset_time_range(2.5, 7.5)
@@ -73,11 +73,11 @@ def test_ephys_traces_2(tempdir):
         assert bool(np.all(data == traces).compute()) is True
         assert traces.chunk_bounds == reader.chunk_bounds
 
-        spike_times = [5, 50, 100, 901]
-        spike_chunks = traces._get_time_chunks(spike_times)
+        spike_samples = np.array([5, 50, 100, 901])
+        spike_chunks = traces._get_time_chunks(spike_samples / 100.)
         ae(spike_chunks, [0, 0, 1, 9])
 
-        waveforms = traces.extract_waveforms(spike_times, [1, 4, 7], 10)
+        waveforms = extract_waveforms(traces, spike_samples, [1, 4, 7], 10)
         assert waveforms.shape == (4, 10, 3)
 
         traces_sub = traces.subset_time_range(2.5, 7.5)
@@ -94,7 +94,7 @@ def test_ephys_traces_2(tempdir):
 
 
 def test_ephys_traces_3(tempdir):
-    data = (50 * np.random.randn(1000, 10)).astype(np.int16)
+    data = (50 * np.random.randn(1001, 10)).astype(np.int16)
     sample_rate = 100
     path = tempdir / 'data.bin'
 
@@ -107,10 +107,32 @@ def test_ephys_traces_3(tempdir):
 
     assert traces.dtype == data.dtype
     assert traces.shape == data.shape
-    assert traces.chunks == ((100,) * 10, (10,))
+    assert traces.chunks == ((100,) * 10 + (1,), (10,))
+
+    assert da.all(traces == data).compute()
+
+    assert da.all(get_ephys_traces(traces) == traces).compute()
 
 
 def test_ephys_traces_4(tempdir):
+    data = (50 * np.random.randn(1000, 10)).astype(np.int16)
+    sample_rate = 100
+    path = tempdir / 'data.npy'
+
+    np.save(path, data)
+
+    traces = get_ephys_traces(path, sample_rate=sample_rate)
+
+    assert isinstance(traces, EphysTraces)
+
+    assert traces.dtype == data.dtype
+    assert traces.shape == data.shape
+    assert traces.chunks == ((100,) * 10, (10,))
+
+    assert da.all(traces == data).compute()
+
+
+def test_ephys_traces_5(tempdir):
     data = (50 * np.random.randn(1000, 10)).astype(np.int16)
     sample_rate = 100
     path = tempdir / 'data.bin'

@@ -20,7 +20,7 @@ import scipy.io as sio
 from tqdm import tqdm
 
 from .array import _index_of, _spikes_in_clusters
-from .traces import _extract_waveforms, get_ephys_traces, random_ephys_traces
+from .traces import _extract_waveform, get_ephys_traces, random_ephys_traces, extract_waveforms
 from phylib.utils import Bunch
 from phylib.utils._misc import _write_tsv_simple, _read_tsv_simple, read_python
 from phylib.utils.geometry import linear_positions
@@ -834,10 +834,8 @@ class TemplateModel(object):
                     assert len(cols0) == len(cols1)
                     out[i, :, cols0] = self.spike_waveforms.waveforms[i, :, cols1]
             return out
-
-        w = self.traces.extract_waveforms(
-            self.spike_times[spike_ids], channel_ids, n_samples_waveforms=nsw)
-        return w
+        spike_samples = self.spike_samples[spike_ids]
+        return extract_waveforms(self.traces, spike_samples, channel_ids, n_samples_waveforms=None)
 
     def get_features(self, spike_ids, channel_ids):
         """Return sparse features for given spikes."""
@@ -1073,7 +1071,7 @@ class TemplateModel(object):
             c = best_channels[t]
             # Extract the waveforms and write them in the file.
             ncl = min(len(c), nc)
-            out[i, :, :ncl] = _extract_waveforms(
+            out[i, :, :ncl] = _extract_waveform(
                 self.traces, s, channel_ids=c, n_samples_waveforms=nsw)
             # Save the best channels to the auxiliary file, putting -1 for unused channels.
             out_ind[i, :ncl] = c
