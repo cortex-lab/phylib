@@ -19,8 +19,9 @@ from numpy.lib.format import open_memmap
 import scipy.io as sio
 from tqdm import tqdm
 
-from .array import _index_of, _spikes_in_clusters
-from .traces import _extract_waveforms, get_ephys_traces, random_ephys_traces
+from .array import (
+    _concatenate_virtual_arrays, _index_of, _spikes_in_clusters, RandomVirtualArray)
+from .traces import _extract_waveforms
 from phylib.utils import Bunch
 from phylib.utils._misc import _write_tsv_simple, _read_tsv_simple, read_python
 from phylib.utils.geometry import linear_positions
@@ -126,6 +127,56 @@ def save_metadata(filename, field_name, metadata):
 
 
 #------------------------------------------------------------------------------
+# Raw data functions
+#------------------------------------------------------------------------------
+
+def _dat_n_samples(filename, dtype=None, n_channels=None, offset=None):
+    """Get the number of samples from the size of a dat file."""
+    assert dtype is not None
+    item_size = np.dtype(dtype).itemsize
+    offset = offset if offset else 0
+    n_samples = (op.getsize(str(filename)) - offset) // (item_size * n_channels)
+    assert n_samples >= 0
+    return n_samples
+
+
+def _dat_to_traces(dat_path, n_channels=None, dtype=None, offset=None, order=None):
+    """Memmap a dat file."""
+    assert dtype is not None
+    assert n_channels is not None
+    n_samples = _dat_n_samples(dat_path, n_channels=n_channels, dtype=dtype, offset=offset)
+    return np.memmap(
+        str(dat_path), dtype=dtype, shape=(n_samples, n_channels), offset=offset, order=order)
+
+
+def load_raw_data(path=None, n_channels_dat=None, dtype=None, offset=None, order=None):
+    """Load raw data at a given path."""
+    if not path:
+        return
+    path = Path(path)
+    if not path.exists():
+        logger.warning("Path %s does not exist, trying ephys.raw filename.", path)
+        path = path.parent / ('ephys.raw' + path.suffix)
+        if not path.exists():
+            logger.warning("Error while loading data: File `%s` not found.", path)
+            return None
+    assert path.exists()
+    logger.debug("Loading traces at `%s`.", path)
+    if str(path).endswith('.cbin'):  # pragma: no cover
+        try:
+            from mtscomp import decompress
+            logger.debug("Decompressing %s on the fly with mtscomp.", path)
+            return decompress(path)
+        except ImportError:
+            logger.warning(
+                "The mtscomp package is not available, %s cannot be decompressed. "
+                "In the meantime, the raw data will not be available.", path)
+            return
+    dtype = dtype if dtype is not None else np.int16
+    return _dat_to_traces(path, n_channels=n_channels_dat, dtype=dtype, offset=offset, order=order)
+
+
+#------------------------------------------------------------------------------
 # Channel util functions
 #------------------------------------------------------------------------------
 
@@ -170,9 +221,8 @@ def _close_memmap(name, obj):
     if isinstance(obj, np.memmap):
         logger.debug("Close memmap array %s.", name)
         obj._mmap.close()
-    elif getattr(obj, 'arrs', None) is not None:  # pragma: no cover
+    elif getattr(obj, 'arrs', None) is not None:
         # Support ConcatenatedArrays.
-        # NOTE: no longer used since EphysTraces
         _close_memmap('%s.arrs' % name, obj.arrs)
     elif isinstance(obj, (list, tuple)):
         [_close_memmap('%s[]' % name, item) for item in obj]
@@ -338,7 +388,7 @@ class TemplateModel(object):
         # Traces and duration.
         self.traces = self._load_traces(self.channel_mapping)
         if self.traces is not None:
-            self.duration = self.traces.duration
+            self.duration = self.traces.shape[0] / float(self.sample_rate)
         else:
             self.duration = self.spike_times[-1]
         if self.spike_times[-1] > self.duration:  # pragma: no cover
@@ -463,19 +513,18 @@ class TemplateModel(object):
         if not self.dat_path:
             if os.environ.get('PHY_VIRTUAL_RAW_DATA', None):  # pragma: no cover
                 n_samples = int((self.spike_times[-1] + 1) * self.sample_rate)
-                return random_ephys_traces(
-                    n_samples, len(channel_map), sample_rate=self.sample_rate)
+                return RandomVirtualArray((n_samples, len(channel_map)))
             return
         paths = self.dat_path
         # Make sure we have a list of paths (virtually-concatenated).
         assert isinstance(paths, (list, tuple))
         n = self.n_channels_dat
         # Memmap all dat files and concatenate them virtually.
-        traces = get_ephys_traces(
-            paths, n_channels_dat=n, dtype=self.dtype, offset=self.offset,
-            sample_rate=self.sample_rate)
-        if traces is not None:
-            traces = traces[:, channel_map]  # lazy permutation on the channel axis using dask
+        traces = [
+            load_raw_data(path, n_channels_dat=n, dtype=self.dtype, offset=self.offset)
+            for path in paths]
+        traces = [_ for _ in traces if _ is not None]
+        traces = _concatenate_virtual_arrays(traces, channel_map)
         return traces
 
     def _load_amplitudes(self):
@@ -819,11 +868,12 @@ class TemplateModel(object):
         nsw = self.n_samples_waveforms
         channel_ids = np.arange(self.n_channels) if channel_ids is None else channel_ids
 
-        if self.spike_waveforms is not None:  # pragma: no cover
-            nc = len(channel_ids)
-            out = np.zeros((ns, nsw, nc), dtype=np.float64)
-            # Extract the spike waveforms.
-            for i, ts in enumerate(self.spike_samples[spike_ids]):
+        nc = len(channel_ids)
+        out = np.zeros((ns, nsw, nc), dtype=np.float64)
+
+        # Extract the spike waveforms.
+        for i, ts in enumerate(self.spike_samples[spike_ids]):
+            if self.spike_waveforms is not None:  # pragma: no cover
                 # NOTE: this has not be extensively tested yet.
                 # Precomputed waveforms in spikes.waveforms.npy
                 ind = self.spike_waveforms.channel_ids[i, :]
@@ -833,11 +883,12 @@ class TemplateModel(object):
                     cols1 = _index_of(channel_common, ind)
                     assert len(cols0) == len(cols1)
                     out[i, :, cols0] = self.spike_waveforms.waveforms[i, :, cols1]
-            return out
-
-        w = self.traces.extract_waveforms(
-            self.spike_times[spike_ids], channel_ids, n_samples_waveforms=nsw)
-        return w
+            else:
+                # Extract waveforms on the fly from raw data.
+                out[i, ...] = _extract_waveforms(
+                    self.traces, ts, channel_ids=channel_ids, n_samples_waveforms=nsw)
+            out[i, ...] -= np.median(out[i, ...], axis=0)
+        return out
 
     def get_features(self, spike_ids, channel_ids):
         """Return sparse features for given spikes."""
