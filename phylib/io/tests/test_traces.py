@@ -80,11 +80,3 @@ def test_ephys_traces_2(tempdir):
     traces_sub = traces.subset_time_range(2.5, 7.5)
     assert traces_sub.shape == (500, 10)
     assert bool(np.all(traces[250:750, :] == traces_sub).compute()) is True
-
-    assert list((i0, i1) for (i0, i1, _) in traces.iter_chunks()) == list(
-        zip(range(0, 1000, 100), range(100, 1001, 100)))
-    ae(traces.get_chunk(-1), data[:100, :])
-    ae(traces.get_chunk(0), data[:100, :])
-    ae(traces.get_chunk(8), data[800:900, :])
-    ae(traces.get_chunk(9), data[900:, :])
-    ae(traces.get_chunk(10), data[900:, :])

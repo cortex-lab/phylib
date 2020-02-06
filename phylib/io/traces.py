@@ -87,23 +87,7 @@ class EphysTraces(da.Array):
 
     @property
     def chunk_bounds(self):
-        """List of the chunk bounds."""
         return [0] + np.cumsum([self.chunks[0]]).tolist()
-
-    @property
-    def n_chunks(self):
-        return len(self.chunk_bounds) - 1
-
-    def iter_chunks(self):
-        """Iterate over tuples (i0, i1, chunk_data)."""
-        for i0, i1 in zip(self.chunk_bounds[:-1], self.chunk_bounds[1:]):
-            yield i0, i1, self[i0:i1, ...]
-
-    def get_chunk(self, chunk_idx):
-        """Return data of a given chunk."""
-        chunk_idx = _clip(chunk_idx, 0, self.n_chunks - 1)
-        i0, i1 = self.chunk_bounds[chunk_idx:chunk_idx + 2]
-        return self[i0:i1, ...]
 
     def _get_time_chunks(self, spike_times):
         """Return the time chunk indices of every spike."""

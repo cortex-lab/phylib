@@ -417,9 +417,7 @@ class TemplateModel(object):
         full_paths = list(l[0] for l in [list(self.dir_path.glob(name)) for name in names] if l)
         path = _find_first_existing_path(*full_paths, multiple_ok=multiple_ok)
         if mandatory and not path:
-            raise IOError(
-                "None of these files could be found in %s: %s." %
-                (self.dir_path, ', '.join(names)))
+            raise IOError("None of these files could be found: %s." % ', '.join(names))
         return path
 
     def _read_array(self, path, mmap_mode=None):
