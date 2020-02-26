@@ -109,10 +109,7 @@ def test_model_save(template_model_full):
     m = template_model_full
     m.save_metadata('test', {1: 1})
     m.save_spike_clusters(m.spike_clusters)
-    m.save_mean_waveforms({1: Bunch(
-        channel_ids=np.arange(m.n_channels),
-        data=np.zeros((1, m.n_samples_waveforms, m.n_channels)))})
-    m.save_spike_waveforms()
+    m.save_spikes_subet_waveforms(10, 8)
 
 
 def test_model_metadata_1(template_model_full):

@@ -15,12 +15,14 @@ from pathlib import Path
 import shutil
 
 import numpy as np
-from numpy.lib.format import open_memmap
+# from numpy.lib.format import open_memmap
 import scipy.io as sio
-from tqdm import tqdm
+# from tqdm import tqdm
 
-from .array import _index_of, _spikes_in_clusters
-from .traces import _extract_waveform, get_ephys_traces, random_ephys_traces, extract_waveforms
+from .array import _index_of, _spikes_in_clusters, _spikes_per_cluster, select_spikes
+from .traces import (
+    get_ephys_traces, RandomEphysReader, extract_waveforms,
+    get_spike_waveforms, export_waveforms)
 from phylib.utils import Bunch
 from phylib.utils._misc import _write_tsv_simple, _read_tsv_simple, read_python
 from phylib.utils.geometry import linear_positions
@@ -463,8 +465,7 @@ class TemplateModel(object):
         if not self.dat_path:
             if os.environ.get('PHY_VIRTUAL_RAW_DATA', None):  # pragma: no cover
                 n_samples = int((self.spike_times[-1] + 1) * self.sample_rate)
-                return random_ephys_traces(
-                    n_samples, len(channel_map), sample_rate=self.sample_rate)
+                return RandomEphysReader(n_samples, len(channel_map), sample_rate=self.sample_rate)
             return
         paths = self.dat_path
         # Make sure we have a list of paths (virtually-concatenated).
@@ -475,7 +476,7 @@ class TemplateModel(object):
             paths, n_channels_dat=n, dtype=self.dtype, offset=self.offset,
             sample_rate=self.sample_rate)
         if traces is not None:
-            traces = traces[:, channel_map]  # lazy permutation on the channel axis using dask
+            traces = traces[:, channel_map]  # lazy permutation on the channel axis
         return traces
 
     def _load_amplitudes(self):
@@ -555,16 +556,18 @@ class TemplateModel(object):
 
     def _load_spike_waveforms(self):  # pragma: no cover
         logger.debug("Loading spike waveforms.")
-        path = self.dir_path / 'spikes.waveforms.npy'
-        path_ind = self.dir_path / 'spikes.waveformsChannels.npy'
-        if not path.exists() or not path_ind.exists():
-            logger.debug(
+        path = self.dir_path / '_phy_spikes_subset.waveforms.npy'
+        path_channels = self.dir_path / '_phy_spikes_subset.channels.npy'
+        path_spikes = self.dir_path / '_phy_spikes_subset.spikes.npy'
+        if not path.exists() or not path_channels.exists() or not path_spikes.exists():
+            logger.warning(
                 "Skipping spike waveforms that do not exist, they will be extracted "
                 "on the fly from the raw data as needed.")
             return
         return Bunch(
             waveforms=self._read_array(path, mmap_mode='r'),
-            channel_ids=self._read_array(path_ind, mmap_mode='r'),
+            channel_ids=self._read_array(path_channels),
+            spike_ids=self._read_array(path_spikes),
         )
 
     def _load_similar_templates(self):
@@ -815,28 +818,16 @@ class TemplateModel(object):
         if self.traces is None and self.spike_waveforms is None:
             return
         # Create the output array.
-        ns = len(spike_ids)
         nsw = self.n_samples_waveforms
         channel_ids = np.arange(self.n_channels) if channel_ids is None else channel_ids
 
-        # Load from precomputed spikes.
-        if self.spike_waveforms is not None:  # pragma: no cover
-            nc = len(channel_ids)
-            out = np.zeros((ns, nsw, nc), dtype=np.float64)
-            # Extract the spike waveforms.
-            for i, ts in enumerate(self.spike_samples[spike_ids]):
-                # NOTE: this has not be extensively tested yet.
-                # Precomputed waveforms in spikes.waveforms.npy
-                ind = self.spike_waveforms.channel_ids[i, :]
-                channel_common = np.intersect1d(channel_ids, ind)
-                if len(channel_ids) > 0:
-                    cols0 = _index_of(channel_common, channel_ids)
-                    cols1 = _index_of(channel_common, ind)
-                    assert len(cols0) == len(cols1)
-                    out[i, :, cols0] = self.spike_waveforms.waveforms[i, :, cols1]
-            return out
-        # Or load directly from raw data (slower).
+        if self.spike_waveforms is not None:
+            # Load from precomputed spikes.
+            return get_spike_waveforms(
+                spike_ids, channel_ids, spike_waveforms=self.spike_waveforms,
+                n_samples_waveforms=nsw)
         else:
+            # Or load directly from raw data (slower).
             spike_samples = self.spike_samples[spike_ids]
             return extract_waveforms(
                 self.traces, spike_samples, channel_ids, n_samples_waveforms=nsw)
@@ -1035,65 +1026,42 @@ class TemplateModel(object):
         logger.debug("Save spike clusters to `%s`.", path)
         np.save(path, spike_clusters)
 
-    def save_spike_waveforms(
-            self, n_samples_waveforms=None, n_channels_max=None):  # pragma: no cover
-        """Save all spike waveforms to a memmapped NumPy file.
-
-        NOTE: this function is not used yet.
-
-        """
-
+    def save_spikes_subet_waveforms(self, max_n_spikes_per_template=None, max_n_channels=None):
         if self.traces is None:
             logger.warning(
                 "Spike waveforms could not be extracted as the raw data file is not available.")
             return
 
-        path = self.dir_path / 'spikes.waveforms.npy'
-        path_ind = self.dir_path / 'spikes.waveformsChannels.npy'
-
-        # Determine the waveforms array shape.
-        ns = self.n_spikes
-        assert ns > 0
-        nsw = n_samples_waveforms or self.n_samples_waveforms or 80
-        assert nsw > 0
-        nc = n_channels_max or 16
+        nst = max_n_spikes_per_template
+        nc = max_n_channels
+        assert nst > 0
         assert nc > 0
-        shape = (ns, nsw, nc)
 
-        # Create the memmap npy file for writing.
-        out = open_memmap(
-            path, mode='w+', dtype=self.dtype, shape=shape, fortran_order=False)
-        out_ind = open_memmap(
-            path_ind, mode='w+', dtype=np.int32, shape=(ns, nc), fortran_order=False)
-        # Iterate over all spikes.
-        logger.info("Extract waveforms to %s and %s...", path.name, path_ind.name)
+        path = self.dir_path / '_phy_spikes_subset.waveforms.npy'
+        path_spikes = self.dir_path / '_phy_spikes_subset.spikes.npy'
+        path_channels = self.dir_path / '_phy_spikes_subset.channels.npy'
 
-        best_channels = {t: self.get_template(t).channel_ids[:nc] for t in range(self.n_templates)}
+        # Subselection of spikes.
+        spt = _spikes_per_cluster(self.spike_templates)
+        spike_ids = select_spikes(max_n_spikes_per_cluster=nst, spikes_per_cluster=spt)
+        ns = len(spike_ids)
+        logger.debug("Saving spike waveforms: %d spikes.")
+        np.save(path_spikes, spike_ids)
 
-        for i, (s, t) in tqdm(enumerate(zip(self.spike_samples, self.spike_templates)), total=ns):
-            # Find the best channel ids for the spike's template.
-            c = best_channels[t]
-            # Extract the waveforms and write them in the file.
-            ncl = min(len(c), nc)
-            out[i, :, :ncl] = _extract_waveform(
-                self.traces, s, channel_ids=c, n_samples_waveforms=nsw)
-            # Save the best channels to the auxiliary file, putting -1 for unused channels.
-            out_ind[i, :ncl] = c
-            out_ind[i, ncl:] = -1
+        # Compute spike channels.
+        best_channels = np.vstack([
+            self.get_template(t).channel_ids[:nc] for t in range(self.n_templates)])
+        assert best_channels.ndim == 2
+        assert best_channels.shape[0] == self.n_templates
+        spike_channels = best_channels[self.spike_templates[spike_ids], :]
+        assert spike_channels.shape == (ns, nc)
+        logger.debug("Saving spike waveforms: spike channels.")
+        np.save(path_channels, spike_channels)
 
-        return out, out_ind
-
-    def save_mean_waveforms(self, mean_waveforms):
-        """Save the mean waveforms as a single array."""
-        path = self.dir_path / 'clusters.meanWaveforms.npy'
-        n_clusters = len(mean_waveforms)
-        out = np.zeros((n_clusters, self.n_samples_waveforms, self.n_channels))
-        for i, cluster_id in enumerate(sorted(mean_waveforms)):
-            b = mean_waveforms[cluster_id]
-            if b.data is not None:
-                out[i, :, b.channel_ids] = b.data[0, ...].T
-        logger.debug("Save mean waveforms to `%s`.", path)
-        np.save(path, out)
+        # Extract waveforms from the raw data on a chunk by chunk basis.
+        export_waveforms(
+            path, self.traces, spike_ids, self.spike_samples[spike_ids], spike_channels,
+            n_samples_waveforms=self.n_samples_waveforms)
 
     def close(self):
         """Close all memmapped files."""
