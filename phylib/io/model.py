@@ -980,7 +980,6 @@ class TemplateModel(object):
     # Internal helper methods for public high-level methods
     #--------------------------------------------------------------------------
 
-
     def _get_template_from_spikes(self, spike_ids):
         """Get the main template from a set of spikes."""
         # We get the original template ids for the spikes.
