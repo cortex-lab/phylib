@@ -220,23 +220,9 @@ class EphysAlfCreator(object):
         if self.model.sparse_features is None:
             spikes_depths = clusters_depths[spike_clusters]
         else:
+            spikes_depths = self.model.make_depths()
             # if PC features are provided, compute the depth as the weighted sum of coordinates
-            nbatch = 50000
-            c = 0
-            spikes_depths = np.zeros_like(self.model.spike_times)
-            nspi = spikes_depths.shape[0]
-            while True:
-                ispi = np.arange(c, min(c + nbatch, nspi))
-                # take only first component
-                features = np.square(self.model.sparse_features.data[ispi, :, 0])
-                ichannels = self.model.sparse_features.cols[self.model.spike_clusters[ispi]]
-                ypos = self.model.channel_positions[ichannels, 1]
 
-                spikes_depths[ispi] = np.sum(np.transpose(ypos * features) /
-                                             np.sum(features, axis=1), axis=0)
-                c += nbatch
-                if c >= nspi:
-                    break
         self._save_npy('spikes.depths.npy', spikes_depths)
         self._save_npy('clusters.depths.npy', clusters_depths)
 
