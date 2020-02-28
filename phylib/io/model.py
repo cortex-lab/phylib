@@ -968,18 +968,18 @@ class TemplateModel(object):
             ichannels = self.sparse_features.cols[self.spike_clusters[ispi]]
             ypos = self.channel_positions[ichannels, 1]
 
-            spike_depths[ispi] = np.sum(np.transpose(ypos * features)
-                                        / np.sum(features, axis=1), axis=0)
+            spike_depths[ispi] = np.sum(np.transpose(ypos * features) /
+                                        np.sum(features, axis=1), axis=0)
             c += batch_sz
             if c >= nspi:
                 break
 
         return spike_depths
 
-
     #--------------------------------------------------------------------------
     # Internal helper methods for public high-level methods
     #--------------------------------------------------------------------------
+
 
     def _get_template_from_spikes(self, spike_ids):
         """Get the main template from a set of spikes."""
