@@ -8,7 +8,9 @@
 #------------------------------------------------------------------------------
 
 import logging
+from functools import reduce
 from math import ceil
+from operator import mul
 from pathlib import Path
 
 import numpy as np
@@ -17,7 +19,7 @@ from numpy.lib.format import (
 import mtscomp
 from tqdm import tqdm
 
-from .array import _clip, _index_of
+from .array import _index_of
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +30,10 @@ DEFAULT_CHUNK_DURATION = 10.0  # seconds
 #------------------------------------------------------------------------------
 # Utils
 #------------------------------------------------------------------------------
+
+def prod(l):
+    return reduce(mul, l, 1)
+
 
 def _get_subitems(bounds, item):
     """Given a list of part/chunk bounds and an item passed to __getitem__(), return
@@ -562,17 +568,16 @@ def iter_waveforms(traces, spike_samples, spike_channels, n_samples_waveforms=No
     n_samples_waveforms = n_samples_waveforms
     n_channels_loc = spike_channels.shape[1]
 
-    # pad = n_samples_waveforms // 2 + 1
     for i0, i1 in tqdm(traces.iter_chunks(), desc="Extracting waveforms"):
         # Get spikes in chunk.
         ind = _find_chunks([i0, i1], spike_samples) == 0
-        spike_samples = spike_samples[ind]
-        ns = len(spike_samples)
+        ss = spike_samples[ind]
+        ns = len(ss)
         if ns == 0:
             continue
         # Extract the spike waveforms within the chunk.
         waveforms = np.zeros((ns, n_samples_waveforms, n_channels_loc), dtype=traces.dtype)
-        for i, ss in enumerate(spike_samples):
+        for i, ss in enumerate(ss):
             channel_ids = spike_channels[i, :]
             waveforms[i, ...] = _extract_waveform(
                 traces, ss, channel_ids=channel_ids,
@@ -589,7 +594,10 @@ def export_waveforms(path, traces, spike_samples, spike_channels, n_samples_wave
     shape = (n_spikes, n_samples_waveforms, n_channels_loc)
 
     writer = NpyWriter(path, shape, traces.dtype)
+    size_written = 0
     for waveforms in iter_waveforms(
             traces, spike_samples, spike_channels, n_samples_waveforms=n_samples_waveforms):
         writer.append(waveforms)
+        size_written += waveforms.size
     writer.close()
+    assert prod(shape) == size_written

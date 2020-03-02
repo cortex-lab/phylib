@@ -12,7 +12,7 @@ import numpy as np
 from numpy.testing import assert_equal as ae
 from numpy.testing import assert_allclose as ac
 import mtscomp
-from pytest import raises, mark, fixture
+from pytest import raises, fixture, mark
 
 from phylib.utils import Bunch
 from ..traces import (
@@ -151,9 +151,10 @@ def test_get_spike_waveforms():
     ae(out, expected)
 
 
-def test_waveform_extractor(tempdir):
+@mark.parametrize('sample_rate', [10000, 1000, 500, 100])
+def test_waveform_extractor(tempdir, sample_rate):
     data = np.random.randn(2000, 10).astype(np.float32)
-    traces = get_ephys_traces(data, sample_rate=1000)
+    traces = get_ephys_traces(data, sample_rate=sample_rate)
 
     nsw = 20
     spike_samples = [5, 25, 100, 1000, 1995]
