@@ -17,7 +17,7 @@ from pytest import raises, fixture, mark
 from phylib.utils import Bunch
 from ..traces import (
     _get_subitems, _get_chunk_bounds,
-    get_ephys_traces, BaseEphysReader, extract_waveforms, export_waveforms,
+    get_ephys_traces, BaseEphysReader, extract_waveforms, export_waveforms, RandomEphysReader,
     get_spike_waveforms)
 
 logger = logging.getLogger(__name__)
@@ -92,91 +92,126 @@ def test_get_chunk_bounds():
 # Test ephys reader
 #------------------------------------------------------------------------------
 
-sample_rate = 100.
+@fixture
+def arr():
+    return np.random.randn(2000, 10)
 
 
-def _iter_traces(tempdir, arr):
-    yield arr, dict(sample_rate=sample_rate)
-
-    path = tempdir / 'data.npy'
-    np.save(path, arr)
-    yield path, dict(sample_rate=sample_rate)
-
-    path = tempdir / 'data.bin'
-    with open(path, 'wb') as f:
-        arr.tofile(f)
-    yield path, dict(sample_rate=sample_rate, dtype=arr.dtype, n_channels=arr.shape[1])
-
-    path0 = tempdir / 'data0.bin'
-    with open(path0, 'wb') as f:
-        arr[:arr.shape[0] // 2, :].tofile(f)
-    path1 = tempdir / 'data1.bin'
-    with open(path1, 'wb') as f:
-        arr[arr.shape[0] // 2, :].tofile(f)
-    # TODO
-    # yield [path0, path1], dict(sample_rate=sample_rate, dtype=arr.dtype, n_channels=arr.shape[1])
-
-    out = tempdir / 'data.cbin'
-    outmeta = tempdir / 'data.ch'
-    mtscomp.compress(
-        path, out, outmeta, sample_rate=sample_rate,
-        n_channels=arr.shape[1], dtype=arr.dtype,
-        n_threads=1, check_after_compress=False, quiet=True)
-    reader = mtscomp.decompress(out, outmeta, check_after_decompress=False, quiet=True)
-    yield reader, {}
-    yield out, {}
+@fixture(params=[10000, 1000, 100])
+def sample_rate(request):
+    return request.param
 
 
-def test_ephys_reader_1(tempdir):
-    arr = np.random.randn(2000, 10)
-    for obj, kwargs in _iter_traces(tempdir, arr):
-        traces = get_ephys_traces(obj, **kwargs)
+@fixture(params=['numpy', 'npy', 'flat', 'flat_concat', 'mtscomp', 'mtscomp_reader'])
+def traces(request, tempdir, arr, sample_rate):
+    if request.param == 'numpy':
+        return get_ephys_traces(arr, sample_rate=sample_rate)
 
-        assert isinstance(traces, BaseEphysReader)
-        assert traces.dtype == arr.dtype
-        assert traces.ndim == 2
-        assert traces.shape == arr.shape
-        assert traces.n_samples == arr.shape[0]
-        assert traces.n_channels == arr.shape[1]
-        print(traces.part_bounds)
-        # assert traces.n_parts == 2
+    elif request.param == 'npy':
+        path = tempdir / 'data.npy'
+        np.save(path, arr)
+        return get_ephys_traces(path, sample_rate=sample_rate)
 
-        ac(traces[:], arr)
+    elif request.param == 'flat':
+        path = tempdir / 'data.bin'
+        with open(path, 'wb') as f:
+            arr.tofile(f)
+        return get_ephys_traces(
+            path, sample_rate=sample_rate, dtype=arr.dtype, n_channels=arr.shape[1])
 
-        def _a(f):
-            ac(f(traces)[:], f(arr))
+    elif request.param == 'flat_concat':
+        path0 = tempdir / 'data0.bin'
+        with open(path0, 'wb') as f:
+            arr[:arr.shape[0] // 2, :].tofile(f)
+        path1 = tempdir / 'data1.bin'
+        with open(path1, 'wb') as f:
+            arr[arr.shape[0] // 2:, :].tofile(f)
+        return get_ephys_traces(
+            [path0, path1], sample_rate=sample_rate, dtype=arr.dtype, n_channels=arr.shape[1])
 
-        _a(lambda x: x[:, ::-1])
+    elif request.param in ('mtscomp', 'mtscomp_reader'):
+        path = tempdir / 'data.bin'
+        with open(path, 'wb') as f:
+            arr.tofile(f)
+        out = tempdir / 'data.cbin'
+        outmeta = tempdir / 'data.ch'
+        mtscomp.compress(
+            path, out, outmeta, sample_rate=sample_rate,
+            n_channels=arr.shape[1], dtype=arr.dtype,
+            n_threads=1, check_after_compress=False, quiet=True)
+        reader = mtscomp.decompress(out, outmeta, check_after_decompress=False, quiet=True)
+        if request.param == 'mtscomp':
+            return get_ephys_traces(reader)
+        else:
+            return get_ephys_traces(out)
 
-        _a(lambda x: x + 1)
-        _a(lambda x: 1 + x)
 
-        _a(lambda x: x - 1)
-        _a(lambda x: 1 - x)
+def test_ephys_reader_1(tempdir, arr, traces):
+    assert isinstance(traces, BaseEphysReader)
+    assert traces.dtype == arr.dtype
+    assert traces.ndim == 2
+    assert traces.shape == arr.shape
+    assert traces.n_samples == arr.shape[0]
+    assert traces.n_channels == arr.shape[1]
+    assert traces.n_parts in (1, 2)
+    assert len(traces.part_bounds) == traces.n_parts + 1
+    assert len(traces.chunk_bounds) == traces.n_chunks + 1
 
-        _a(lambda x: x * 2)
-        _a(lambda x: 2 * x)
+    ac(traces[:], arr)
 
-        _a(lambda x: x ** 2)
-        _a(lambda x: 2 ** x)
+    def _a(f):
+        ac(f(traces)[:], f(arr))
 
-        _a(lambda x: x / 2)
-        _a(lambda x: 2 / x)
+    _a(lambda x: x[:, ::-1])
 
-        _a(lambda x: x / 2.)
-        _a(lambda x: 2. / x)
+    _a(lambda x: x + 1)
+    _a(lambda x: 1 + x)
 
-        _a(lambda x: x // 2)
-        _a(lambda x: 2 // x)
+    _a(lambda x: x - 1)
+    _a(lambda x: 1 - x)
 
-        _a(lambda x: +x)
-        _a(lambda x: -x)
+    _a(lambda x: x * 2)
+    _a(lambda x: 2 * x)
 
-        _a(lambda x: -x[:, [1, 3, 5]])
+    _a(lambda x: x ** 2)
+    _a(lambda x: 2 ** x)
 
-        _a(lambda x: 1 + x * 2)
-        _a(lambda x: 1 + (2 * x))
-        _a(lambda x: -x * 2)
+    _a(lambda x: x / 2)
+    _a(lambda x: 2 / x)
+
+    _a(lambda x: x / 2.)
+    _a(lambda x: 2. / x)
+
+    _a(lambda x: x // 2)
+    _a(lambda x: 2 // x)
+
+    _a(lambda x: +x)
+    _a(lambda x: -x)
+
+    _a(lambda x: -x[:, [1, 3, 5]])
+
+    _a(lambda x: 1 + x * 2)
+    _a(lambda x: 1 + (2 * x))
+    _a(lambda x: -x * 2)
+
+    _a(lambda x: x[::1])
+    _a(lambda x: x[::1, :])
+    _a(lambda x: x[::1, 1:5])
+    _a(lambda x: x[::1, ::3])
+
+
+def test_ephys_random(sample_rate):
+    reader = RandomEphysReader(2000, 10, sample_rate=sample_rate)
+    assert reader[:10].shape == (10, 10)
+    assert reader[:].shape == (2000, 10)
+    assert reader[0].shape == (1, 10)
+    assert reader[10:20].shape == (10, 10)
+    assert reader[[1, 3, 5]].shape == (3, 10)
+    assert reader[[1, 3, 5], :].shape == (3, 10)
+    assert reader[[1, 3, 5], ::2].shape == (3, 5)
+    assert reader[[1, 3, 5], [0, 2, 4]].shape == (3, 3)
+    assert reader[0:-1].shape == (1999, 10)
+    assert reader[-10:-1].shape == (9, 10)
 
 
 def test_get_spike_waveforms():
@@ -197,11 +232,9 @@ def test_get_spike_waveforms():
     ae(out, expected)
 
 
-@mark.parametrize('sample_rate', [10000, 1000, 500, 100])
 @mark.parametrize('do_export', [False, True])
-def test_waveform_extractor(tempdir, sample_rate, do_export):
-    data = np.random.randn(2000, 10).astype(np.float32)
-    traces = get_ephys_traces(data, sample_rate=sample_rate)
+def test_waveform_extractor(tempdir, arr, traces, sample_rate, do_export):
+    data = arr
 
     nsw = 20
     channel_ids = [1, 3, 5]

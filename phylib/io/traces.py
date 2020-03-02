@@ -72,7 +72,7 @@ def _get_subitems(bounds, item):
         item = np.asarray(item, dtype=np.int64)
         # NOTE: only support ordered lists for now
         if len(item) >= 2:
-            assert np.diff(item) >= 0
+            assert np.all(np.diff(item))
         bounds = np.asarray(bounds)
         chunks = _find_chunks(bounds, item)
         out = []
@@ -94,7 +94,7 @@ def _get_subitems(bounds, item):
         return [(chunk, item - bounds[chunk])]
 
 
-def _item_length(bounds, item):
+def _item_length(bounds, item):  # pragma: no cover
     """Return the size of the __getitem__() output as a function of its input."""
     total = bounds[-1] - bounds[0]
     if isinstance(item, slice):
@@ -200,7 +200,7 @@ class BaseEphysReader(object):
 
     def __getitem__(self, item):
         if isinstance(item, tuple):
-            if len(item) == 1:
+            if len(item) == 1:  # pragma: no cover
                 item = item[0]
             elif len(item) == 2:
                 # Lazy indexing on the second axis, e.g. for channel mapping.
@@ -353,7 +353,7 @@ class MtscompEphysReader(BaseEphysReader):
             last_chunk = max(first_chunk, last_chunk - 1)
             yield reader.chunk_bounds[first_chunk], reader.chunk_bounds[last_chunk]
         # Last chunk.
-        yield reader.chunk_bounds[last_chunk + 1]
+        yield reader.chunk_bounds[last_chunk], reader.chunk_bounds[last_chunk + 1]
         # Close the thread pool.
         reader.stop_thread_pool()
 
@@ -405,7 +405,7 @@ class RandomEphysReader(BaseEphysReader):
 def _get_ephys_constructor(obj, **kwargs):
     """Return the class, argument, and kwargs to create an Ephys instance from any
     compatible Python object."""
-    if 'n_channels_dat' in kwargs:
+    if 'n_channels_dat' in kwargs:  # pragma: no cover
         kwargs['n_channels'] = kwargs.pop('n_channels_dat')
     if isinstance(obj, mtscomp.Reader):
         return (MtscompEphysReader, obj, kwargs)
@@ -432,7 +432,7 @@ def _get_ephys_constructor(obj, **kwargs):
     elif isinstance(obj, (tuple, list)):
         if obj:
             # Concatenate the main argument to the constructor.
-            klass, arg, kwargs = _get_ephys_constructor(obj[0])
+            klass, arg, kwargs = _get_ephys_constructor(obj[0], **kwargs)
             arg = [_get_ephys_constructor(o)[1] for o in obj]
             return (klass, arg, kwargs)
     else:
@@ -478,7 +478,7 @@ def get_spike_waveforms(spike_ids, channel_ids, spike_waveforms=None, n_samples_
     return out
 
 
-def _npy_header(shape, dtype, order='C'):
+def _npy_header(shape, dtype, order='C'):  # pragma: no cover
     d = {'shape': shape}
     if order == 'C':
         d['fortran_order'] = False
@@ -508,7 +508,7 @@ class NpyWriter(object):
     def append(self, chunk):
         if chunk.ndim == len(self.shape):
             assert chunk.shape[1:] == self.shape[1:]
-        else:
+        else:  # pragma: no cover
             assert chunk.shape == self.shape[1:]
         self.fp.write(chunk.tobytes())
 
