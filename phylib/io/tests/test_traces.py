@@ -244,7 +244,8 @@ def test_waveform_extractor(tempdir, arr, traces, sample_rate, do_export):
     # Export waveforms into a npy file.
     if do_export:
         export_waveforms(
-            tempdir / 'waveforms.npy', traces, spike_samples, spike_channels, n_samples_waveforms=nsw)
+            tempdir / 'waveforms.npy', traces, spike_samples, spike_channels,
+            n_samples_waveforms=nsw)
         w = np.load(tempdir / 'waveforms.npy')
     # Extract waveforms directly.
     else:

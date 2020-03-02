@@ -508,7 +508,7 @@ class NpyWriter(object):
     def append(self, chunk):
         if chunk.ndim == len(self.shape):
             assert chunk.shape[1:] == self.shape[1:]
-        else:  # pragma: no cover
+        else:  # pragma: no cover
             assert chunk.shape == self.shape[1:]
         self.fp.write(chunk.tobytes())
 

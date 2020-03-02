@@ -12,7 +12,7 @@ import numpy as np
 from numpy.testing import assert_equal as ae
 from pytest import raises
 
-from phylib.utils import Bunch
+# from phylib.utils import Bunch
 from phylib.utils.testing import captured_output
 from ..model import from_sparse
 
