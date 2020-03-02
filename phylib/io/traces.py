@@ -512,28 +512,26 @@ class NpyWriter(object):
 def _extract_waveform(traces, sample, channel_ids=None, n_samples_waveforms=None):
     """Extract a single spike waveform."""
     nsw = n_samples_waveforms
+    assert traces.ndim == 2
     dur = traces.shape[0]
     a = nsw // 2
     b = nsw - a
-    assert traces.ndim == 2
     assert nsw > 0
     assert a + b == nsw
     if channel_ids is None:  # pragma: no cover
         channel_ids = slice(None, None, None)
+        n_channels = traces.shape[1]
+    else:
+        n_channels = len(channel_ids)
     t0, t1 = int(sample - a), int(sample + b)
-    t0, t1 = _clip(t0, 0, dur), _clip(t1, 0, dur)
     # Extract the waveforms.
-    w = traces[t0:t1, channel_ids]
-    # Pad with zeros.
-    bef = aft = 0
-    if t0 == 0:  # pragma: no cover
-        bef = nsw - w.shape[0]
-    if t1 == dur:  # pragma: no cover
-        aft = nsw - w.shape[0]
-    assert bef + w.shape[0] + aft == nsw
-    if bef > 0 or aft > 0:  # pragma: no cover
-        w = np.pad(w, ((bef, aft), (0, 0)), 'constant')
-    assert w.shape[0] == nsw
+    w = traces[max(0, t0):t1][:, channel_ids]
+    # Deal with side effects.
+    if t0 < 0:
+        w = np.vstack((np.zeros((nsw - w.shape[0], n_channels), dtype=w.dtype), w))
+    if t1 > dur:
+        w = np.vstack((w, np.zeros((nsw - w.shape[0], n_channels), dtype=w.dtype)))
+    assert w.shape == (nsw, n_channels)
     return w
 
 
@@ -564,7 +562,7 @@ def iter_waveforms(traces, spike_samples, spike_channels, n_samples_waveforms=No
     n_samples_waveforms = n_samples_waveforms
     n_channels_loc = spike_channels.shape[1]
 
-    pad = n_samples_waveforms // 2 + 1
+    # pad = n_samples_waveforms // 2 + 1
     for i0, i1 in tqdm(traces.iter_chunks(), desc="Extracting waveforms"):
         # Get spikes in chunk.
         ind = _find_chunks([i0, i1], spike_samples) == 0
@@ -572,19 +570,14 @@ def iter_waveforms(traces, spike_samples, spike_channels, n_samples_waveforms=No
         ns = len(spike_samples)
         if ns == 0:
             continue
-
-        # Raw data chunk.
-        chunk = traces[i0 - pad:i1 + pad]
-        assert isinstance(chunk, np.ndarray)
-
         # Extract the spike waveforms within the chunk.
-        waveforms = np.zeros((ns, n_samples_waveforms, n_channels_loc))
+        waveforms = np.zeros((ns, n_samples_waveforms, n_channels_loc), dtype=traces.dtype)
         for i, ss in enumerate(spike_samples):
             channel_ids = spike_channels[i, :]
             waveforms[i, ...] = _extract_waveform(
-                chunk, ss - i0 + pad, channel_ids=channel_ids,
+                traces, ss, channel_ids=channel_ids,
                 n_samples_waveforms=n_samples_waveforms)
-        yield waveforms.astype(np.float32)
+        yield waveforms
 
 
 def export_waveforms(path, traces, spike_samples, spike_channels, n_samples_waveforms=None):
@@ -595,7 +588,7 @@ def export_waveforms(path, traces, spike_samples, spike_channels, n_samples_wave
     n_channels_loc = spike_channels.shape[1]
     shape = (n_spikes, n_samples_waveforms, n_channels_loc)
 
-    writer = NpyWriter(path, shape, np.float32)
+    writer = NpyWriter(path, shape, traces.dtype)
     for waveforms in iter_waveforms(
             traces, spike_samples, spike_channels, n_samples_waveforms=n_samples_waveforms):
         writer.append(waveforms)

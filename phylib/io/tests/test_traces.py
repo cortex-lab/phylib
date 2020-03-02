@@ -152,17 +152,25 @@ def test_get_spike_waveforms():
 
 
 def test_waveform_extractor(tempdir):
-    data = np.random.randn(2000, 10)
+    data = np.random.randn(2000, 10).astype(np.float32)
     traces = get_ephys_traces(data, sample_rate=1000)
 
     nsw = 20
-    spike_samples = [5, 25, 100, 1000]
+    spike_samples = [5, 25, 100, 1000, 1995]
     spike_channels = [[1, 3, 5]] * len(spike_samples)
 
     export_waveforms(
         tempdir / 'waveforms.npy', traces, spike_samples, spike_channels, n_samples_waveforms=nsw)
 
     w = np.load(tempdir / 'waveforms.npy')
+    assert w.dtype == data.dtype == traces.dtype
 
-    # ac(w[2, ...], data[90:110, [1, 3, 5]])
-    # ac(w[3, ...], data[990:1010, [1, 3, 5]])
+    assert np.all(w[0, :5, :] == 0)
+    ac(w[0, 5:, :], data[0:15, [1, 3, 5]])
+
+    ac(w[1, ...], data[15:35, [1, 3, 5]])
+    ac(w[2, ...], data[90:110, [1, 3, 5]])
+    ac(w[3, ...], data[990:1010, [1, 3, 5]])
+
+    assert np.all(w[4, -5:, :] == 0)
+    ac(w[4, :-5, :], data[-15:, [1, 3, 5]])
