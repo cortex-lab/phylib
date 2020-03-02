@@ -107,6 +107,15 @@ def _iter_traces(tempdir, arr):
         arr.tofile(f)
     yield path, dict(sample_rate=sample_rate, dtype=arr.dtype, n_channels=arr.shape[1])
 
+    path0 = tempdir / 'data0.bin'
+    with open(path0, 'wb') as f:
+        arr[:arr.shape[0] // 2, :].tofile(f)
+    path1 = tempdir / 'data1.bin'
+    with open(path1, 'wb') as f:
+        arr[arr.shape[0] // 2, :].tofile(f)
+    # TODO
+    # yield [path0, path1], dict(sample_rate=sample_rate, dtype=arr.dtype, n_channels=arr.shape[1])
+
     out = tempdir / 'data.cbin'
     outmeta = tempdir / 'data.ch'
     mtscomp.compress(
@@ -119,7 +128,7 @@ def _iter_traces(tempdir, arr):
 
 
 def test_ephys_reader_1(tempdir):
-    arr = np.random.randn(1000, 10)
+    arr = np.random.randn(2000, 10)
     for obj, kwargs in _iter_traces(tempdir, arr):
         traces = get_ephys_traces(obj, **kwargs)
 
@@ -129,8 +138,45 @@ def test_ephys_reader_1(tempdir):
         assert traces.shape == arr.shape
         assert traces.n_samples == arr.shape[0]
         assert traces.n_channels == arr.shape[1]
+        print(traces.part_bounds)
+        # assert traces.n_parts == 2
 
         ac(traces[:], arr)
+
+        def _a(f):
+            ac(f(traces)[:], f(arr))
+
+        _a(lambda x: x[:, ::-1])
+
+        _a(lambda x: x + 1)
+        _a(lambda x: 1 + x)
+
+        _a(lambda x: x - 1)
+        _a(lambda x: 1 - x)
+
+        _a(lambda x: x * 2)
+        _a(lambda x: 2 * x)
+
+        _a(lambda x: x ** 2)
+        _a(lambda x: 2 ** x)
+
+        _a(lambda x: x / 2)
+        _a(lambda x: 2 / x)
+
+        _a(lambda x: x / 2.)
+        _a(lambda x: 2. / x)
+
+        _a(lambda x: x // 2)
+        _a(lambda x: 2 // x)
+
+        _a(lambda x: +x)
+        _a(lambda x: -x)
+
+        _a(lambda x: -x[:, [1, 3, 5]])
+
+        _a(lambda x: 1 + x * 2)
+        _a(lambda x: 1 + (2 * x))
+        _a(lambda x: -x * 2)
 
 
 def test_get_spike_waveforms():

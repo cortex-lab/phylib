@@ -7,6 +7,7 @@
 # Imports
 #------------------------------------------------------------------------------
 
+import copy
 import logging
 from functools import reduce
 from math import ceil
@@ -140,27 +141,10 @@ def _get_chunk_bounds(arr_sizes, chunk_size):
 
 
 def _apply_op(op, arg, arr):
-    if op == 'add':
-        return arr + arg
-    elif op == 'radd':
-        return arg + arr
-    elif op == 'mul':
-        return arr * arg
-    elif op == 'rmul':
-        return arg * arr
-    elif op == 'sub':
-        return arr - arg
-    elif op == 'rsub':
-        return arr - arg
-    elif op == 'div':
-        return arr / arg
-    elif op == 'rdiv':
-        return arg / arr
-    elif op == 'pow':
-        return arr ** arg
-    elif op == 'cols':
+    if op == 'cols':
         return arr[:, arg]
-    raise NotImplementedError()
+    f = getattr(arr, '__%s__' % op)
+    return f(arg) if arg is not None else f()
 
 
 def _memmap_flat(path, dtype=None, n_channels=None, offset=0):
@@ -221,7 +205,8 @@ class BaseEphysReader(object):
             elif len(item) == 2:
                 # Lazy indexing on the second axis, e.g. for channel mapping.
                 cols = item[1]
-                self._append_op('cols', cols)
+                # NOTE the self = here.
+                self = self._append_op('cols', cols)
                 item = item[0]
             else:
                 raise NotImplementedError()
@@ -235,49 +220,65 @@ class BaseEphysReader(object):
         out = np.vstack(to_concat)
         return self._apply_ops(out)
 
-    def _append_op(self, op, arg):
-        self._ops.append((op, arg))
+    def _append_op(self, op, arg=None):
+        clone = copy.copy(self)
+        # NOTE: make sure the clone instance has its own ops list so as to avoid side effects.
+        clone._ops = list(self._ops)
+        clone._ops.append((op, arg))
+        return clone
 
     def _apply_ops(self, arr):
         for op, arg in self._ops:
             arr = _apply_op(op, arg, arr)
         return arr
 
-    def __mul__(self, arg):
-        self._append_op('mul', arg)
-        return self
-
-    def __rmul__(self, arg):
-        self._append_op('rmul', arg)
-        return self
-
     def __add__(self, arg):
-        self._append_op('add', arg)
-        return self
+        return self._append_op('add', arg)
 
     def __radd__(self, arg):
-        self._append_op('radd', arg)
-        return self
-
-    def __div__(self, arg):
-        self._append_op('div', arg)
-        return self
-
-    def __rdiv__(self, arg):
-        self._append_op('rdiv', arg)
-        return self
+        return self._append_op('radd', arg)
 
     def __sub__(self, arg):
-        self._append_op('sub', arg)
-        return self
+        return self._append_op('sub', arg)
 
     def __rsub__(self, arg):
-        self._append_op('rsub', arg)
-        return self
+        return self._append_op('rsub', arg)
+
+    def __mul__(self, arg):
+        return self._append_op('mul', arg)
+
+    def __rmul__(self, arg):
+        return self._append_op('rmul', arg)
+
+    def __div__(self, arg):  # pragma: no cover
+        return self._append_op('div', arg)
+
+    def __rdiv__(self, arg):  # pragma: no cover
+        return self._append_op('rdiv', arg)
+
+    def __floordiv__(self, arg):
+        return self._append_op('floordiv', arg)
+
+    def __truediv__(self, arg):
+        return self._append_op('truediv', arg)
+
+    def __rfloordiv__(self, arg):
+        return self._append_op('rfloordiv', arg)
+
+    def __rtruediv__(self, arg):
+        return self._append_op('rtruediv', arg)
+
+    def __pos__(self):
+        return self._append_op('pos')
+
+    def __neg__(self):
+        return self._append_op('neg')
 
     def __pow__(self, arg):
-        self._append_op('pow', arg)
-        return self
+        return self._append_op('pow', arg)
+
+    def __rpow__(self, arg):
+        return self._append_op('rpow', arg)
 
     def subset_time_range(self, interval):
         raise NotImplementedError()
