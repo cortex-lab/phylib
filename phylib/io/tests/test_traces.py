@@ -152,18 +152,25 @@ def test_get_spike_waveforms():
 
 
 @mark.parametrize('sample_rate', [10000, 1000, 500, 100])
-def test_waveform_extractor(tempdir, sample_rate):
+@mark.parametrize('do_export', [False, True])
+def test_waveform_extractor(tempdir, sample_rate, do_export):
     data = np.random.randn(2000, 10).astype(np.float32)
     traces = get_ephys_traces(data, sample_rate=sample_rate)
 
     nsw = 20
+    channel_ids = [1, 3, 5]
     spike_samples = [5, 25, 100, 1000, 1995]
-    spike_channels = [[1, 3, 5]] * len(spike_samples)
+    spike_channels = [channel_ids] * len(spike_samples)
 
-    export_waveforms(
-        tempdir / 'waveforms.npy', traces, spike_samples, spike_channels, n_samples_waveforms=nsw)
+    # Export waveforms into a npy file.
+    if do_export:
+        export_waveforms(
+            tempdir / 'waveforms.npy', traces, spike_samples, spike_channels, n_samples_waveforms=nsw)
+        w = np.load(tempdir / 'waveforms.npy')
+    # Extract waveforms directly.
+    else:
+        w = extract_waveforms(traces, spike_samples, channel_ids, n_samples_waveforms=nsw)
 
-    w = np.load(tempdir / 'waveforms.npy')
     assert w.dtype == data.dtype == traces.dtype
 
     assert np.all(w[0, :5, :] == 0)

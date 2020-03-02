@@ -550,10 +550,9 @@ def extract_waveforms(traces, spike_samples, channel_ids, n_samples_waveforms=No
     nc = len(channel_ids)
     out = np.zeros((ns, nsw, nc), dtype=np.float64)
     # Extract the spike waveforms.
-    out = np.concatenate((_extract_waveform(
+    out = np.concatenate([_extract_waveform(
         traces, ts, channel_ids=channel_ids, n_samples_waveforms=nsw)[np.newaxis, ...]
-        for i, ts in enumerate(spike_samples)), axis=0)
-    out -= np.median(out, axis=1)[:, np.newaxis, :]
+        for i, ts in enumerate(spike_samples)], axis=0)
     return out
 
 
