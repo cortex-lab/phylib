@@ -271,6 +271,9 @@ class TemplateModel(object):
         self.spike_templates = self._load_spike_templates()
         assert self.spike_templates.shape == (ns,)
 
+        # Unique template ids.
+        self.template_ids = np.unique(self.spike_templates)
+
         # Spike clusters.
         self.spike_clusters = self._load_spike_clusters()
         assert self.spike_clusters.shape == (ns,)
@@ -564,6 +567,7 @@ class TemplateModel(object):
                 "Skipping spike waveforms that do not exist, they will be extracted "
                 "on the fly from the raw data as needed.")
             return
+        logger.debug("Loading spikes subset waveforms.")
         return Bunch(
             waveforms=self._read_array(path, mmap_mode='r'),
             spike_channels=self._read_array(path_channels),
@@ -748,6 +752,8 @@ class TemplateModel(object):
         """Return the n best channels for a given template, filling with -1s if there isn't
         enough best channels for that template."""
         assert n_channels > 0
+        if template_id not in self.template_ids:
+            return [-1] * n_channels
         template = self.get_template(template_id)
         channel_ids = list(template.channel_ids[:n_channels])
         if len(channel_ids) < n_channels:
@@ -1056,8 +1062,7 @@ class TemplateModel(object):
         cluster_ids = sorted(spt.keys())
         spike_ids = select_spikes(
             cluster_ids=cluster_ids, max_n_spikes_per_cluster=nst,
-            spikes_per_cluster=lambda cl: spt[cl],
-            subset='full')
+            spikes_per_cluster=lambda cl: spt[cl])
         ns = len(spike_ids)
         logger.debug("Saving spike waveforms: %d spikes.", ns)
         np.save(path_spikes, spike_ids)

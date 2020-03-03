@@ -119,7 +119,7 @@ def test_model_spike_waveforms(template_path_full):
         assert isinstance(traces, np.ndarray)
 
     waveforms = {}
-    for tid in range(model.n_templates):
+    for tid in model.template_ids:
         spike_ids = model.get_template_spikes(tid)
         channel_ids = model.get_template_channels(tid)
         waveforms[tid] = model.get_waveforms(spike_ids, channel_ids)
@@ -133,7 +133,7 @@ def test_model_spike_waveforms(template_path_full):
     nsw = model.n_samples_waveforms // 2
     if model.spike_waveforms is None:
         return
-    for tid in range(model.n_templates):
+    for tid in model.template_ids:
         spike_ids = model.get_template_spikes(tid)
         channel_ids = model.get_template_channels(tid)
         spike_ids = np.intersect1d(spike_ids, model.spike_waveforms.spike_ids)
