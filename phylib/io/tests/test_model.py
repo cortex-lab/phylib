@@ -112,16 +112,25 @@ def test_model_save(template_model_full):
 
 
 def test_model_spike_waveforms(template_path_full):
-    waveforms = {}
     model = load_model(template_path_full)
+
+    if model.traces is not None:
+        traces = model.traces[:]
+        assert isinstance(traces, np.ndarray)
+
+    waveforms = {}
     for tid in range(model.n_templates):
         spike_ids = model.get_template_spikes(tid)
         channel_ids = model.get_template_channels(tid)
         waveforms[tid] = model.get_waveforms(spike_ids, channel_ids)
-    model.save_spikes_subset_waveforms(1000, 16)
-    model.close()
 
-    model = load_model(template_path_full)
+    # Export the waveforms.
+    model.save_spikes_subset_waveforms(1000, 16)
+    # Fill spike_waveforms after saving them.
+    model.spike_waveforms = model._load_spike_waveforms()
+
+    # Check the waveforms loaded from the spike subset waveforms arrays.
+    nsw = model.n_samples_waveforms // 2
     if model.spike_waveforms is None:
         return
     for tid in range(model.n_templates):
@@ -129,10 +138,19 @@ def test_model_spike_waveforms(template_path_full):
         channel_ids = model.get_template_channels(tid)
         spike_ids = np.intersect1d(spike_ids, model.spike_waveforms.spike_ids)
         w = model.get_waveforms(spike_ids, channel_ids)
-        assert w is not None
-        # ae(w, waveforms[tid])
-        # print(w.shape, waveforms[tid].shape)
-        # print(tid, np.all(w == waveforms[tid]))
+
+        # Check the 2 ways of getting the waveforms.
+        ae(w, waveforms[tid])
+
+        if model.traces is not None:
+            # Check each array with the ground truth, obtained from the raw data.
+            for i, spike in enumerate(spike_ids):
+                t = int(model.spike_samples[spike])
+                wt = traces[t - nsw:t + nsw, channel_ids]
+
+                ae(waveforms[tid][i], wt)
+                ae(w[i], wt)
+
     model.close()
 
 

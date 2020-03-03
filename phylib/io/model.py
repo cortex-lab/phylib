@@ -1064,7 +1064,7 @@ class TemplateModel(object):
 
         # Compute spike channels.
         best_channels = np.vstack([
-            self._template_n_channels(t, nc) for t in range(self.n_templates)])
+            self._template_n_channels(t, nc) for t in range(self.n_templates)]).astype(np.int32)
         assert best_channels.ndim == 2
         assert best_channels.shape[0] == self.n_templates
         spike_channels = best_channels[self.spike_templates[spike_ids], :]

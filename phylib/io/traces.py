@@ -548,6 +548,8 @@ def _extract_waveform(traces, sample, channel_ids=None, n_samples_waveforms=None
     t0, t1 = int(sample - a), int(sample + b)
     # Extract the waveforms.
     w = traces[max(0, t0):t1][:, channel_ids]
+    if not isinstance(channel_ids, slice):
+        w[:, channel_ids == -1] = 0
     # Deal with side effects.
     if t0 < 0:
         w = np.vstack((np.zeros((nsw - w.shape[0], n_channels), dtype=w.dtype), w))
@@ -587,13 +589,14 @@ def iter_waveforms(traces, spike_samples, spike_channels, n_samples_waveforms=No
         # Get spikes in chunk.
         ind = _find_chunks([i0, i1], spike_samples) == 0
         ss = spike_samples[ind]
+        sc = spike_channels[ind]
         ns = len(ss)
         if ns == 0:
             continue
         # Extract the spike waveforms within the chunk.
         waveforms = np.zeros((ns, n_samples_waveforms, n_channels_loc), dtype=traces.dtype)
         for i, ss in enumerate(ss):
-            channel_ids = spike_channels[i, :]
+            channel_ids = sc[i, :]
             waveforms[i, ...] = _extract_waveform(
                 traces, ss, channel_ids=channel_ids,
                 n_samples_waveforms=n_samples_waveforms)
@@ -604,7 +607,7 @@ def export_waveforms(path, traces, spike_samples, spike_channels, n_samples_wave
     """Export a selection of spike waveforms to a npy file by iterating over the data on a chunk
     by chunk basis."""
     n_spikes = len(spike_samples)
-    spike_channels = np.asarray(spike_channels, dtype=np.int64)
+    spike_channels = np.asarray(spike_channels, dtype=np.int32)
     n_channels_loc = spike_channels.shape[1]
     shape = (n_spikes, n_samples_waveforms, n_channels_loc)
 
