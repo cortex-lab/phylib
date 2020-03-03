@@ -13,7 +13,7 @@ from pytest import raises
 
 from ..array import (
     _unique, _normalize, _index_of, _spikes_in_clusters, _spikes_per_cluster,
-    _flatten_per_cluster, get_closest_clusters, _get_data_lim, _flatten,
+    _flatten_per_cluster, get_closest_clusters, _get_data_lim, _flatten, _clip,
     select_spikes, Selector, chunk_bounds, regular_subset, excerpts, data_chunk, grouped_mean,
     get_excerpts, _range_from_slice, _pad, _get_padded,
     select_spikes_from_chunked, read_array, write_array)
@@ -25,6 +25,10 @@ from ..mock import artificial_spike_clusters
 #------------------------------------------------------------------------------
 # Test utility functions
 #------------------------------------------------------------------------------
+
+def test_clip():
+    assert _clip(-1, 0, 1) == 0
+
 
 def test_range_from_slice():
     """Test '_range_from_slice'."""

@@ -21,7 +21,7 @@ import scipy.io as sio
 
 from .array import _index_of, _spikes_in_clusters, _spikes_per_cluster, select_spikes
 from .traces import (
-    get_ephys_traces, RandomEphysReader, extract_waveforms,
+    get_ephys_reader, RandomEphysReader, extract_waveforms,
     get_spike_waveforms, export_waveforms)
 from phylib.utils import Bunch
 from phylib.utils._misc import _write_tsv_simple, _read_tsv_simple, read_python
@@ -472,7 +472,7 @@ class TemplateModel(object):
         assert isinstance(paths, (list, tuple))
         n = self.n_channels_dat
         # Memmap all dat files and concatenate them virtually.
-        traces = get_ephys_traces(
+        traces = get_ephys_reader(
             paths, n_channels_dat=n, dtype=self.dtype, offset=self.offset,
             sample_rate=self.sample_rate)
         if traces is not None:
@@ -566,7 +566,7 @@ class TemplateModel(object):
             return
         return Bunch(
             waveforms=self._read_array(path, mmap_mode='r'),
-            channel_ids=self._read_array(path_channels),
+            spike_channels=self._read_array(path_channels),
             spike_ids=self._read_array(path_spikes),
         )
 
@@ -743,6 +743,16 @@ class TemplateModel(object):
         assert best_channel in channel_ids
         assert amplitude.shape == (len(channel_ids),)
         return channel_ids, amplitude, best_channel
+
+    def _template_n_channels(self, template_id, n_channels):
+        """Return the n best channels for a given template, filling with -1s if there isn't
+        enough best channels for that template."""
+        assert n_channels > 0
+        template = self.get_template(template_id)
+        channel_ids = list(template.channel_ids[:n_channels])
+        if len(channel_ids) < n_channels:
+            channel_ids += [-1] * (n_channels - len(channel_ids))
+        return channel_ids
 
     def _get_template_dense(self, template_id, channel_ids=None):
         """Return data for one template."""
@@ -1026,7 +1036,7 @@ class TemplateModel(object):
         logger.debug("Save spike clusters to `%s`.", path)
         np.save(path, spike_clusters)
 
-    def save_spikes_subet_waveforms(self, max_n_spikes_per_template=None, max_n_channels=None):
+    def save_spikes_subset_waveforms(self, max_n_spikes_per_template=None, max_n_channels=None):
         if self.traces is None:
             logger.warning(
                 "Spike waveforms could not be extracted as the raw data file is not available.")
@@ -1043,14 +1053,18 @@ class TemplateModel(object):
 
         # Subselection of spikes.
         spt = _spikes_per_cluster(self.spike_templates)
-        spike_ids = select_spikes(max_n_spikes_per_cluster=nst, spikes_per_cluster=spt)
+        cluster_ids = sorted(spt.keys())
+        spike_ids = select_spikes(
+            cluster_ids=cluster_ids, max_n_spikes_per_cluster=nst,
+            spikes_per_cluster=lambda cl: spt[cl],
+            subset='full')
         ns = len(spike_ids)
-        logger.debug("Saving spike waveforms: %d spikes.")
+        logger.debug("Saving spike waveforms: %d spikes.", ns)
         np.save(path_spikes, spike_ids)
 
         # Compute spike channels.
         best_channels = np.vstack([
-            self.get_template(t).channel_ids[:nc] for t in range(self.n_templates)])
+            self._template_n_channels(t, nc) for t in range(self.n_templates)])
         assert best_channels.ndim == 2
         assert best_channels.shape[0] == self.n_templates
         spike_channels = best_channels[self.spike_templates[spike_ids], :]
@@ -1060,7 +1074,7 @@ class TemplateModel(object):
 
         # Extract waveforms from the raw data on a chunk by chunk basis.
         export_waveforms(
-            path, self.traces, spike_ids, self.spike_samples[spike_ids], spike_channels,
+            path, self.traces, self.spike_samples[spike_ids], spike_channels,
             n_samples_waveforms=self.n_samples_waveforms)
 
     def close(self):

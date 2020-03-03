@@ -421,8 +421,9 @@ def select_spikes(
         for cluster in cluster_ids:
             # Decrease the number of spikes per cluster when there
             # are more clusters.
-            n = int(max_n_spikes_per_cluster * exp(-.1 * (n_clusters - 1)))
-            n = max(1, n)
+            if subset != 'full':
+                n = int(max_n_spikes_per_cluster * exp(-.1 * (n_clusters - 1)))
+                n = max(1, n)
             spike_ids = spikes_per_cluster(cluster)
             if subset == 'regular':
                 # Regular subselection.

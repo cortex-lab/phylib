@@ -17,7 +17,7 @@ from pytest import raises, fixture, mark
 from phylib.utils import Bunch
 from ..traces import (
     _get_subitems, _get_chunk_bounds,
-    get_ephys_traces, BaseEphysReader, extract_waveforms, export_waveforms, RandomEphysReader,
+    get_ephys_reader, BaseEphysReader, extract_waveforms, export_waveforms, RandomEphysReader,
     get_spike_waveforms)
 
 logger = logging.getLogger(__name__)
@@ -105,18 +105,18 @@ def sample_rate(request):
 @fixture(params=['numpy', 'npy', 'flat', 'flat_concat', 'mtscomp', 'mtscomp_reader'])
 def traces(request, tempdir, arr, sample_rate):
     if request.param == 'numpy':
-        return get_ephys_traces(arr, sample_rate=sample_rate)
+        return get_ephys_reader(arr, sample_rate=sample_rate)
 
     elif request.param == 'npy':
         path = tempdir / 'data.npy'
         np.save(path, arr)
-        return get_ephys_traces(path, sample_rate=sample_rate)
+        return get_ephys_reader(path, sample_rate=sample_rate)
 
     elif request.param == 'flat':
         path = tempdir / 'data.bin'
         with open(path, 'wb') as f:
             arr.tofile(f)
-        return get_ephys_traces(
+        return get_ephys_reader(
             path, sample_rate=sample_rate, dtype=arr.dtype, n_channels=arr.shape[1])
 
     elif request.param == 'flat_concat':
@@ -126,7 +126,7 @@ def traces(request, tempdir, arr, sample_rate):
         path1 = tempdir / 'data1.bin'
         with open(path1, 'wb') as f:
             arr[arr.shape[0] // 2:, :].tofile(f)
-        return get_ephys_traces(
+        return get_ephys_reader(
             [path0, path1], sample_rate=sample_rate, dtype=arr.dtype, n_channels=arr.shape[1])
 
     elif request.param in ('mtscomp', 'mtscomp_reader'):
@@ -141,12 +141,12 @@ def traces(request, tempdir, arr, sample_rate):
             n_threads=1, check_after_compress=False, quiet=True)
         reader = mtscomp.decompress(out, outmeta, check_after_decompress=False, quiet=True)
         if request.param == 'mtscomp':
-            return get_ephys_traces(reader)
+            return get_ephys_reader(reader)
         else:
-            return get_ephys_traces(out)
+            return get_ephys_reader(out)
 
 
-def test_ephys_reader_1(tempdir, arr, traces):
+def test_ephys_reader_1(tempdir, arr, traces, sample_rate):
     assert isinstance(traces, BaseEphysReader)
     assert traces.dtype == arr.dtype
     assert traces.ndim == 2
@@ -154,6 +154,7 @@ def test_ephys_reader_1(tempdir, arr, traces):
     assert traces.n_samples == arr.shape[0]
     assert traces.n_channels == arr.shape[1]
     assert traces.n_parts in (1, 2)
+    assert traces.duration == arr.shape[0] / sample_rate
     assert len(traces.part_bounds) == traces.n_parts + 1
     assert len(traces.chunk_bounds) == traces.n_chunks + 1
 
@@ -225,7 +226,7 @@ def test_get_spike_waveforms():
     assert s.shape == (ns,)
     assert c.shape == (ns, nc)
 
-    sw = Bunch(waveforms=w, spike_ids=s, channel_ids=c)
+    sw = Bunch(waveforms=w, spike_ids=s, spike_channels=c)
     out = get_spike_waveforms([5, 1, 3], [2, 1], spike_waveforms=sw, n_samples_waveforms=nsw)
 
     expected = w[[2, 0, 1], ...][..., [1, 0]]
@@ -239,7 +240,8 @@ def test_waveform_extractor(tempdir, arr, traces, sample_rate, do_export):
     nsw = 20
     channel_ids = [1, 3, 5]
     spike_samples = [5, 25, 100, 1000, 1995]
-    spike_channels = [channel_ids] * len(spike_samples)
+    spike_ids = np.arange(len(spike_samples))
+    spike_channels = np.array([channel_ids] * len(spike_samples))
 
     # Export waveforms into a npy file.
     if do_export:
@@ -252,6 +254,17 @@ def test_waveform_extractor(tempdir, arr, traces, sample_rate, do_export):
         w = extract_waveforms(traces, spike_samples, channel_ids, n_samples_waveforms=nsw)
 
     assert w.dtype == data.dtype == traces.dtype
+
+    spike_waveforms = Bunch(
+        spike_ids=spike_ids,
+        spike_channels=spike_channels,
+        waveforms=w,
+    )
+
+    ww = get_spike_waveforms(
+        spike_ids, channel_ids, spike_waveforms=spike_waveforms,
+        n_samples_waveforms=nsw)
+    ae(w, ww)
 
     assert np.all(w[0, :5, :] == 0)
     ac(w[0, 5:, :], data[0:15, [1, 3, 5]])

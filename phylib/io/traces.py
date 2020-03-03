@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-"""EphysTraces class."""
+"""EphysReader class."""
 
 
 #------------------------------------------------------------------------------
@@ -194,6 +194,10 @@ class BaseEphysReader(object):
     def shape(self):
         return (self.n_samples, self.n_channels)
 
+    @property
+    def duration(self):
+        return self.n_samples / float(self.sample_rate)
+
     def _get_part(self, part_idx, subitem):
         """Return the requested item[] of a part of the data. To be overriden."""
         raise NotImplementedError()
@@ -207,6 +211,9 @@ class BaseEphysReader(object):
                 cols = item[1]
                 # NOTE the self = here.
                 self = self._append_op('cols', cols)
+                if item[0] == slice(None, None, None):
+                    # traces[:, cols] should return a cloned EphysReader instance.
+                    return self
                 item = item[0]
             else:
                 raise NotImplementedError()
@@ -330,9 +337,7 @@ class MtscompEphysReader(BaseEphysReader):
         return self.reader[subitem]
 
     def iter_chunks(self):
-        # decompress N chunks in parallel, and iterate over the boundaries of the chunks (i1
-        # is the bounds of the antelast chunk, so as to handle overlapping with waveform
-        # extraction), adjust the cache 2*ncpus
+        """Iterate over multiple chunks that are decompressed in parallel."""
         reader = self.reader
         # Make sure all chunks from a batch are cached.
         reader.set_cache_size(reader.n_batches + 2)
@@ -377,6 +382,10 @@ class ArrayEphysReader(BaseEphysReader):
 
 class NpyEphysReader(ArrayEphysReader):
     def __init__(self, path, **kwargs):
+        if isinstance(path, (tuple, list)):
+            if len(path) != 1:
+                raise ValueError("There should be exactly one path to a npy file.")
+            path = path[0]
         self._arr = np.load(path, mmap_mode='r')  # TODO: support for multiple npy files
         super(NpyEphysReader, self).__init__(self._arr, **kwargs)
 
@@ -413,7 +422,7 @@ def _get_ephys_constructor(obj, **kwargs):
         path = Path(obj)
         if not path.exists():  # pragma: no cover
             logger.warning("File %s does not exist.", path)
-            return
+            return None, None, {}
         assert path.exists()
         ext = path.suffix
         # Mtscomp file
@@ -439,13 +448,15 @@ def _get_ephys_constructor(obj, **kwargs):
         return (ArrayEphysReader, obj, kwargs)
 
 
-def get_ephys_traces(obj, **kwargs):
-    """Get an EphysTraces instance from any NumPy-like object of file path.
+def get_ephys_reader(obj, **kwargs):
+    """Get an EphysReader instance from any NumPy-like object of file path.
 
     Return None if data file(s) not available.
 
     """
     klass, arg, kwargs = _get_ephys_constructor(obj, **kwargs)
+    if not klass:
+        return
     return klass(arg, **kwargs)
 
 
@@ -453,9 +464,13 @@ def get_ephys_traces(obj, **kwargs):
 # Waveform extractor
 #------------------------------------------------------------------------------
 
-
 def get_spike_waveforms(spike_ids, channel_ids, spike_waveforms=None, n_samples_waveforms=None):
-    """Get spike waveforms from precomputed doubly sparse spike waveforms array."""
+    """Get spike waveforms from precomputed doubly sparse spike waveforms array.
+
+    The `spike_waveforms` object is a Bunch with attributes
+    `spike_ids`, `spike_channels`, `waveforms`.
+
+    """
     assert spike_waveforms
     # Make sure the requested spikes all belong to the spike_waveforms object.
     assert np.all(np.isin(spike_ids, spike_waveforms.spike_ids))
@@ -465,10 +480,10 @@ def get_spike_waveforms(spike_ids, channel_ids, spike_waveforms=None, n_samples_
     assert nsw > 0
     nc = len(channel_ids)
     assert nc > 0
-    out = np.zeros((ns, nsw, nc), dtype=np.float64)
+    out = np.zeros((ns, nsw, nc), dtype=spike_waveforms.waveforms.dtype)
     # Extract the spike waveforms.
     for i, sid in enumerate(spike_ids_rel):
-        ind = spike_waveforms.channel_ids[sid, :]
+        ind = spike_waveforms.spike_channels[sid, :]
         channel_common = np.intersect1d(channel_ids, ind)
         if len(channel_ids) > 0:
             cols0 = _index_of(channel_common, channel_ids)
@@ -549,11 +564,11 @@ def extract_waveforms(traces, spike_samples, channel_ids, n_samples_waveforms=No
     nsw = n_samples_waveforms
     assert nsw > 0, "Please specify n_samples_waveforms > 0"
     nc = len(channel_ids)
-    out = np.zeros((ns, nsw, nc), dtype=np.float64)
     # Extract the spike waveforms.
-    out = np.concatenate([_extract_waveform(
-        traces, ts, channel_ids=channel_ids, n_samples_waveforms=nsw)[np.newaxis, ...]
-        for i, ts in enumerate(spike_samples)], axis=0)
+    out = np.zeros((ns, nsw, nc), dtype=traces.dtype)
+    for i, ts in enumerate(spike_samples):
+        out[i] = _extract_waveform(
+            traces, ts, channel_ids=channel_ids, n_samples_waveforms=nsw)[np.newaxis, ...]
     return out
 
 

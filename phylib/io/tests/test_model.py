@@ -14,7 +14,7 @@ from pytest import raises
 
 # from phylib.utils import Bunch
 from phylib.utils.testing import captured_output
-from ..model import from_sparse
+from ..model import from_sparse, load_model
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +109,31 @@ def test_model_save(template_model_full):
     m = template_model_full
     m.save_metadata('test', {1: 1})
     m.save_spike_clusters(m.spike_clusters)
-    m.save_spikes_subet_waveforms(10, 8)
+
+
+def test_model_spike_waveforms(template_path_full):
+    waveforms = {}
+    model = load_model(template_path_full)
+    for tid in range(model.n_templates):
+        spike_ids = model.get_template_spikes(tid)
+        channel_ids = model.get_template_channels(tid)
+        waveforms[tid] = model.get_waveforms(spike_ids, channel_ids)
+    model.save_spikes_subset_waveforms(1000, 16)
+    model.close()
+
+    model = load_model(template_path_full)
+    if model.spike_waveforms is None:
+        return
+    for tid in range(model.n_templates):
+        spike_ids = model.get_template_spikes(tid)
+        channel_ids = model.get_template_channels(tid)
+        spike_ids = np.intersect1d(spike_ids, model.spike_waveforms.spike_ids)
+        w = model.get_waveforms(spike_ids, channel_ids)
+        assert w is not None
+        # ae(w, waveforms[tid])
+        # print(w.shape, waveforms[tid].shape)
+        # print(tid, np.all(w == waveforms[tid]))
+    model.close()
 
 
 def test_model_metadata_1(template_model_full):
