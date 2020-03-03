@@ -8,7 +8,7 @@
 
 import logging
 import math
-from math import floor, exp
+from math import floor
 from operator import itemgetter
 from pathlib import Path
 
@@ -416,14 +416,14 @@ def select_spikes(
         selection = {c: spikes_per_cluster(c) for c in cluster_ids}
     else:
         assert max_n_spikes_per_cluster > 0
+        n = max_n_spikes_per_cluster
         selection = {}
-        n_clusters = len(cluster_ids)
+        # n_clusters = len(cluster_ids)
         for cluster in cluster_ids:
             # Decrease the number of spikes per cluster when there
             # are more clusters.
-            if subset != 'full':
-                n = int(max_n_spikes_per_cluster * exp(-.1 * (n_clusters - 1)))
-                n = max(1, n)
+            # n = int(max_n_spikes_per_cluster * exp(-.1 * (n_clusters - 1)))
+            # n = max(1, n)
             spike_ids = spikes_per_cluster(cluster)
             if subset == 'regular':
                 # Regular subselection.

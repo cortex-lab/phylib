@@ -344,7 +344,7 @@ def test_select_spikes_1():
     ae(select_spikes([2, 3, 5], 0, spikes_per_cluster=spc), spikes)
     ae(select_spikes([2, 3, 5], None, spikes_per_cluster=spc), spikes)
     ae(select_spikes([2, 3, 5], 1, spikes_per_cluster=spc), [2, 3])
-    ae(select_spikes([2, 5], 2, spikes_per_cluster=spc), [2])
+    ae(select_spikes([2, 5], 2, spikes_per_cluster=spc), [2, 11])
 
 
 def test_select_spikes_2():
@@ -353,7 +353,7 @@ def test_select_spikes_2():
     sel = Selector(spc)
     assert sel.select_spikes() is None
     ae(sel.select_spikes([2, 5]), spc(2))
-    ae(sel.select_spikes([2, 5], 2), [2])
+    ae(sel.select_spikes([2, 5], 2), [2, 11])
 
 
 def test_select_spikes_3():
