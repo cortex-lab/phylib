@@ -394,10 +394,8 @@ def regular_subset(spikes, n_spikes_max=None, offset=0):
     # Nothing to do if the selection already satisfies n_spikes_max.
     if n_spikes_max is None or len(spikes) <= n_spikes_max:  # pragma: no cover
         return spikes
-    step = math.ceil(np.clip(1. / n_spikes_max * len(spikes),
-                             1, len(spikes)))
+    step = math.ceil(np.clip(1. / n_spikes_max * len(spikes), 1, len(spikes)))
     step = int(step)
-    # Note: randomly-changing selections are confusing...
     my_spikes = spikes[offset::step][:n_spikes_max]
     assert len(my_spikes) <= len(spikes)
     assert len(my_spikes) <= n_spikes_max
@@ -406,7 +404,7 @@ def regular_subset(spikes, n_spikes_max=None, offset=0):
 
 def select_spikes(
         cluster_ids=None, max_n_spikes_per_cluster=None, spikes_per_cluster=None,
-        batch_size=None, subset=None):
+        batch_size=None, subset=None, spike_ids_subset=None):
     """Return a selection of spikes belonging to the specified clusters."""
     subset = subset or 'regular'
     assert _is_array_like(cluster_ids)
@@ -425,6 +423,9 @@ def select_spikes(
             # n = int(max_n_spikes_per_cluster * exp(-.1 * (n_clusters - 1)))
             # n = max(1, n)
             spike_ids = spikes_per_cluster(cluster)
+            # Use a subselection of spikes.
+            if spike_ids_subset is not None:
+                spike_ids = np.intersect1d(spike_ids, spike_ids_subset)
             if subset == 'regular':
                 # Regular subselection.
                 if batch_size is None or len(spike_ids) <= max(batch_size, n):
@@ -474,7 +475,8 @@ class Selector(object):
         self.spikes_per_cluster = spikes_per_cluster
 
     def select_spikes(
-            self, cluster_ids=None, max_n_spikes_per_cluster=None, batch_size=None, subset=None):
+            self, cluster_ids=None, max_n_spikes_per_cluster=None, batch_size=None,
+            subset=None, spike_ids_subset=None):
         """Get a selection of spikes from a given set of clusters."""
         if cluster_ids is None or not len(cluster_ids):
             return None
@@ -483,4 +485,4 @@ class Selector(object):
         # Select a subset of the spikes.
         return select_spikes(
             cluster_ids, spikes_per_cluster=self.spikes_per_cluster, max_n_spikes_per_cluster=ns,
-            batch_size=batch_size, subset=subset)
+            batch_size=batch_size, subset=subset, spike_ids_subset=spike_ids_subset)

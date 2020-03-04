@@ -558,7 +558,6 @@ class TemplateModel(object):
         return samples, times
 
     def _load_spike_waveforms(self):  # pragma: no cover
-        logger.debug("Loading spike waveforms.")
         path = self.dir_path / '_phy_spikes_subset.waveforms.npy'
         path_channels = self.dir_path / '_phy_spikes_subset.channels.npy'
         path_spikes = self.dir_path / '_phy_spikes_subset.spikes.npy'
@@ -567,7 +566,7 @@ class TemplateModel(object):
                 "Skipping spike waveforms that do not exist, they will be extracted "
                 "on the fly from the raw data as needed.")
             return
-        logger.debug("Loading spikes subset waveforms.")
+        logger.debug("Loading spikes subset waveforms to avoid fetching waveforms from raw data.")
         return Bunch(
             waveforms=self._read_array(path, mmap_mode='r'),
             spike_channels=self._read_array(path_channels),

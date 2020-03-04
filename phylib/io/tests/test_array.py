@@ -354,6 +354,8 @@ def test_select_spikes_2():
     assert sel.select_spikes() is None
     ae(sel.select_spikes([2, 5]), spc(2))
     ae(sel.select_spikes([2, 5], 2), [2, 11])
+    ae(sel.select_spikes([2, 5], 2, spike_ids_subset=[2, 11]), [2, 11])
+    ae(sel.select_spikes([2, 5], 2, spike_ids_subset=[2]), [2])
 
 
 def test_select_spikes_3():

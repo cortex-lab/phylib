@@ -585,7 +585,7 @@ def iter_waveforms(traces, spike_samples, spike_channels, n_samples_waveforms=No
     n_samples_waveforms = n_samples_waveforms
     n_channels_loc = spike_channels.shape[1]
 
-    for i0, i1 in tqdm(traces.iter_chunks(), desc="Extracting waveforms"):
+    for i0, i1 in tqdm(traces.iter_chunks(), desc="Extracting waveforms", total=traces.n_chunks):
         # Get spikes in chunk.
         ind = _find_chunks([i0, i1], spike_samples) == 0
         ss = spike_samples[ind]
