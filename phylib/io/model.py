@@ -953,6 +953,29 @@ class TemplateModel(object):
         assert template_features.shape[0] == ns
         return template_features
 
+    def get_depths(self):
+        """Compute spike depths based on spike pc features and probe depths."""
+
+        # compute the depth as the weighted sum of coordinates
+        batch_sz = 50000  # number of spikes per batch
+        c = 0
+        spike_depths = np.zeros_like(self.spike_times)
+        nspi = spike_depths.shape[0]
+        while True:
+            ispi = np.arange(c, min(c + batch_sz, nspi))
+            # take only first component
+            features = np.square(self.sparse_features.data[ispi, :, 0])
+            ichannels = self.sparse_features.cols[self.spike_clusters[ispi]]
+            ypos = self.channel_positions[ichannels, 1]
+
+            spike_depths[ispi] = np.sum(np.transpose(ypos * features) /
+                                        np.sum(features, axis=1), axis=0)
+            c += batch_sz
+            if c >= nspi:
+                break
+
+        return spike_depths
+
     #--------------------------------------------------------------------------
     # Internal helper methods for public high-level methods
     #--------------------------------------------------------------------------
