@@ -470,13 +470,10 @@ class TemplateModel(object):
                 n_samples = int((self.spike_times[-1] + 1) * self.sample_rate)
                 return RandomEphysReader(n_samples, len(channel_map), sample_rate=self.sample_rate)
             return
-        paths = self.dat_path
-        # Make sure we have a list of paths (virtually-concatenated).
-        assert isinstance(paths, (list, tuple))
         n = self.n_channels_dat
-        # Memmap all dat files and concatenate them virtually.
+        # self.dat_path could be any object accepted by get_ephys_reader().
         traces = get_ephys_reader(
-            paths, n_channels_dat=n, dtype=self.dtype, offset=self.offset,
+            self.dat_path, n_channels_dat=n, dtype=self.dtype, offset=self.offset,
             sample_rate=self.sample_rate)
         if traces is not None:
             traces = traces[:, channel_map]  # lazy permutation on the channel axis

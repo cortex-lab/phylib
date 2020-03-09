@@ -11,6 +11,7 @@ import copy
 import logging
 from functools import reduce
 from math import ceil
+import multiprocessing as mp
 from operator import mul
 from pathlib import Path
 
@@ -298,7 +299,7 @@ class BaseEphysReader(object):
 
 
 class FlatEphysReader(BaseEphysReader):
-    def __init__(self, paths, sample_rate=None, dtype=None, offset=0, n_channels=None):
+    def __init__(self, paths, sample_rate=None, dtype=None, offset=0, n_channels=None, **kwargs):
         super(FlatEphysReader, self).__init__()
         if isinstance(paths, (str, Path)):
             paths = [paths]
@@ -327,8 +328,16 @@ class FlatEphysReader(BaseEphysReader):
 
 
 class MtscompEphysReader(BaseEphysReader):
-    def __init__(self, reader):
+    def __init__(self, reader, **kwargs):
         super(MtscompEphysReader, self).__init__()
+        if isinstance(reader, (tuple, list)):  # pragma: no cover
+            assert reader
+            # TODO: support concatenation of multiple .cbin files. Currently, only take the first.
+            if len(reader) >= 2:
+                logger.warning(
+                    "Support of multiple concatenate .cbin files is not supported yet. "
+                    "Taking the first file only.")
+            reader = reader[0]
         assert isinstance(reader, mtscomp.Reader)
         self.reader = reader
         self.name = reader.cdata.name
@@ -403,7 +412,7 @@ class NpyEphysReader(ArrayEphysReader):
 class RandomEphysReader(BaseEphysReader):
     name = 'random'
 
-    def __init__(self, n_samples, n_channels, sample_rate=None):
+    def __init__(self, n_samples, n_channels, sample_rate=None, **kwargs):
         super(RandomEphysReader, self).__init__()
         self.sample_rate = sample_rate
         assert self.sample_rate > 0
@@ -439,7 +448,7 @@ def _get_ephys_constructor(obj, **kwargs):
         ext = path.suffix
         # Mtscomp file
         if ext == '.cbin':
-            reader = mtscomp.Reader()
+            reader = mtscomp.Reader(n_threads=mp.cpu_count() // 2)
             reader.open(path)
             return (MtscompEphysReader, reader, kwargs)
         # Flat binary file
