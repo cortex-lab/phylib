@@ -1061,7 +1061,7 @@ class TemplateModel(object):
         cluster_ids = sorted(spt.keys())
         spike_ids = select_spikes(
             cluster_ids=cluster_ids, max_n_spikes_per_cluster=nst,
-            spikes_per_cluster=lambda cl: spt[cl])
+            spikes_per_cluster=lambda cl: spt[cl], subset='random')
         ns = len(spike_ids)
         logger.debug("Saving spike waveforms: %d spikes.", ns)
         np.save(path_spikes, spike_ids)
