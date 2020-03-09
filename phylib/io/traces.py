@@ -170,6 +170,7 @@ class BaseEphysReader(object):
     part_bounds = ()  # [0, ..., part_size_0, ..., part_size_n]
     dtype = None
     name = 'default'
+    dir_path = None
 
     ndim = 2
     sample_onset = 0
@@ -304,6 +305,7 @@ class FlatEphysReader(BaseEphysReader):
         self._paths = [Path(p) for p in paths]
         assert all(p.exists() for p in self._paths)
         self.name = paths[0].stem
+        self.dir_path = paths[0].parent
         self._mmaps = [
             _memmap_flat(path, dtype=dtype, n_channels=n_channels, offset=offset)
             for path in paths]
@@ -330,6 +332,7 @@ class MtscompEphysReader(BaseEphysReader):
         assert isinstance(reader, mtscomp.Reader)
         self.reader = reader
         self.name = reader.cdata.name
+        self.dir_path = Path(self.name).parent
         self.sample_rate = reader.sample_rate
         self.dtype = reader.dtype
         self.n_channels = reader.n_channels
@@ -392,6 +395,7 @@ class NpyEphysReader(ArrayEphysReader):
             path = path[0]
         path = Path(path)
         self.name = path.stem
+        self.dir_path = path.parent
         self._arr = np.load(path, mmap_mode='r')  # TODO: support for multiple npy files
         super(NpyEphysReader, self).__init__(self._arr, **kwargs)
 
