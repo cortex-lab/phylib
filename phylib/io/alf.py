@@ -38,6 +38,7 @@ _FILE_RENAMES = [  # file_in, file_out, squeeze (bool to squeeze vector from mat
     ('channel_probe.npy', 'channels.probes.npy', True),
     ('cluster_probes.npy', 'clusters.probes.npy', True),
     ('cluster_shanks.npy', 'clusters.shanks.npy', True),
+    ('whitening_mat.npy', 'kilosort.whitening_matrix.npy', False)
     # ('cluster_group.tsv', 'ks2/clusters.phyAnnotation.tsv', False), # todo check indexing, add2QC
 ]
 
