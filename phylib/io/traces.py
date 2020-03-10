@@ -359,7 +359,7 @@ class MtscompEphysReader(BaseEphysReader):
         reader.set_cache_size(reader.n_batches + 2)
         # Create the thread pool.
         reader.start_thread_pool()
-        for batch in tqdm(range(reader.n_batches), desc='Decompressing', disable=reader.quiet):
+        for batch in range(reader.n_batches):
             first_chunk = reader.batch_size * batch  # first included
             last_chunk = min(reader.batch_size * (batch + 1), reader.n_chunks)  # last excluded
             assert 0 <= first_chunk < last_chunk <= reader.n_chunks
