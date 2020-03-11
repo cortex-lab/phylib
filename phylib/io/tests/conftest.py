@@ -109,6 +109,13 @@ def _make_dataset(tempdir, param='dense', has_spike_attributes=True):
         tempdir / 'cluster_Amplitude.tsv', [{'cluster_id': 1, 'Amplitude': 123.4}],
         first_field='cluster_id')
 
+    write_tsv(
+        tempdir / 'cluster_metrics.tsv', [
+            {'cluster_id': 2, 'met1': 123.4, 'met2': 'hello world 1'},
+            {'cluster_id': 3, 'met1': 5.678},
+            {'cluster_id': 5, 'met2': 'hello world 2'},
+        ])
+
     template_path = tempdir / paths[0].name
     return template_path
 

@@ -175,6 +175,20 @@ def test_model_metadata_2(template_model):
     assert m.metadata.get('quality', {}).get(1, None) == 1
 
 
+def test_model_metadata_3(template_model):
+    m = template_model
+
+    assert m.metadata.get('met1', {}).get(2, None) == 123.4
+    assert m.metadata.get('met1', {}).get(3, None) == 5.678
+    assert m.metadata.get('met1', {}).get(4, None) is None
+    assert m.metadata.get('met1', {}).get(5, None) is None
+
+    assert m.metadata.get('met2', {}).get(2, None) == 'hello world 1'
+    assert m.metadata.get('met2', {}).get(3, None) is None
+    assert m.metadata.get('met2', {}).get(4, None) is None
+    assert m.metadata.get('met2', {}).get(5, None) == 'hello world 2'
+
+
 def test_model_spike_attributes(template_model_full):
     model = template_model_full
     assert set(model.spike_attributes.keys()) == set(('randn', 'works'))

@@ -246,7 +246,7 @@ def read_tsv(path):
         field_names = list(next(reader))
         for row in reader:
             data.append({k: _try_make_number(v) for k, v in zip(field_names, row) if v != ''})
-    logger.debug("Read %s.", path)
+    logger.log(5, "Read %s.", path)
     return data
 
 

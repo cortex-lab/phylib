@@ -24,7 +24,7 @@ from .traces import (
     get_ephys_reader, RandomEphysReader, extract_waveforms,
     get_spike_waveforms, export_waveforms)
 from phylib.utils import Bunch
-from phylib.utils._misc import _write_tsv_simple, _read_tsv_simple, read_python
+from phylib.utils._misc import _write_tsv_simple, read_tsv, read_python
 from phylib.utils.geometry import linear_positions
 
 logger = logging.getLogger(__name__)
@@ -114,12 +114,24 @@ def from_sparse(data, cols, channel_ids):
 
 
 def load_metadata(filename):
-    """Load cluster metadata from a CSV file.
+    """Load cluster metadata from a TSV file.
 
-    Return (field_name, dictionary).
+    Return {field_name: dictionary cluster_id => value}.
 
     """
-    return _read_tsv_simple(filename)
+    data = read_tsv(filename)
+    if not data:  # pragma: no cover
+        return {}
+    out = {}
+    for d in data:
+        if 'cluster_id' in d:
+            cluster_id = d['cluster_id']
+            for field, value in d.items():
+                if field != 'cluster_id':
+                    if field not in out:
+                        out[field] = {}
+                    out[field][cluster_id] = value
+    return out
 
 
 def save_metadata(filename, field_name, metadata):
@@ -398,11 +410,11 @@ class TemplateModel(object):
                 continue
             logger.debug("Load `%s`.", filename.name)
             try:
-                field_name, values = load_metadata(filename)
+                for field, data in load_metadata(filename).items():
+                    metadata[field] = data
             except Exception as e:
-                logger.debug("Could not load %s: %s.", filename.name, str(e))
+                logger.warning("Error when reading %s: %s.", filename.name, str(e))
                 continue
-            metadata[field_name] = values
         return metadata
 
     #--------------------------------------------------------------------------
