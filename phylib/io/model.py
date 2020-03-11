@@ -714,7 +714,7 @@ class TemplateModel(object):
     # Internal data access methods
     #--------------------------------------------------------------------------
 
-    def _find_best_channels(self, template):
+    def _find_best_channels(self, template, amplitude_threshold=None):
         """Find the best channels for a given template."""
         # Compute the template amplitude on each channel.
         assert template.ndim == 2  # shape: (n_samples, n_channels)
@@ -724,7 +724,9 @@ class TemplateModel(object):
         best_channel = np.argmax(amplitude)
         max_amp = amplitude[best_channel]
         # Find the channels X% peak.
-        peak_channels = np.nonzero(amplitude >= self.amplitude_threshold * max_amp)[0]
+        amplitude_threshold = (
+            amplitude_threshold if amplitude_threshold is not None else self.amplitude_threshold)
+        peak_channels = np.nonzero(amplitude >= amplitude_threshold * max_amp)[0]
         # Find N closest channels.
         close_channels = get_closest_channels(
             self.channel_positions, best_channel, self.n_closest_channels)
@@ -756,14 +758,15 @@ class TemplateModel(object):
             channel_ids += [-1] * (n_channels - len(channel_ids))
         return channel_ids
 
-    def _get_template_dense(self, template_id, channel_ids=None):
+    def _get_template_dense(self, template_id, channel_ids=None, amplitude_threshold=None):
         """Return data for one template."""
         if not self.sparse_templates:
             return
         template_w = self.sparse_templates.data[template_id, ...]
         template = self._unwhiten(template_w).astype(np.float32)
         assert template.ndim == 2
-        channel_ids_, amplitude, best_channel = self._find_best_channels(template)
+        channel_ids_, amplitude, best_channel = self._find_best_channels(
+            template, amplitude_threshold=amplitude_threshold)
         channel_ids = channel_ids if channel_ids is not None else channel_ids_
         template = template[:, channel_ids]
         assert template.ndim == 2
@@ -818,12 +821,13 @@ class TemplateModel(object):
     # Data access methods
     #--------------------------------------------------------------------------
 
-    def get_template(self, template_id, channel_ids=None):
+    def get_template(self, template_id, channel_ids=None, amplitude_threshold=None):
         """Get data about a template."""
         if self.sparse_templates and self.sparse_templates.cols is not None:
             return self._get_template_sparse(template_id)
         else:
-            return self._get_template_dense(template_id, channel_ids=channel_ids)
+            return self._get_template_dense(
+                template_id, channel_ids=channel_ids, amplitude_threshold=amplitude_threshold)
 
     def get_waveforms(self, spike_ids, channel_ids=None):
         """Return spike waveforms on specified channels."""
