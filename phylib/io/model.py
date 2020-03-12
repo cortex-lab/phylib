@@ -19,7 +19,7 @@ import numpy as np
 import scipy.io as sio
 # from tqdm import tqdm
 
-from .array import _index_of, _spikes_in_clusters, _spikes_per_cluster, select_spikes
+from .array import _index_of, _spikes_in_clusters, _spikes_per_cluster, SpikeSelector
 from .traces import (
     get_ephys_reader, RandomEphysReader, extract_waveforms,
     get_spike_waveforms, export_waveforms)
@@ -576,11 +576,15 @@ class TemplateModel(object):
                 "on the fly from the raw data as needed.")
             return
         logger.debug("Loading spikes subset waveforms to avoid fetching waveforms from raw data.")
-        return Bunch(
-            waveforms=self._read_array(path, mmap_mode='r'),
-            spike_channels=self._read_array(path_channels),
-            spike_ids=self._read_array(path_spikes),
-        )
+        try:
+            return Bunch(
+                waveforms=self._read_array(path, mmap_mode='r'),
+                spike_channels=self._read_array(path_channels),
+                spike_ids=self._read_array(path_spikes),
+            )
+        except Exception as e:
+            logger.warning("Could not load spike waveforms: %s.", e)
+            return
 
     def _load_similar_templates(self):
         try:
@@ -1060,6 +1064,7 @@ class TemplateModel(object):
                 "Spike waveforms could not be extracted as the raw data file is not available.")
             return
 
+        n_chunks_kept = 20  # TODO: better choice
         nst = max_n_spikes_per_template
         nc = max_n_channels
         assert nst > 0
@@ -1071,15 +1076,19 @@ class TemplateModel(object):
 
         # Subselection of spikes.
         spt = _spikes_per_cluster(self.spike_templates)
-        cluster_ids = sorted(spt.keys())
-        spike_ids = select_spikes(
-            cluster_ids=cluster_ids, max_n_spikes_per_cluster=nst,
-            spikes_per_cluster=lambda cl: spt[cl], subset='random')
+        template_ids = sorted(spt.keys())
+        ss = SpikeSelector(
+            get_spikes_per_cluster=lambda cl: spt.get(cl, np.array([], dtype=np.int64)),
+            spike_times=self.spike_samples, chunk_bounds=self.traces.chunk_bounds,
+            n_chunks_kept=n_chunks_kept)
+        spike_ids = ss(max_n_spikes_per_template, template_ids, subset_chunks=True)
+
+        # Save the spike ids.
         ns = len(spike_ids)
         logger.debug("Saving spike waveforms: %d spikes.", ns)
         np.save(path_spikes, spike_ids)
 
-        # Compute spike channels.
+        # Save the spike channels.
         best_channels = np.vstack([
             self._template_n_channels(t, nc) for t in range(self.n_templates)]).astype(np.int32)
         assert best_channels.ndim == 2

@@ -293,7 +293,7 @@ class BaseEphysReader(object):
     def subset_time_range(self, interval):
         raise NotImplementedError()
 
-    def iter_chunks(self):
+    def iter_chunks(self, cache=True):
         for i0, i1 in zip(self.chunk_bounds[:-1], self.chunk_bounds[1:]):
             yield i0, i1
 
@@ -352,22 +352,29 @@ class MtscompEphysReader(BaseEphysReader):
         assert part_idx == 0
         return self.reader[subitem]
 
-    def iter_chunks(self):
+    def iter_chunks(self, cache=True):
         """Iterate over multiple chunks that are decompressed in parallel."""
         reader = self.reader
-        # Make sure all chunks from a batch are cached.
-        reader.set_cache_size(reader.n_batches + 2)
-        # Create the thread pool.
-        reader.start_thread_pool()
+
+        if cache:
+            # Create the thread pool.
+            reader.start_thread_pool()
+            # Make sure all chunks from a batch are cached.
+            reader.set_cache_size(reader.n_batches + 2)
+
         for batch in range(reader.n_batches):
             first_chunk = reader.batch_size * batch  # first included
             last_chunk = min(reader.batch_size * (batch + 1), reader.n_chunks)  # last excluded
             assert 0 <= first_chunk < last_chunk <= reader.n_chunks
-            logger.debug(
-                "Processing batch #%d/%d with chunks %s.",
-                batch + 1, reader.n_batches, ', '.join(map(str, range(first_chunk, last_chunk))))
-            # Decompress all chunks in the batch.
-            reader.decompress_chunks(range(first_chunk, last_chunk), reader.pool)
+
+            if cache:
+                logger.debug(
+                    "Processing batch #%d/%d with chunks %s.",
+                    batch + 1,
+                    reader.n_batches, ', '.join(map(str, range(first_chunk, last_chunk))))
+                # Decompress all chunks in the batch.
+                reader.decompress_chunks(range(first_chunk, last_chunk), reader.pool)
+
             # Do not include the last chunk so as to cache the next chunk (useful when extracting
             # waveforms).
             first_chunk = max(first_chunk - 1, 0)
@@ -375,8 +382,10 @@ class MtscompEphysReader(BaseEphysReader):
             yield reader.chunk_bounds[first_chunk], reader.chunk_bounds[last_chunk]
         # Last chunk.
         yield reader.chunk_bounds[last_chunk], reader.chunk_bounds[last_chunk + 1]
+
         # Close the thread pool.
-        reader.stop_thread_pool()
+        if cache:
+            reader.stop_thread_pool()
 
 
 class ArrayEphysReader(BaseEphysReader):
@@ -595,7 +604,7 @@ def extract_waveforms(traces, spike_samples, channel_ids, n_samples_waveforms=No
     return out
 
 
-def iter_waveforms(traces, spike_samples, spike_channels, n_samples_waveforms=None):
+def iter_waveforms(traces, spike_samples, spike_channels, n_samples_waveforms=None, cache=False):
     """Iterate over trace chunks and yield batches of spike waveforms."""
     spike_samples = np.asarray(spike_samples)
     spike_channels = np.asarray(spike_channels)
@@ -606,12 +615,14 @@ def iter_waveforms(traces, spike_samples, spike_channels, n_samples_waveforms=No
     n_samples_waveforms = n_samples_waveforms
     n_channels_loc = spike_channels.shape[1]
 
-    for i0, i1 in tqdm(traces.iter_chunks(), desc="Extracting waveforms", total=traces.n_chunks):
+    pb = tqdm(desc="Extracting waveforms", total=traces.duration)
+    for i0, i1 in traces.iter_chunks(cache=cache):
         # Get spikes in chunk.
         ind = _find_chunks([i0, i1], spike_samples) == 0
         ss = spike_samples[ind]
         sc = spike_channels[ind]
         ns = len(ss)
+        pb.update((i1 - i0) / traces.sample_rate)
         if ns == 0:
             continue
         # Extract the spike waveforms within the chunk.
@@ -622,9 +633,11 @@ def iter_waveforms(traces, spike_samples, spike_channels, n_samples_waveforms=No
                 traces, ss, channel_ids=channel_ids,
                 n_samples_waveforms=n_samples_waveforms)
         yield waveforms
+    pb.close()
 
 
-def export_waveforms(path, traces, spike_samples, spike_channels, n_samples_waveforms=None):
+def export_waveforms(
+        path, traces, spike_samples, spike_channels, n_samples_waveforms=None, cache=False):
     """Export a selection of spike waveforms to a npy file by iterating over the data on a chunk
     by chunk basis."""
     n_spikes = len(spike_samples)
@@ -635,7 +648,8 @@ def export_waveforms(path, traces, spike_samples, spike_channels, n_samples_wave
     writer = NpyWriter(path, shape, traces.dtype)
     size_written = 0
     for waveforms in iter_waveforms(
-            traces, spike_samples, spike_channels, n_samples_waveforms=n_samples_waveforms):
+            traces, spike_samples, spike_channels, n_samples_waveforms=n_samples_waveforms,
+            cache=cache):
         writer.append(waveforms)
         size_written += waveforms.size
     writer.close()

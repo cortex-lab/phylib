@@ -7,15 +7,14 @@
 #------------------------------------------------------------------------------
 
 import logging
-import math
-from math import floor
+from math import floor, ceil
 from operator import itemgetter
 from pathlib import Path
 
 import numpy as np
 
 from phylib.utils import _as_scalar, _as_scalars
-from phylib.utils._types import _as_array, _is_array_like
+from phylib.utils._types import _as_array
 
 logger = logging.getLogger(__name__)
 
@@ -363,7 +362,7 @@ def _spikes_per_cluster(spike_clusters, spike_ids=None):
 
 def _flatten_per_cluster(per_cluster):
     """Convert a dictionary {cluster: spikes} to a spikes array."""
-    return np.sort(np.concatenate(list(per_cluster.values()))).astype(np.int64)
+    return np.unique(np.concatenate(list(per_cluster.values()))).astype(np.int64)
 
 
 def grouped_mean(arr, spike_clusters):
@@ -388,101 +387,51 @@ def grouped_mean(arr, spike_clusters):
     return t / spike_counts.reshape((-1,) + (1,) * (arr.ndim - 1))
 
 
-def regular_subset(spikes, n_spikes_max=None, offset=0):
-    """Prune the current selection to get at most n_spikes_max spikes."""
-    assert spikes is not None
-    # Nothing to do if the selection already satisfies n_spikes_max.
-    if n_spikes_max is None or len(spikes) <= n_spikes_max:  # pragma: no cover
-        return spikes
-    step = math.ceil(np.clip(1. / n_spikes_max * len(spikes), 1, len(spikes)))
-    step = int(step)
-    my_spikes = spikes[offset::step][:n_spikes_max]
-    assert len(my_spikes) <= len(spikes)
-    assert len(my_spikes) <= n_spikes_max
-    return my_spikes
+# -----------------------------------------------------------------------------
+# Spike selection
+# -----------------------------------------------------------------------------
+
+def _times_in_chunks(times, chunks_kept):
+    """Return the indices of the times that belong to a list of kept chunks."""
+    ind = np.searchsorted(chunks_kept, times, side='right')
+    return ind % 2 == 1
 
 
-def select_spikes(
-        cluster_ids=None, max_n_spikes_per_cluster=None, spikes_per_cluster=None,
-        batch_size=None, subset=None, spike_ids_subset=None):
-    """Return a selection of spikes belonging to the specified clusters."""
-    subset = subset or 'regular'
-    assert _is_array_like(cluster_ids)
-    if not len(cluster_ids):
-        return np.array([], dtype=np.int64)
-    if max_n_spikes_per_cluster in (None, 0):
-        selection = {c: spikes_per_cluster(c) for c in cluster_ids}
-    else:
-        assert max_n_spikes_per_cluster > 0
-        n = max_n_spikes_per_cluster
+class SpikeSelector(object):
+    """Select a given number of spikes per cluster among a subset of the chunks."""
+    def __init__(
+            self, get_spikes_per_cluster=None, spike_times=None,
+            chunk_bounds=None, n_chunks_kept=None):
+        self.get_spikes_per_cluster = get_spikes_per_cluster
+        self.spike_times = spike_times
+        self.chunks_kept = []
+        n_chunks = len(chunk_bounds) - 1
+
+        for i in range(0, n_chunks, max(1, int(ceil(n_chunks / n_chunks_kept)))):
+            self.chunks_kept.extend(chunk_bounds[i:i + 2])
+        self.chunks_kept = np.array(self.chunks_kept)
+
+    def __call__(self, n_spk_clu, cluster_ids, subset_chunks=False, subset_spikes=None):
+        """Select about n_spk_clu random spikes from each of the requested clusters, only
+        in the kept chunks."""
+        if not len(cluster_ids):
+            return np.array([], dtype=np.int64)
+        # Start with all spikes from each cluster.
         selection = {}
-        # n_clusters = len(cluster_ids)
         for cluster in cluster_ids:
-            # Decrease the number of spikes per cluster when there
-            # are more clusters.
-            # n = int(max_n_spikes_per_cluster * exp(-.1 * (n_clusters - 1)))
-            # n = max(1, n)
-            spike_ids = spikes_per_cluster(cluster)
-            # Use a subselection of spikes.
-            if spike_ids_subset is not None:
-                spike_ids = np.intersect1d(spike_ids, spike_ids_subset)
-            if subset == 'regular':
-                # Regular subselection.
-                if batch_size is None or len(spike_ids) <= max(batch_size, n):
-                    spike_ids = regular_subset(spike_ids, n_spikes_max=n)
-                else:
-                    # Batch selections of spikes.
-                    spike_ids = get_excerpts(spike_ids, n // batch_size, batch_size)
-            elif subset == 'random' and len(spike_ids) > n:
-                # Random subselection.
-                spike_ids = np.random.choice(spike_ids, n, replace=False)
-                spike_ids = np.unique(spike_ids)
+            # Get all spikes from that cluster.
+            spike_ids = self.get_spikes_per_cluster(cluster)
+            # Get the spike times.
+            t = self.spike_times[spike_ids]
+            # Keep the spikes belonging to the chunks.
+            if subset_chunks:
+                spike_ids = spike_ids[_times_in_chunks(t, self.chunks_kept)]
+            # Keep spikes from a given subset.
+            if subset_spikes is not None:
+                spike_ids = np.intersect1d(spike_ids, subset_spikes)
+            # Make a subselection if needed.
+            if n_spk_clu is not None and n_spk_clu > 0 and len(spike_ids) > n_spk_clu:
+                spike_ids = np.random.choice(spike_ids, n_spk_clu, replace=False)
             selection[cluster] = spike_ids
-    return _flatten_per_cluster(selection)
-
-
-def select_spikes_from_chunked(spike_times, chunk_bounds, max_n_spikes, skip_chunks=0):
-    """Select a maximum number of spikes among the specified ones so as to minimize the
-    number of chunks that contain those spikes."""
-    if len(spike_times) <= max_n_spikes:
-        return np.arange(len(spike_times)).astype(np.int64)
-    spike_times = _as_array(spike_times)
-    chunk_bounds = _as_array(chunk_bounds)
-    spike_chunks = np.searchsorted(chunk_bounds, spike_times, side='right') - 1
-    chunk_sizes = np.bincount(spike_chunks)
-    best_chunks = np.argsort(chunk_sizes)[::-1][skip_chunks:]
-    keep = np.zeros(len(spike_times), dtype=np.bool)
-    total = 0
-    for chunk_idx in best_chunks:
-        in_chunks = np.isin(spike_chunks, chunk_idx)
-        n_spikes_chunk = np.sum(in_chunks)
-        if total + n_spikes_chunk > max_n_spikes:
-            # Truncate to get the exact number of requested spikes.
-            last = np.nonzero(np.cumsum(in_chunks) <= max_n_spikes - total)[0][-1]
-            in_chunks[last + 1:] = False
-        keep[in_chunks] = True
-        total += n_spikes_chunk
-        if total >= max_n_spikes:
-            break
-    return np.nonzero(keep)[0]
-
-
-class Selector(object):
-    """This object is passed with the `select` event when clusters are
-    selected. It allows to make selections of spikes."""
-    def __init__(self, spikes_per_cluster):
-        # NOTE: spikes_per_cluster is a function.
-        self.spikes_per_cluster = spikes_per_cluster
-
-    def select_spikes(
-            self, cluster_ids=None, max_n_spikes_per_cluster=None, batch_size=None,
-            subset=None, spike_ids_subset=None):
-        """Get a selection of spikes from a given set of clusters."""
-        if cluster_ids is None or not len(cluster_ids):
-            return None
-        ns = max_n_spikes_per_cluster
-        assert len(cluster_ids) >= 1
-        # Select a subset of the spikes.
-        return select_spikes(
-            cluster_ids, spikes_per_cluster=self.spikes_per_cluster, max_n_spikes_per_cluster=ns,
-            batch_size=batch_size, subset=subset, spike_ids_subset=spike_ids_subset)
+        # Return the concatenation of all spikes.
+        return _flatten_per_cluster(selection)

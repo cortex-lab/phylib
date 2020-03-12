@@ -234,7 +234,8 @@ def test_get_spike_waveforms():
 
 
 @mark.parametrize('do_export', [False, True])
-def test_waveform_extractor(tempdir, arr, traces, sample_rate, do_export):
+@mark.parametrize('do_cache', [False, True])
+def test_waveform_extractor(tempdir, arr, traces, sample_rate, do_export, do_cache):
     data = arr
 
     nsw = 20
@@ -247,7 +248,7 @@ def test_waveform_extractor(tempdir, arr, traces, sample_rate, do_export):
     if do_export:
         export_waveforms(
             tempdir / 'waveforms.npy', traces, spike_samples, spike_channels,
-            n_samples_waveforms=nsw)
+            n_samples_waveforms=nsw, cache=do_cache)
         w = np.load(tempdir / 'waveforms.npy')
     # Extract waveforms directly.
     else:

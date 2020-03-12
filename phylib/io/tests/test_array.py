@@ -14,12 +14,12 @@ from pytest import raises
 from ..array import (
     _unique, _normalize, _index_of, _spikes_in_clusters, _spikes_per_cluster,
     _flatten_per_cluster, get_closest_clusters, _get_data_lim, _flatten, _clip,
-    select_spikes, Selector, chunk_bounds, regular_subset, excerpts, data_chunk, grouped_mean,
+    chunk_bounds, excerpts, data_chunk, grouped_mean, SpikeSelector,
     get_excerpts, _range_from_slice, _pad, _get_padded,
-    select_spikes_from_chunked, read_array, write_array)
+    read_array, write_array)
 from phylib.utils._types import _as_array
 from phylib.utils.testing import _assert_equal as ae
-from ..mock import artificial_spike_clusters
+from ..mock import artificial_spike_clusters, artificial_spike_samples
 
 
 #------------------------------------------------------------------------------
@@ -271,15 +271,6 @@ def test_get_excerpts():
     assert len(get_excerpts(data, n_excerpts=0, excerpt_size=10)) == 0
 
 
-def test_regular_subset():
-    spikes = [2, 3, 5, 7, 11, 13, 17]
-    ae(regular_subset(spikes), spikes)
-    ae(regular_subset(spikes, 100), spikes)
-    ae(regular_subset(spikes, 100, offset=2), spikes)
-    ae(regular_subset(spikes, 3), [2, 7, 17])
-    ae(regular_subset(spikes, 3, offset=1), [3, 11])
-
-
 #------------------------------------------------------------------------------
 # Test spike clusters functions
 #------------------------------------------------------------------------------
@@ -294,13 +285,11 @@ def test_spikes_in_clusters():
     ae(_spikes_in_clusters(spike_clusters, []), [])
 
     for i in range(n_clusters):
-        assert np.all(spike_clusters[_spikes_in_clusters(spike_clusters,
-                                                         [i])] == i)
+        assert np.all(spike_clusters[_spikes_in_clusters(spike_clusters, [i])] == i)
 
     clusters = [1, 2, 3]
-    assert np.all(np.in1d(spike_clusters[_spikes_in_clusters(spike_clusters,
-                                                             clusters)],
-                          clusters))
+    assert np.all(np.in1d(
+        spike_clusters[_spikes_in_clusters(spike_clusters, clusters)], clusters))
 
 
 def test_spikes_per_cluster():
@@ -332,63 +321,64 @@ def test_grouped_mean():
     ae(grouped_mean(arr, spike_clusters), [10, -3, -5])
 
 
-def test_select_spikes_1():
-    with raises(AssertionError):
-        select_spikes()
-    spikes = [2, 3, 5, 7, 11]
-    spc = lambda c: {2: [2, 7, 11], 3: [3, 5], 5: []}.get(c, None)
-    ae(select_spikes([], spikes_per_cluster=spc), [])
-    ae(select_spikes([2, 3, 5], spikes_per_cluster=spc), spikes)
-    ae(select_spikes([2, 5], spikes_per_cluster=spc), spc(2))
+#------------------------------------------------------------------------------
+# Test spike selection
+#------------------------------------------------------------------------------
 
-    ae(select_spikes([2, 3, 5], 0, spikes_per_cluster=spc), spikes)
-    ae(select_spikes([2, 3, 5], None, spikes_per_cluster=spc), spikes)
-    ae(select_spikes([2, 3, 5], 1, spikes_per_cluster=spc), [2, 3])
-    ae(select_spikes([2, 5], 2, spikes_per_cluster=spc), [2, 11])
+def test_select_spikes_1():
+    spike_times = np.array([0., 1., 2., 3.3, 4.4])
+    spike_clusters = np.array([1, 2, 1, 2, 4])
+    chunk_bounds = [0.0, 1.1, 2.2, 3.3, 4.4, 5.5, 6.6]
+    n_chunks_kept = 2
+    cluster_ids = [1, 2, 4]
+    spikes_ids_kept = [0, 1, 3]
+
+    spc = _spikes_per_cluster(spike_clusters)
+    ss = SpikeSelector(
+        get_spikes_per_cluster=lambda cl: spc.get(cl, np.array([], dtype=np.int64)),
+        spike_times=spike_times, chunk_bounds=chunk_bounds, n_chunks_kept=n_chunks_kept)
+    ae(ss.chunks_kept, [0.0, 1.1, 3.3, 4.4])
+
+    ae(ss(3, [], subset_chunks=True), [])
+    ae(ss(3, [0], subset_chunks=True), [])
+    ae(ss(3, [1], subset_chunks=True), [0])
+
+    ae(ss(None, cluster_ids, subset_chunks=True), spikes_ids_kept)
+    ae(ss(0, cluster_ids, subset_chunks=True), spikes_ids_kept)
+    ae(ss(3, cluster_ids, subset_chunks=True), spikes_ids_kept)
+    ae(ss(2, cluster_ids, subset_chunks=True), spikes_ids_kept)
+    assert list(ss(1, cluster_ids, subset_chunks=True)) in [[0, 1], [0, 3]]
+
+    ae(ss(2, cluster_ids, subset_spikes=[0, 1], subset_chunks=True), [0, 1])
+    ae(ss(2, cluster_ids, subset_chunks=False), np.arange(5))
 
 
 def test_select_spikes_2():
-    spc = lambda c: {2: [2, 7, 11], 3: [3, 5], 5: []}.get(c, None)
+    n_spikes = 1000
+    n_clusters = 10
+    spike_times = artificial_spike_samples(n_spikes)
+    spike_times = 10. * spike_times / spike_times.max()
+    chunk_bounds = np.linspace(0.0, 10.0, 11)
+    n_chunks_kept = 3
+    chunks_kept = [0., 1., 4., 5., 8., 9.]
+    spike_clusters = artificial_spike_clusters(n_spikes, n_clusters)
 
-    sel = Selector(spc)
-    assert sel.select_spikes() is None
-    ae(sel.select_spikes([2, 5]), spc(2))
-    ae(sel.select_spikes([2, 5], 2), [2, 11])
-    ae(sel.select_spikes([2, 5], 2, spike_ids_subset=[2, 11]), [2, 11])
-    ae(sel.select_spikes([2, 5], 2, spike_ids_subset=[2]), [2])
+    spc = _spikes_per_cluster(spike_clusters)
+    ss = SpikeSelector(
+        get_spikes_per_cluster=lambda cl: spc.get(cl, np.array([], dtype=np.int64)),
+        spike_times=spike_times, chunk_bounds=chunk_bounds, n_chunks_kept=n_chunks_kept)
+    ae(ss.chunks_kept, chunks_kept)
 
+    def _check_chunks(sid):
+        chunk_ids = np.searchsorted(chunk_bounds, spike_times[sid], 'right') - 1
+        ae(np.unique(chunk_ids), [0, 4, 8])
 
-def test_select_spikes_3():
-    s = select_spikes([0], max_n_spikes_per_cluster=4,
-                      spikes_per_cluster=lambda x: np.arange(10),
-                      batch_size=2,
-                      )
-    ae(s, [0, 1, 8, 9])
+    # Select all spikes belonging to the kept chunks.
+    sid = ss(n_spikes, np.arange(n_clusters), subset_chunks=True)
+    _check_chunks(sid)
 
-
-def test_select_spikes_random():
-    s = select_spikes([1], max_n_spikes_per_cluster=2,
-                      spikes_per_cluster=lambda c: {0: [0, 1],
-                                                    1: [2, 3, 4]}[c],
-                      subset='random',
-                      )
-    assert len(s) == 2
-    assert np.all(np.in1d(s, [2, 3, 4]))
-
-
-def test_spikes_from_chunked():
-    chunk_bounds = np.array([0,      4,       9,   12,    20])  # noqa
-    spike_times =  np.array([   1, 3, 4, 5, 7,         15])  # noqa
-
-    def f(*args):
-        spike_ids = select_spikes_from_chunked(*args)
-        return spike_times[spike_ids]
-
-    ae(f(spike_times, chunk_bounds, 0), [])
-    ae(f(spike_times, chunk_bounds, 1), [4])
-    ae(f(spike_times, chunk_bounds, 2), [4, 5])
-    ae(f(spike_times, chunk_bounds, 3), [4, 5, 7])
-    ae(f(spike_times, chunk_bounds, 4), [1, 4, 5, 7])
-    ae(f(spike_times, chunk_bounds, 5), [1, 3, 4, 5, 7])
-    ae(f(spike_times, chunk_bounds, 6), spike_times)
-    ae(f(spike_times, chunk_bounds, 10), spike_times)
+    # Select 10 spikes from each cluster.
+    sid = ss(10, np.arange(n_clusters), subset_chunks=True)
+    assert np.all(np.diff(sid) > 0)
+    _check_chunks(sid)
+    ae(np.bincount(spike_clusters[sid]), [10] * 10)
