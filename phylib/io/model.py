@@ -929,10 +929,8 @@ class TemplateModel(object):
         assert template_features.shape[0] == ns
         return template_features
 
-
     def get_depths(self):
         """Compute spike depths based on spike pc features and probe depths."""
-
         # compute the depth as the weighted sum of coordinates
         batch_sz = 50000  # number of spikes per batch
         c = 0
