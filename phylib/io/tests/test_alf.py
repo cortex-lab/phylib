@@ -89,9 +89,9 @@ def test_ephys_1(dataset):
     assert len(dataset._load('cluster_group.tsv')) == 3
     assert dataset._load('rawdata.npy').shape == (1000, dataset.nc)
     assert dataset._load('mydata.lf.bin').shape == (1000 * dataset.nc,)
-    assert dataset._load('whitening_mat.npy').shape == ((dataset.nc, dataset.nc))
-    assert dataset._load('_phy_spikes_subset.channels.npy').shape == ((dataset.ns, dataset.ncmax))
-    assert dataset._load('_phy_spikes_subset.spikes.npy').shape == ((dataset.ns,))
+    assert dataset._load('whitening_mat.npy').shape == (dataset.nc, dataset.nc)
+    assert dataset._load('_phy_spikes_subset.channels.npy').shape == (dataset.ns, dataset.ncmax)
+    assert dataset._load('_phy_spikes_subset.spikes.npy').shape == (dataset.ns,)
     assert dataset._load('_phy_spikes_subset.waveforms.npy').shape == (
         (dataset.ns, dataset.nsamp, dataset.ncmax)
     )
