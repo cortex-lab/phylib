@@ -47,7 +47,9 @@ class Dataset(object):
         np.save(p / 'whitening_mat.npy', np.eye(self.nc, self.nc))
         np.save(p / '_phy_spikes_subset.channels.npy', np.zeros([self.ns, self.ncmax]))
         np.save(p / '_phy_spikes_subset.spikes.npy', np.zeros([self.ns]))
-        np.save(p / '_phy_spikes_subset.waveforms.npy', np.zeros([self.ns, self.nsamp, self.ncmax]))
+        np.save(p / '_phy_spikes_subset.waveforms.npy', np.zeros(
+            [self.ns, self.nsamp, self.ncmax])
+        )
 
         _write_tsv_simple(p / 'cluster_group.tsv', 'group', {2: 'good', 3: 'mua', 5: 'noise'})
         _write_tsv_simple(p / 'cluster_Amplitude.tsv', field_name='Amplitude',
@@ -90,7 +92,9 @@ def test_ephys_1(dataset):
     assert dataset._load('whitening_mat.npy').shape == ((dataset.nc, dataset.nc))
     assert dataset._load('_phy_spikes_subset.channels.npy').shape == ((dataset.ns, dataset.ncmax))
     assert dataset._load('_phy_spikes_subset.spikes.npy').shape == ((dataset.ns,))
-    assert dataset._load('_phy_spikes_subset.waveforms.npy').shape == ((dataset.ns, dataset.nsamp, dataset.ncmax))
+    assert dataset._load('_phy_spikes_subset.waveforms.npy').shape == (
+        (dataset.ns, dataset.nsamp, dataset.ncmax)
+    )
 
 
 def test_spike_depths(dataset):
