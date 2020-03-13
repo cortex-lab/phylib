@@ -30,6 +30,8 @@ class Dataset(object):
         self.tmp_dir = tempdir
         p = Path(self.tmp_dir)
         self.ns = 100
+        self.nsamp = 25
+        self.ncmax = 42
         self.nc = 10
         self.nt = 5
         self.ncd = 1000
@@ -42,6 +44,11 @@ class Dataset(object):
         np.save(p / 'similar_templates.npy', np.tile(np.arange(self.nt), (self.nt, 1)))
         np.save(p / 'channel_map.npy', np.c_[np.arange(self.nc)])
         np.save(p / 'channel_probe.npy', np.zeros(self.nc))
+        np.save(p / 'whitening_mat.npy', np.eye(self.nc, self.nc))
+        np.save(p / '_phy_spikes_subset.channels.npy', np.zeros([self.ns, self.ncmax]))
+        np.save(p / '_phy_spikes_subset.spikes.npy', np.zeros([self.ns]))
+        np.save(p / '_phy_spikes_subset.waveforms.npy', np.zeros([self.ns, self.nsamp, self.ncmax]))
+
         _write_tsv_simple(p / 'cluster_group.tsv', 'group', {2: 'good', 3: 'mua', 5: 'noise'})
         _write_tsv_simple(p / 'cluster_Amplitude.tsv', field_name='Amplitude',
                           data={str(n): np.random.rand() * 120 for n in np.arange(self.nt)})
@@ -80,6 +87,10 @@ def test_ephys_1(dataset):
     assert len(dataset._load('cluster_group.tsv')) == 3
     assert dataset._load('rawdata.npy').shape == (1000, dataset.nc)
     assert dataset._load('mydata.lf.bin').shape == (1000 * dataset.nc,)
+    assert dataset._load('whitening_mat.npy').shape == ((dataset.nc, dataset.nc))
+    assert dataset._load('_phy_spikes_subset.channels.npy').shape == ((dataset.ns, dataset.ncmax))
+    assert dataset._load('_phy_spikes_subset.spikes.npy').shape == ((dataset.ns,))
+    assert dataset._load('_phy_spikes_subset.waveforms.npy').shape == ((dataset.ns, dataset.nsamp, dataset.ncmax))
 
 
 def test_spike_depths(dataset):
