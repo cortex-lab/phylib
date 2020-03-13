@@ -38,6 +38,10 @@ _FILE_RENAMES = [  # file_in, file_out, squeeze (bool to squeeze vector from mat
     ('channel_probe.npy', 'channels.probes.npy', True),
     ('cluster_probes.npy', 'clusters.probes.npy', True),
     ('cluster_shanks.npy', 'clusters.shanks.npy', True),
+    ('whitening_mat.npy', '_kilosort_whitening.matrix.npy', False),
+    ('_phy_spikes_subset.channels.npy', '_phy_spikes_subset.channels.npy', False),
+    ('_phy_spikes_subset.spikes.npy', '_phy_spikes_subset.spikes.npy', False),
+    ('_phy_spikes_subset.waveforms.npy', '_phy_spikes_subset.waveforms.npy', False),
     # ('cluster_group.tsv', 'ks2/clusters.phyAnnotation.tsv', False), # todo check indexing, add2QC
 ]
 
