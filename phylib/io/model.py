@@ -951,8 +951,9 @@ class TemplateModel(object):
 
         return spike_depths
 
-    def get_amplitudes_v(self):
-        """Convert spike amplitude values to volts via scaling by unwhitened template waveform."""
+    def get_amplitudes_true(self):
+        """Convert spike amplitude values to input amplitudes units
+         via scaling by unwhitened template waveform."""
         # unwhiten template waveforms on their channels of max amplitude
         templates_chs = self.templates_channels
         templates_wfs = self.sparse_templates.data[np.arange(self.n_templates), :, templates_chs]
