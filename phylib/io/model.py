@@ -1135,6 +1135,9 @@ class TemplateModel(object):
             path, self.traces, self.spike_samples[spike_ids], spike_channels,
             n_samples_waveforms=self.n_samples_waveforms)
 
+        # Reload spike waveforms.
+        self.spike_waveforms = self._load_spike_waveforms()
+
     def close(self):
         """Close all memmapped files."""
         for k, v in sorted(self.__dict__.items(), key=itemgetter(0)):
