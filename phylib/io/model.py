@@ -290,6 +290,9 @@ class TemplateModel(object):
         self.spike_clusters = self._load_spike_clusters()
         assert self.spike_clusters.shape == (ns,)
 
+        # Unique cluster ids.
+        self.cluster_ids = np.unique(self.spike_clusters)
+
         # Spike reordering.
         self.spike_times_reordered = self._load_spike_reorder()
         if self.spike_times_reordered is not None:
@@ -965,6 +968,12 @@ class TemplateModel(object):
         _print('# of templates', self.n_templates)
         _print('# of spikes', "{:,}".format(self.n_spikes))
 
+    def get_template_counts(self, cluster_id):
+        """Return a histogram of the number of spikes in each template for a given cluster."""
+        spike_ids = self.get_cluster_spikes(cluster_id)
+        st = self.spike_templates[spike_ids]
+        return np.bincount(st, minlength=self.n_templates)
+
     def get_template_spikes(self, template_id):
         """Return the spike ids that belong to a given template."""
         return _spikes_in_clusters(self.spike_templates, [template_id])
@@ -987,6 +996,29 @@ class TemplateModel(object):
         """Return the waveforms of a template on the most relevant channels."""
         template = self.get_template(template_id)
         return template.template if template else None
+
+    def get_cluster_mean_waveforms(self, cluster_id):
+        """Return the mean template waveforms of a cluster, as a weighted average of the
+        template waveforms from which the cluster originates from."""
+        count = self.get_template_counts(cluster_id)
+        best_template = np.argmax(count)
+        template_ids = np.nonzero(count)[0]
+        count = count[template_ids]
+        # Get local channels of the best template for the given cluster.
+        template = self.get_template(best_template)
+        channel_ids = template.channel_ids
+        # Get all templates from which this cluster stems from.
+        templates = [self.get_template(template_id) for template_id in template_ids]
+        # Construct the waveforms array.
+        ns = self.n_samples_waveforms
+        data = np.zeros((len(template_ids), ns, self.n_channels))
+        for i, b in enumerate(templates):
+            data[i][:, b.channel_ids] = b.template
+        waveforms = data[..., channel_ids]
+        assert waveforms.shape == (len(template_ids), ns, len(channel_ids))
+        mean_waveforms = np.average(waveforms, axis=0, weights=count)
+        assert mean_waveforms.shape == (ns, len(channel_ids))
+        return Bunch(mean_waveforms=mean_waveforms, channel_ids=channel_ids)
 
     def get_template_spike_waveforms(self, template_id):
         """Return all spike waveforms of a template, on the most relevant channels."""

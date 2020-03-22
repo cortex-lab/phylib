@@ -104,6 +104,9 @@ def test_model_4(template_model_full):
         assert waveforms.shape[0] == n_spikes
         assert waveforms.shape[2] == n_channels
 
+    mean_waveforms = m.get_cluster_mean_waveforms(3)
+    assert mean_waveforms.mean_waveforms.shape[1] == len(mean_waveforms.channel_ids)
+
 
 def test_model_save(template_model_full):
     m = template_model_full
