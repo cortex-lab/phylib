@@ -932,6 +932,46 @@ class TemplateModel(object):
         assert template_features.shape[0] == ns
         return template_features
 
+    def get_depths(self):
+        """Compute spike depths based on spike pc features and probe depths."""
+        # compute the depth as the weighted sum of coordinates
+        batch_sz = 50000  # number of spikes per batch
+        c = 0
+        spike_depths = np.zeros_like(self.spike_times)
+        nspi = spike_depths.shape[0]
+        while True:
+            ispi = np.arange(c, min(c + batch_sz, nspi))
+            # take only first component
+            features = np.square(self.sparse_features.data[ispi, :, 0])
+            ichannels = self.sparse_features.cols[self.spike_clusters[ispi]]
+            ypos = self.channel_positions[ichannels, 1]
+
+            spike_depths[ispi] = np.sum(np.transpose(ypos * features) /
+                                        np.sum(features, axis=1), axis=0)
+            c += batch_sz
+            if c >= nspi:
+                break
+
+        return spike_depths
+
+    def get_amplitudes_true(self):
+        """Convert spike amplitude values to input amplitudes units
+         via scaling by unwhitened template waveform."""
+        # unwhiten template waveforms on their channels of max amplitude
+        templates_chs = self.templates_channels
+        templates_wfs = self.sparse_templates.data[np.arange(self.n_templates), :, templates_chs]
+        templates_wfs_unw = templates_wfs.T * self.wmi[templates_chs, templates_chs]
+        templates_amps = np.abs(
+            np.max(templates_wfs_unw, axis=0) - np.min(templates_wfs_unw, axis=0))
+
+        # scale the spike amplitude values by the template amplitude values
+        amplitudes_v = np.zeros_like(self.amplitudes)
+        for t in range(self.n_templates):
+            idxs = self.get_template_spikes(t)
+            amplitudes_v[idxs] = self.amplitudes[idxs] * templates_amps[t]
+
+        return amplitudes_v
+
     #--------------------------------------------------------------------------
     # Internal helper methods for public high-level methods
     #--------------------------------------------------------------------------

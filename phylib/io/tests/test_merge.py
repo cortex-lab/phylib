@@ -74,9 +74,12 @@ def test_probe_merge_2(tempdir):
     # Check the spikes.
     single = load_model(tempdir / probe_names[0] / 'params.py')
 
-    def test_merged_single(merged):
-        _, im1, i1 = np.intersect1d(merged.amplitudes, single.amplitudes, return_indices=True)
-        _, im2, i2 = np.intersect1d(merged.amplitudes, single.amplitudes + 20, return_indices=True)
+    def test_merged_single(merged, merged_original_amps=None):
+        if merged_original_amps is None:
+            merged_original_amps = merged.amplitudes
+        _, im1, i1 = np.intersect1d(merged_original_amps, single.amplitudes, return_indices=True)
+        _, im2, i2 = np.intersect1d(merged_original_amps, single.amplitudes + 20,
+                                    return_indices=True)
         # intersection spans the full vector
         assert i1.size + i2.size == merged.amplitudes.size
         # test spikes
@@ -95,15 +98,15 @@ def test_probe_merge_2(tempdir):
         assert np.all(merged.templates_channels[merged.templates_probes == 1] >= single.n_channels)
         spike_probes = merged.templates_probes[merged.spike_templates]
 
-        assert np.all(merged.amplitudes[spike_probes == 0] <= 15)
-        assert np.all(merged.amplitudes[spike_probes == 1] >= 20)
+        assert np.all(merged_original_amps[spike_probes == 0] <= 15)
+        assert np.all(merged_original_amps[spike_probes == 1] >= 20)
 
         np.all(merged.sparse_templates.data[:64, :, 0:32] == single.sparse_templates.data)
 
     # Convert into ALF and load.
     alf = EphysAlfCreator(merged).convert(tempdir / 'alf')
     test_merged_single(merged)
-    test_merged_single(alf)
+    test_merged_single(alf, merged_original_amps=merged.amplitudes)
 
     # specific test channel ids only for ALF merge dataset: the raw indices are still individual
     # file indices, the merged channel mapping is in `channels._phy_ids.npy`
