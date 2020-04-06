@@ -418,7 +418,6 @@ class SpikeSelector(object):
             return np.array([], dtype=np.int64)
         # Start with all spikes from each cluster.
         selection = {}
-        n_clusters = len(cluster_ids)
         for cluster in cluster_ids:
             # Get all spikes from that cluster.
             spike_ids = self.get_spikes_per_cluster(cluster)

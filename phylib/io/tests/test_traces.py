@@ -145,7 +145,6 @@ def traces(request, tempdir, arr, sample_rate):
         else:
             return get_ephys_reader(out)
 
-    assert isinstance(traces, EphysTraces)
 
 def test_ephys_reader_1(tempdir, arr, traces, sample_rate):
     assert isinstance(traces, BaseEphysReader)

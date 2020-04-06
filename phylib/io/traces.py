@@ -190,11 +190,6 @@ class BaseEphysReader(object):
         return self.chunk_bounds[-1]
 
     @property
-    def n_samples(self):
-        # TODO: take subset interval into account
-        return self.chunk_bounds[-1]
-
-    @property
     def n_parts(self):
         return max(0, len(self.part_bounds) - 1)
 
@@ -392,12 +387,6 @@ class MtscompEphysReader(BaseEphysReader):
         if cache:
             reader.stop_thread_pool()
 
-def from_array(arr, sample_rate):
-    """Convert any NumPy-like array to an EphysTraces instance, using an 1 second chunk size."""
-    n_samples, n_channels = arr.shape
-    chunk_shape = (int(sample_rate or n_samples), n_channels)  # 1 second chunk
-    dask_arr = da.from_array(arr, chunk_shape, name='traces')
-    return from_dask(dask_arr, sample_rate=sample_rate)
 
 class ArrayEphysReader(BaseEphysReader):
     def __init__(self, arr, **kwargs):
