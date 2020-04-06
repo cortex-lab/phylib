@@ -7,15 +7,14 @@
 #------------------------------------------------------------------------------
 
 import logging
-import math
-from math import floor, exp, ceil
+from math import floor, ceil
 from operator import itemgetter
 from pathlib import Path
 
 import numpy as np
 
 from phylib.utils import _as_scalar, _as_scalars
-from phylib.utils._types import _as_array, _is_array_like
+from phylib.utils._types import _as_array
 
 logger = logging.getLogger(__name__)
 
@@ -229,171 +228,6 @@ def write_array(path, arr):
 
 
 # -----------------------------------------------------------------------------
-# Virtual concatenation
-# -----------------------------------------------------------------------------
-
-def _start_stop(item):
-    """Find the start and stop indices of a __getitem__ item.
-
-    This is used only by ConcatenatedArrays.
-
-    Only two cases are supported currently:
-
-    * Single integer.
-    * Contiguous slice in the first dimension only.
-
-    """
-    if isinstance(item, tuple):
-        item = item[0]
-    if isinstance(item, slice):
-        # Slice.
-        if item.step not in (None, 1):
-            raise NotImplementedError()
-        return item.start, item.stop
-    elif isinstance(item, (list, np.ndarray)):
-        # List or array of indices.
-        return np.min(item), np.max(item)
-    else:
-        # Integer.
-        return item, item + 1
-
-
-def _fill_index(arr, item):
-    if isinstance(item, tuple):
-        item = (slice(None, None, None),) + item[1:]
-        return arr[item]
-    else:
-        return arr
-
-
-class ConcatenatedArrays(object):
-    """This object represents a concatenation of several memory-mapped arrays."""
-    def __init__(self, arrs, cols=None, scaling=None):
-        assert isinstance(arrs, list)
-        self.arrs = arrs
-        # Reordering of the columns.
-        self.cols = cols
-        self.offsets = np.concatenate([[0], np.cumsum([arr.shape[0] for arr in arrs])], axis=0)
-        self.dtype = arrs[0].dtype if arrs else None
-        self.scaling = scaling
-
-    @property
-    def shape(self):
-        if self.arrs[0].ndim == 1:
-            return (self.offsets[-1],)
-        ncols = (len(self.cols) if self.cols is not None
-                 else self.arrs[0].shape[1])
-        return (self.offsets[-1], ncols)
-
-    @property
-    def ndim(self):
-        return len(self.shape)
-
-    def _get_recording(self, index):
-        """Return the recording that contains a given index."""
-        assert index >= 0
-        recs = np.nonzero((index - self.offsets[:-1]) >= 0)[0]
-        if len(recs) == 0:  # pragma: no cover
-            # If the index is greater than the total size,
-            # return the last recording.
-            return len(self.arrs) - 1
-        # Return the last recording such that the index is greater than
-        # its offset.
-        return recs[-1]
-
-    def _get(self, item):
-        cols = self.cols if self.cols is not None else slice(None, None, None)
-        # Get the start and stop indices of the requested item.
-        start, stop = _start_stop(item)
-        # Return the concatenation of all arrays.
-        if start is None and stop is None:
-            return np.concatenate(self.arrs, axis=0)[..., cols]
-        if start is None:
-            start = 0
-        if stop is None:
-            stop = self.offsets[-1]
-        if stop < 0:
-            stop = self.offsets[-1] + stop
-        # Get the recording indices of the first and last item.
-        rec_start = self._get_recording(start)
-        rec_stop = self._get_recording(stop)
-        assert 0 <= rec_start <= rec_stop < len(self.arrs)
-        # Find the start and stop relative to the arrays.
-        start_rel = start - self.offsets[rec_start]
-        stop_rel = stop - self.offsets[rec_stop]
-        # Single array case.
-        if rec_start == rec_stop:
-            # Apply the rest of the index.
-            out = _fill_index(self.arrs[rec_start][start_rel:stop_rel], item)
-            out = out[..., cols]
-            return out
-        chunk_start = self.arrs[rec_start][start_rel:]
-        chunk_stop = self.arrs[rec_stop][:stop_rel]
-        # Concatenate all chunks.
-        l = [chunk_start]
-        if rec_stop - rec_start >= 2:
-            logger.warning(
-                "Loading a full virtual array: this might be slow and "
-                "something might be wrong.")
-            l += [self.arrs[r][...] for r in range(rec_start + 1, rec_stop)]
-        l += [chunk_stop]
-        # Apply the rest of the index.
-        return _fill_index(np.concatenate(l, axis=0), item)[..., cols]
-
-    def __getitem__(self, item):
-        out = self._get(item)
-        assert out is not None
-        if self.scaling is not None and self.scaling != 1:
-            out = out * self.scaling
-        return out
-
-    def __len__(self):
-        return self.shape[0]
-
-
-def _concatenate_virtual_arrays(arrs, cols=None, scaling=None):
-    """Return a virtual concatenate of several NumPy arrays."""
-    return None if not len(arrs) else ConcatenatedArrays(arrs, cols, scaling=scaling)
-
-
-class RandomVirtualArray(object):
-    """An object that represents a virtual array of arbitrary size. Slicing it returns
-    random values."""
-    def __init__(self, shape, dtype=np.float64):
-        assert shape and isinstance(shape, tuple)
-        self.shape = shape
-        self.dtype = dtype
-        self.ndim = len(shape)
-
-    def _generate_array(self, n):
-        shape = (n,) + self.shape[1:]
-        return np.random.normal(size=shape).astype(self.dtype)
-
-    def __getitem__(self, item):
-        if isinstance(item, slice):
-            start = item.start or 0
-            stop = item.stop or self.shape[0]
-            if stop < 0:
-                stop += self.shape[0]
-            if stop > self.shape[0]:
-                stop = self.shape[0]
-            step = item.step or 1
-            n = ceil((stop - start) / float(step))
-            return self._generate_array(n)
-        elif isinstance(item, (list, np.ndarray)):
-            n = len(item)
-            return self._generate_array(n)
-        elif isinstance(item, tuple):
-            s = item[1:]
-            if not isinstance(item[0], (int, np.generic)):
-                s = (slice(None, None, None),) + s
-            return self[item[0]][s]
-        elif isinstance(item, (int, np.generic)):
-            return self._generate_array(1)[0]
-        raise NotImplementedError()
-
-
-# -----------------------------------------------------------------------------
 # Chunking functions
 # -----------------------------------------------------------------------------
 
@@ -528,7 +362,7 @@ def _spikes_per_cluster(spike_clusters, spike_ids=None):
 
 def _flatten_per_cluster(per_cluster):
     """Convert a dictionary {cluster: spikes} to a spikes array."""
-    return np.sort(np.concatenate(list(per_cluster.values()))).astype(np.int64)
+    return np.unique(np.concatenate(list(per_cluster.values()))).astype(np.int64)
 
 
 def grouped_mean(arr, spike_clusters):
@@ -553,98 +387,52 @@ def grouped_mean(arr, spike_clusters):
     return t / spike_counts.reshape((-1,) + (1,) * (arr.ndim - 1))
 
 
-def regular_subset(spikes, n_spikes_max=None, offset=0):
-    """Prune the current selection to get at most n_spikes_max spikes."""
-    assert spikes is not None
-    # Nothing to do if the selection already satisfies n_spikes_max.
-    if n_spikes_max is None or len(spikes) <= n_spikes_max:  # pragma: no cover
-        return spikes
-    step = math.ceil(np.clip(1. / n_spikes_max * len(spikes),
-                             1, len(spikes)))
-    step = int(step)
-    # Note: randomly-changing selections are confusing...
-    my_spikes = spikes[offset::step][:n_spikes_max]
-    assert len(my_spikes) <= len(spikes)
-    assert len(my_spikes) <= n_spikes_max
-    return my_spikes
+# -----------------------------------------------------------------------------
+# Spike selection
+# -----------------------------------------------------------------------------
+
+def _times_in_chunks(times, chunks_kept):
+    """Return the indices of the times that belong to a list of kept chunks."""
+    ind = np.searchsorted(chunks_kept, times, side='right')
+    return ind % 2 == 1
 
 
-def select_spikes(
-        cluster_ids=None, max_n_spikes_per_cluster=None, spikes_per_cluster=None,
-        batch_size=None, subset=None):
-    """Return a selection of spikes belonging to the specified clusters."""
-    subset = subset or 'regular'
-    assert _is_array_like(cluster_ids)
-    if not len(cluster_ids):
-        return np.array([], dtype=np.int64)
-    if max_n_spikes_per_cluster in (None, 0):
-        selection = {c: spikes_per_cluster(c) for c in cluster_ids}
-    else:
-        assert max_n_spikes_per_cluster > 0
+class SpikeSelector(object):
+    """Select a given number of spikes per cluster among a subset of the chunks."""
+    def __init__(
+            self, get_spikes_per_cluster=None, spike_times=None,
+            chunk_bounds=None, n_chunks_kept=None):
+        self.get_spikes_per_cluster = get_spikes_per_cluster
+        self.spike_times = spike_times
+        self.chunks_kept = []
+        n_chunks = len(chunk_bounds) - 1
+
+        for i in range(0, n_chunks, max(1, int(ceil(n_chunks / n_chunks_kept)))):
+            self.chunks_kept.extend(chunk_bounds[i:i + 2])
+        self.chunks_kept = np.array(self.chunks_kept)
+
+    def __call__(self, n_spk_clu, cluster_ids, subset_chunks=False, subset_spikes=None):
+        """Select about n_spk_clu random spikes from each of the requested clusters, only
+        in the kept chunks."""
+        if not len(cluster_ids):
+            return np.array([], dtype=np.int64)
+        # Start with all spikes from each cluster.
         selection = {}
         n_clusters = len(cluster_ids)
         for cluster in cluster_ids:
-            # Decrease the number of spikes per cluster when there
-            # are more clusters.
-            n = int(max_n_spikes_per_cluster * exp(-.1 * (n_clusters - 1)))
-            n = max(1, n)
-            spike_ids = spikes_per_cluster(cluster)
-            if subset == 'regular':
-                # Regular subselection.
-                if batch_size is None or len(spike_ids) <= max(batch_size, n):
-                    spike_ids = regular_subset(spike_ids, n_spikes_max=n)
-                else:
-                    # Batch selections of spikes.
-                    spike_ids = get_excerpts(spike_ids, n // batch_size, batch_size)
-            elif subset == 'random' and len(spike_ids) > n:
-                # Random subselection.
-                spike_ids = np.random.choice(spike_ids, n, replace=False)
-                spike_ids = np.unique(spike_ids)
+            # Get all spikes from that cluster.
+            spike_ids = self.get_spikes_per_cluster(cluster)
+            # Get the spike times.
+            t = self.spike_times[spike_ids]
+            # Keep the spikes belonging to the chunks.
+            if subset_chunks:
+                spike_ids = spike_ids[_times_in_chunks(t, self.chunks_kept)]
+            # Keep spikes from a given subset.
+            if subset_spikes is not None:
+                spike_ids = np.intersect1d(spike_ids, subset_spikes)
+            # Make a subselection if needed.
+            if n_spk_clu is not None and n_spk_clu > 0 and len(spike_ids) > n_spk_clu:
+                spike_ids = np.random.choice(spike_ids, n_spk_clu, replace=False)
             selection[cluster] = spike_ids
-    return _flatten_per_cluster(selection)
-
-
-def select_spikes_from_chunked(spike_times, chunk_bounds, max_n_spikes, skip_chunks=0):
-    """Select a maximum number of spikes among the specified ones so as to minimize the
-    number of chunks that contain those spikes."""
-    if len(spike_times) <= max_n_spikes:
-        return spike_times
-    spike_times = _as_array(spike_times)
-    chunk_bounds = _as_array(chunk_bounds)
-    spike_chunks = np.searchsorted(chunk_bounds, spike_times, side='right') - 1
-    chunk_sizes = np.bincount(spike_chunks)
-    best_chunks = np.argsort(chunk_sizes)[::-1][skip_chunks:]
-    keep = np.zeros(len(spike_times), dtype=np.bool)
-    total = 0
-    for chunk_idx in best_chunks:
-        in_chunks = np.isin(spike_chunks, chunk_idx)
-        n_spikes_chunk = np.sum(in_chunks)
-        if total + n_spikes_chunk > max_n_spikes:
-            # Truncate to get the exact number of requested spikes.
-            last = np.nonzero(np.cumsum(in_chunks) <= max_n_spikes - total)[0][-1]
-            in_chunks[last + 1:] = False
-        keep[in_chunks] = True
-        total += n_spikes_chunk
-        if total >= max_n_spikes:
-            break
-    return spike_times[keep]
-
-
-class Selector(object):
-    """This object is passed with the `select` event when clusters are
-    selected. It allows to make selections of spikes."""
-    def __init__(self, spikes_per_cluster):
-        # NOTE: spikes_per_cluster is a function.
-        self.spikes_per_cluster = spikes_per_cluster
-
-    def select_spikes(
-            self, cluster_ids=None, max_n_spikes_per_cluster=None, batch_size=None, subset=None):
-        """Get a selection of spikes from a given set of clusters."""
-        if cluster_ids is None or not len(cluster_ids):
-            return None
-        ns = max_n_spikes_per_cluster
-        assert len(cluster_ids) >= 1
-        # Select a subset of the spikes.
-        return select_spikes(
-            cluster_ids, spikes_per_cluster=self.spikes_per_cluster, max_n_spikes_per_cluster=ns,
-            batch_size=batch_size, subset=subset)
+        # Return the concatenation of all spikes.
+        return _flatten_per_cluster(selection)
