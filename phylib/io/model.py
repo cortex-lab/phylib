@@ -943,7 +943,7 @@ class TemplateModel(object):
             ispi = np.arange(c, min(c + batch_sz, nspi))
             # take only first component
             features = np.square(self.sparse_features.data[ispi, :, 0])
-            ichannels = self.sparse_features.cols[self.spike_clusters[ispi]]
+            ichannels = self.sparse_features.cols[self.spike_clusters[ispi]].astype(np.int64)
             ypos = self.channel_positions[ichannels, 1]
 
             spike_depths[ispi] = np.sum(np.transpose(ypos * features) /

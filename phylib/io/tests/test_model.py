@@ -108,6 +108,11 @@ def test_model_4(template_model_full):
     assert mean_waveforms.mean_waveforms.shape[1] == len(mean_waveforms.channel_ids)
 
 
+def test_model_depth(template_model):
+    depths = template_model.get_depths()
+    assert depths.shape == (template_model.n_spikes,)
+
+
 def test_model_save(template_model_full):
     m = template_model_full
     m.save_metadata('test', {1: 1})
