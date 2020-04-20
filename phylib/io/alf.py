@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 #------------------------------------------------------------------------------
 
 NCH_WAVEFORMS = 32  # number of channels to be saved in templates.waveforms and channels.waveforms
+NSAMPLE_WAVEFORMS = 500  # number of waveforrms sampled out of the raw data
 
 _FILE_RENAMES = [  # file_in, file_out, squeeze (bool to squeeze vector from matlab in npy)
     ('params.py', 'params.py', None),
@@ -116,7 +117,7 @@ class EphysAlfCreator(object):
         if not self.out_path.exists():
             self.out_path.mkdir()
 
-        with tqdm(desc="Converting to ALF", total=95) as bar:
+        with tqdm(desc="Converting to ALF", total=125) as bar:
             self.copy_files(force=force)
             bar.update(10)
             self.make_spike_times_amplitudes()
@@ -125,6 +126,8 @@ class EphysAlfCreator(object):
             bar.update(10)
             self.make_channel_objects()
             bar.update(5)
+            self.model.save_spikes_subset_waveforms(NSAMPLE_WAVEFORMS, NCH_WAVEFORMS)
+            bar.update(30)
             self.make_depths()
             bar.update(20)
             self.make_template_object()
