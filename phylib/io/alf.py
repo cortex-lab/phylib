@@ -118,8 +118,6 @@ class EphysAlfCreator(object):
             self.out_path.mkdir()
 
         with tqdm(desc="Converting to ALF", total=125) as bar:
-            self.copy_files(force=force)
-            bar.update(10)
             self.make_spike_times_amplitudes()
             bar.update(10)
             self.make_cluster_objects()
@@ -133,6 +131,8 @@ class EphysAlfCreator(object):
             self.make_template_object()
             bar.update(30)
             self.rm_files()
+            bar.update(10)
+            self.copy_files(force=force)
             bar.update(10)
             self.rename_with_label()
 
