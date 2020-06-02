@@ -954,23 +954,39 @@ class TemplateModel(object):
 
         return spike_depths
 
-    def get_amplitudes_true(self):
+    def get_amplitudes_true(self, sample2unit=1.):
         """Convert spike amplitude values to input amplitudes units
-         via scaling by unwhitened template waveform."""
+         via scaling by unwhitened template waveform.
+         :param sample2unit float: factor to convert the raw data to a physical unit (defaults 1.)
+         :returns: spike_amplitudes: np.array [nspikes] spike amplitudes in raw data units
+         :returns: templates_physical_unit: np.array[ntemplates, nsamples, nchannels]: templates
+         scaled by their raw data units amplitude estimate"""
+
         # unwhiten template waveforms on their channels of max amplitude
-        templates_chs = self.templates_channels
-        templates_wfs = self.sparse_templates.data[np.arange(self.n_templates), :, templates_chs]
-        templates_wfs_unw = templates_wfs.T * self.wmi[templates_chs, templates_chs]
-        templates_amps = np.abs(
-            np.max(templates_wfs_unw, axis=0) - np.min(templates_wfs_unw, axis=0))
+        if self.sparse_templates.cols:
+            raise NotImplementedError
+        # apply the inverse whitening matrix to the template
+        templates_wfs = np.zeros_like(self.sparse_templates.data)  # nt, ns, nc
+        for n in np.arange(self.n_templates):
+            templates_wfs[n, :, :] = np.matmul(self.sparse_templates.data[n, :, :], self.wmi)
 
-        # scale the spike amplitude values by the template amplitude values
-        amplitudes_v = np.zeros_like(self.amplitudes)
-        for t in range(self.n_templates):
-            idxs = self.get_template_spikes(t)
-            amplitudes_v[idxs] = self.amplitudes[idxs] * templates_amps[t]
+        # The amplitude on each channel is the positive peak minus the negative
+        templates_ch_amps = np.abs(np.max(templates_wfs, axis=1) - np.min(templates_wfs, axis=1))
 
-        return amplitudes_v
+        # The template amplitude is the amplitude of its largest channel
+        # (but see below for true tempAmps)
+        templates_amps_unscaled = np.max(templates_ch_amps, axis=1)
+        spike_amps = templates_amps_unscaled[self.spike_templates] * self.amplitudes
+
+        with np.errstate(divide='ignore'):
+            # take the average per template
+            templates_amps = (np.bincount(self.spike_templates, weights=spike_amps) /
+                              np.bincount(self.spike_templates))
+            # scale back the template according to the spikes units
+            templates_physical_unit = templates_wfs / (templates_amps_unscaled * templates_amps
+                                                       )[:, np.newaxis, np.newaxis]
+
+        return spike_amps * sample2unit, templates_physical_unit * sample2unit
 
     #--------------------------------------------------------------------------
     # Internal helper methods for public high-level methods
@@ -1130,7 +1146,8 @@ class TemplateModel(object):
         logger.debug("Save spike clusters to `%s`.", path)
         np.save(path, spike_clusters)
 
-    def save_spikes_subset_waveforms(self, max_n_spikes_per_template=None, max_n_channels=None):
+    def save_spikes_subset_waveforms(self, max_n_spikes_per_template=None, max_n_channels=None,
+                                     sample2unit=1.):
         if self.traces is None:
             logger.warning(
                 "Spike waveforms could not be extracted as the raw data file is not available.")
@@ -1173,7 +1190,7 @@ class TemplateModel(object):
         # Extract waveforms from the raw data on a chunk by chunk basis.
         export_waveforms(
             path, self.traces, self.spike_samples[spike_ids], spike_channels,
-            n_samples_waveforms=self.n_samples_waveforms)
+            n_samples_waveforms=self.n_samples_waveforms, sample2unit=sample2unit)
 
         # Reload spike waveforms.
         self.spike_waveforms = self._load_spike_waveforms()
