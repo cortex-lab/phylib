@@ -118,18 +118,18 @@ class EphysAlfCreator(object):
             self.out_path.mkdir()
 
         with tqdm(desc="Converting to ALF", total=125) as bar:
-            self.make_spike_times_amplitudes()
             bar.update(10)
             self.make_cluster_objects()
             bar.update(10)
             self.make_channel_objects()
             bar.update(5)
-            self.model.save_spikes_subset_waveforms(NSAMPLE_WAVEFORMS, NCH_WAVEFORMS)
+            self.make_template_and_spikes_objects()
             bar.update(30)
+            self.model.save_spikes_subset_waveforms(
+                NSAMPLE_WAVEFORMS, NCH_WAVEFORMS, sample2unit=self.ampfactor)
+            bar.update(50)
             self.make_depths()
             bar.update(20)
-            self.make_template_object()
-            bar.update(30)
             self.rm_files()
             bar.update(10)
             self.copy_files(force=force)
@@ -167,13 +167,6 @@ class EphysAlfCreator(object):
     def _save_npy(self, filename, arr):
         """Save an array into a .npy file."""
         np.save(self.out_path / filename, arr)
-
-    def make_spike_times_amplitudes(self):
-        """We cannot just rename/copy spike_times.npy because it is in unit of
-        *samples*, and not in seconds."""
-        self._save_npy('spikes.times.npy', self.model.spike_times)
-        self._save_npy('spikes.samples.npy', self.model.spike_samples)
-        self._save_npy('spikes.amps.npy', self.model.get_amplitudes_true() * self.ampfactor)
 
     def make_cluster_objects(self):
         """Create clusters.channels, clusters.waveformsDuration and clusters.amps"""
@@ -229,14 +222,37 @@ class EphysAlfCreator(object):
         else:
             spikes_depths = self.model.get_depths()
             # if PC features are provided, compute the depth as the weighted sum of coordinates
-
+            nbatch = 50000
+            c = 0
+            spikes_depths = np.zeros_like(self.model.spike_times) * np.nan
+            nspi = spikes_depths.shape[0]
+            while True:
+                ispi = np.arange(c, min(c + nbatch, nspi))
+                # take only first component
+                features = self.model.sparse_features.data[ispi, :, 0]
+                features = np.maximum(features, 0) ** 2  # takes only positive values into account
+                ichannels = self.model.sparse_features.cols[self.model.spike_clusters[ispi]]
+                ypos = self.model.channel_positions[ichannels, 1]
+                with np.errstate(divide='ignore'):
+                    spikes_depths[ispi] = (np.sum(np.transpose(ypos * features) /
+                                                  np.sum(features, axis=1), axis=0))
+                c += nbatch
+                if c >= nspi:
+                    break
         self._save_npy('spikes.depths.npy', spikes_depths)
         self._save_npy('clusters.depths.npy', clusters_depths)
 
-    def make_template_object(self):
+    def make_template_and_spikes_objects(self):
         """Creates the template waveforms sparse object
         Without manual curation, it also corresponds to clusters waveforms objects.
         """
+        # "We cannot just rename/copy spike_times.npy because it is in unit of samples,
+        # and not seconds
+        self._save_npy('spikes.times.npy', self.model.spike_times)
+        self._save_npy('spikes.samples.npy', self.model.spike_samples)
+        spike_amps, templates_volts = self.model.get_amplitudes_true(self.ampfactor)
+        self._save_npy('spikes.amps.npy', spike_amps)
+
         if self.model.sparse_templates.cols:
             raise(NotImplementedError("Sparse template export to ALF not implemented yet"))
         else:
