@@ -621,7 +621,7 @@ class TemplateModel(object):
             # template_ind.npy (without an s).
             path = self._find_path('template_ind.npy', 'templates.waveformsChannels*.npy')
             cols = self._read_array(path)
-            if len(cols.shape) != 2:
+            if cols.ndim != 2:  # pragma: no cover
                 cols = np.atleast_2d(cols).T
             assert cols.ndim == 2
             logger.debug("Templates are sparse.")

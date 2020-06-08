@@ -26,7 +26,8 @@ from .array import _index_of
 logger = logging.getLogger(__name__)
 
 
-DEFAULT_CHUNK_DURATION = 10.0  # seconds
+# NOTE: no real need for chunking unless with mtscomp compressed datasets
+DEFAULT_CHUNK_DURATION = 600.0  # seconds
 
 
 #------------------------------------------------------------------------------
