@@ -30,6 +30,9 @@ logger = logging.getLogger(__name__)
 DEFAULT_CHUNK_DURATION = 600.0  # seconds
 
 
+EPHYS_RAW_EXTENSIONS = ('.dat', '.bin', '.raw')
+
+
 #------------------------------------------------------------------------------
 # Utils
 #------------------------------------------------------------------------------
@@ -462,7 +465,7 @@ def _get_ephys_constructor(obj, **kwargs):
             reader.open(path)
             return (MtscompEphysReader, reader, kwargs)
         # Flat binary file
-        elif ext in ('.dat', '.bin'):
+        elif ext in EPHYS_RAW_EXTENSIONS:
             return (FlatEphysReader, path, kwargs)
         elif ext == '.npy':
             return (NpyEphysReader, obj, kwargs)
