@@ -62,7 +62,7 @@ def add_default_handler(level='INFO', logger=logger):
 
 def _add_log_file(filename):  # pragma: no cover
     """Create a log file with DEBUG level."""
-    handler = logging.FileHandler(filename)
+    handler = logging.FileHandler(str(filename))
     handler.setLevel(logging.DEBUG)
     formatter = _Formatter(fmt=_logger_fmt, datefmt=_logger_date_fmt)
     handler.setFormatter(formatter)
