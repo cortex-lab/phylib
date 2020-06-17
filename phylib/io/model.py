@@ -960,9 +960,16 @@ class TemplateModel(object):
         """Convert spike amplitude values to input amplitudes units
          via scaling by unwhitened template waveform.
          :param sample2unit float: factor to convert the raw data to a physical unit (defaults 1.)
-         :returns: spike_amplitudes: np.array [nspikes] spike amplitudes in raw data units
-         :returns: templates_physical_unit: np.array[ntemplates, nsamples, nchannels]: templates
-         scaled by their raw data units amplitude estimate"""
+         :returns: spike_amplitudes_volts: np.array [nspikes] spike amplitudes in raw data units
+         :returns: templates_volts: np.array[ntemplates, nsamples, nchannels]: templates
+         in raw data units
+         :returns: template_amps_volts: np.array[ntemplates]: average templates amplitudes
+          in raw data units
+         To scale the template for template matching,
+         raw_data_volts = templates_volts * spike_amplitudes_volts / template_amps_volts
+         """
+        # spike_amp = ks2_spike_amps * maxmin(inv_whitening(ks2_template_amps))
+        # to rescale the template,
 
         # unwhiten template waveforms on their channels of max amplitude
         if self.sparse_templates.cols:
@@ -973,22 +980,24 @@ class TemplateModel(object):
             templates_wfs[n, :, :] = np.matmul(self.sparse_templates.data[n, :, :], self.wmi)
 
         # The amplitude on each channel is the positive peak minus the negative
-        templates_ch_amps = np.abs(np.max(templates_wfs, axis=1) - np.min(templates_wfs, axis=1))
+        templates_ch_amps = np.max(templates_wfs, axis=1) - np.min(templates_wfs, axis=1)
 
-        # The template amplitude is the amplitude of its largest channel
+        # The template arbitrary unit amplitude is the amplitude of its largest channel
         # (but see below for true tempAmps)
-        templates_amps_unscaled = np.max(templates_ch_amps, axis=1)
-        spike_amps = templates_amps_unscaled[self.spike_templates] * self.amplitudes
+        templates_amps_au = np.max(templates_ch_amps, axis=1)
+        spike_amps = templates_amps_au[self.spike_templates] * self.amplitudes
 
         with np.errstate(divide='ignore'):
-            # take the average per template
-            templates_amps = (np.bincount(self.spike_templates, weights=spike_amps) /
-                              np.bincount(self.spike_templates))
+            # take the average spike amplitude per template
+            templates_amps_v = (np.bincount(self.spike_templates, weights=spike_amps) /
+                                np.bincount(self.spike_templates))
             # scale back the template according to the spikes units
-            templates_physical_unit = templates_wfs / (templates_amps_unscaled * templates_amps
+            templates_physical_unit = templates_wfs * (templates_amps_v / templates_amps_au
                                                        )[:, np.newaxis, np.newaxis]
 
-        return spike_amps * sample2unit, templates_physical_unit * sample2unit
+        return (spike_amps * sample2unit,
+                templates_physical_unit * sample2unit,
+                templates_amps_v * sample2unit)
 
     #--------------------------------------------------------------------------
     # Internal helper methods for public high-level methods

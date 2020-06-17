@@ -250,13 +250,14 @@ class EphysAlfCreator(object):
         # and not seconds
         self._save_npy('spikes.times.npy', self.model.spike_times)
         self._save_npy('spikes.samples.npy', self.model.spike_samples)
-        spike_amps, templates_volts = self.model.get_amplitudes_true(self.ampfactor)
+        spike_amps, templates_v, template_amps = self.model.get_amplitudes_true(self.ampfactor)
         self._save_npy('spikes.amps.npy', spike_amps)
+        self._save_npy('templates.amps.npy', template_amps)
 
         if self.model.sparse_templates.cols:
             raise(NotImplementedError("Sparse template export to ALF not implemented yet"))
         else:
-            n_templates, n_wavsamps, nchall = self.model.sparse_templates.data.shape
+            n_templates, n_wavsamps, nchall = templates_v.shape
             ncw = min(NCH_WAVEFORMS, nchall)  # for some datasets, 32 may be too much
             assert(n_templates == self.model.n_templates)
             templates = np.zeros((n_templates, n_wavsamps, ncw), dtype=np.float32)
@@ -269,10 +270,10 @@ class EphysAlfCreator(object):
                     self.model.channel_positions[self.model.templates_channels[t]]), axis=1)
                 channel_distance[self.model.channel_probes != current_probe] += np.inf
                 templates_inds[t, :] = np.argsort(channel_distance)[:ncw]
-                templates[t, ...] = self.model.sparse_templates.data[t, :][:, templates_inds[t, :]]
-            np.save(self.out_path.joinpath('templates.waveforms'), templates * self.ampfactor)
+                templates[t, ...] = templates_v[t, :][:, templates_inds[t, :]]
+            np.save(self.out_path.joinpath('templates.waveforms'), templates)
             np.save(self.out_path.joinpath('templates.waveformsChannels'), templates_inds)
-            np.save(self.out_path.joinpath('clusters.waveforms'), templates * self.ampfactor)
+            np.save(self.out_path.joinpath('clusters.waveforms'), templates)
             np.save(self.out_path.joinpath('clusters.waveformsChannels'), templates_inds)
 
     def rename_with_label(self):
