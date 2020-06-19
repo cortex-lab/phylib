@@ -27,7 +27,6 @@ logger = logging.getLogger(__name__)
 # File utils
 #------------------------------------------------------------------------------
 
-NCH_WAVEFORMS = 32  # number of channels to be saved in templates.waveforms and channels.waveforms
 NSAMPLE_WAVEFORMS = 500  # number of waveforrms sampled out of the raw data
 
 _FILE_RENAMES = [  # file_in, file_out, squeeze (bool to squeeze vector from matlab in npy)
@@ -126,7 +125,7 @@ class EphysAlfCreator(object):
             self.make_template_and_spikes_objects()
             bar.update(30)
             self.model.save_spikes_subset_waveforms(
-                NSAMPLE_WAVEFORMS, NCH_WAVEFORMS, sample2unit=self.ampfactor)
+                NSAMPLE_WAVEFORMS, sample2unit=self.ampfactor)
             bar.update(50)
             self.make_depths()
             bar.update(20)
@@ -221,24 +220,6 @@ class EphysAlfCreator(object):
             spikes_depths = clusters_depths[spike_clusters]
         else:
             spikes_depths = self.model.get_depths()
-            # if PC features are provided, compute the depth as the weighted sum of coordinates
-            nbatch = 50000
-            c = 0
-            spikes_depths = np.zeros_like(self.model.spike_times) * np.nan
-            nspi = spikes_depths.shape[0]
-            while True:
-                ispi = np.arange(c, min(c + nbatch, nspi))
-                # take only first component
-                features = self.model.sparse_features.data[ispi, :, 0]
-                features = np.maximum(features, 0) ** 2  # takes only positive values into account
-                ichannels = self.model.sparse_features.cols[self.model.spike_clusters[ispi]]
-                ypos = self.model.channel_positions[ichannels, 1]
-                with np.errstate(divide='ignore'):
-                    spikes_depths[ispi] = (np.sum(np.transpose(ypos * features) /
-                                                  np.sum(features, axis=1), axis=0))
-                c += nbatch
-                if c >= nspi:
-                    break
         self._save_npy('spikes.depths.npy', spikes_depths)
         self._save_npy('clusters.depths.npy', clusters_depths)
 
@@ -258,7 +239,8 @@ class EphysAlfCreator(object):
             raise(NotImplementedError("Sparse template export to ALF not implemented yet"))
         else:
             n_templates, n_wavsamps, nchall = templates_v.shape
-            ncw = min(NCH_WAVEFORMS, nchall)  # for some datasets, 32 may be too much
+            # for some datasets, 32 may be too much
+            ncw = min(self.model.n_closest_channels, nchall)
             assert(n_templates == self.model.n_templates)
             templates = np.zeros((n_templates, n_wavsamps, ncw), dtype=np.float32)
             templates_inds = np.zeros((n_templates, ncw), dtype=np.int32)

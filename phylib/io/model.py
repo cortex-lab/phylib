@@ -937,24 +937,25 @@ class TemplateModel(object):
     def get_depths(self):
         """Compute spike depths based on spike pc features and probe depths."""
         # compute the depth as the weighted sum of coordinates
-        batch_sz = 50000  # number of spikes per batch
+        # if PC features are provided, compute the depth as the weighted sum of coordinates
+        nbatch = 50000
         c = 0
-        spike_depths = np.zeros_like(self.spike_times)
-        nspi = spike_depths.shape[0]
+        spikes_depths = np.zeros_like(self.spike_times) * np.nan
+        nspi = spikes_depths.shape[0]
         while True:
-            ispi = np.arange(c, min(c + batch_sz, nspi))
+            ispi = np.arange(c, min(c + nbatch, nspi))
             # take only first component
-            features = np.square(self.sparse_features.data[ispi, :, 0])
-            ichannels = self.sparse_features.cols[self.spike_clusters[ispi]].astype(np.int64)
+            features = self.sparse_features.data[ispi, :, 0]
+            features = np.maximum(features, 0) ** 2  # takes only positive values into account
+            ichannels = self.sparse_features.cols[self.spike_clusters[ispi]].astype(np.uint32)
             ypos = self.channel_positions[ichannels, 1]
-
-            spike_depths[ispi] = np.sum(np.transpose(ypos * features) /
-                                        np.sum(features, axis=1), axis=0)
-            c += batch_sz
+            with np.errstate(divide='ignore'):
+                spikes_depths[ispi] = (np.sum(np.transpose(ypos * features) /
+                                              np.sum(features, axis=1), axis=0))
+            c += nbatch
             if c >= nspi:
                 break
-
-        return spike_depths
+        return spikes_depths
 
     def get_amplitudes_true(self, sample2unit=1.):
         """Convert spike amplitude values to input amplitudes units
@@ -1166,7 +1167,9 @@ class TemplateModel(object):
 
         n_chunks_kept = 20  # TODO: better choice
         nst = max_n_spikes_per_template
-        nc = max_n_channels
+        nc = max_n_channels or self.n_closest_channels
+        nc = max(nc, self.n_closest_channels)
+
         assert nst > 0
         assert nc > 0
 
