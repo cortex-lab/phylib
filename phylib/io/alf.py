@@ -107,7 +107,7 @@ class EphysAlfCreator(object):
 
     def convert(self, out_path, force=False, label='', ampfactor=1):
         """Convert from KS/phy format to ALF."""
-        logger.info("Converting dataset to ALF.")
+        logger.info("Converting dataset to ALF in %s.", out_path)
         self.out_path = Path(out_path)
         self.label = label
         self.ampfactor = ampfactor
@@ -134,6 +134,7 @@ class EphysAlfCreator(object):
             self.copy_files(force=force)
             bar.update(10)
             self.rename_with_label()
+            self.update_params()
 
         # Return the TemplateModel of the converted ALF dataset if the params.py file exists.
         params_path = self.out_path / 'params.py'
@@ -153,6 +154,16 @@ class EphysAlfCreator(object):
                     d = np.load(f0)
                     np.save(f1, d.squeeze())
                     continue
+
+    def update_params(self):
+        # Append ampfactor = xxx in params.py if needed.
+        path = self.out_path / 'params.py'
+        if not path.exists():
+            return
+        if 'ampfactor' in path.read_text():
+            return
+        with path.open('a') as f:
+            f.write('ampfactor = %.5f' % self.ampfactor)
 
     def rm_files(self):
         for fn0 in FILE_DELETES:

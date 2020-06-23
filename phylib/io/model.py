@@ -257,6 +257,8 @@ class TemplateModel(object):
         self.sample_rate = float(self.sample_rate or 1.)
         assert self.sample_rate > 0
         self.offset = getattr(self, 'offset', 0)
+        self.ampfactor = getattr(self, 'ampfactor', 1)
+        assert self.ampfactor > 0
 
         self._load_data()
 
@@ -1240,6 +1242,7 @@ def get_template_params(params_path):
     if isinstance(params['dat_path'], str):
         params['dat_path'] = [params['dat_path']]
     params['dat_path'] = [_make_abs_path(_, params['dir_path']) for _ in params['dat_path']]
+    params['ampfactor'] = params.get('ampfactor', 1)
     return params
 
 
