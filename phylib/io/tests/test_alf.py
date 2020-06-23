@@ -188,10 +188,11 @@ def test_creator(dataset):
     def read_after_write():
         model = TemplateModel(dir_path=out_path, dat_path=dataset.dat_path,
                               sample_rate=2000, n_channels_dat=dataset.nc)
+        assert model.file_format == 'alf'
 
-        np.all(model.spike_templates == c.model.spike_templates)
-        np.all(model.spike_times == c.model.spike_times)
-        np.all(model.spike_samples == c.model.spike_samples)
+        assert np.all(model.spike_templates == c.model.spike_templates)
+        assert np.all(model.spike_times == c.model.spike_times)
+        assert np.all(model.spike_samples == c.model.spike_samples)
 
     # test a straight export, make sure we can reload the data
     shutil.rmtree(out_path, ignore_errors=True)

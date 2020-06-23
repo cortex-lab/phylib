@@ -176,6 +176,7 @@ class EphysAlfCreator(object):
 
     def _save_npy(self, filename, arr):
         """Save an array into a .npy file."""
+        logger.debug("Save %s.", self.out_path / filename)
         np.save(self.out_path / filename, arr)
 
     def make_cluster_objects(self):
@@ -238,41 +239,22 @@ class EphysAlfCreator(object):
         """Creates the template waveforms sparse object
         Without manual curation, it also corresponds to clusters waveforms objects.
         """
-        # "We cannot just rename/copy spike_times.npy because it is in unit of samples,
+        # We cannot just rename/copy spike_times.npy because it is in unit of samples,
         # and not seconds
         self._save_npy('spikes.times.npy', self.model.spike_times)
         self._save_npy('spikes.samples.npy', self.model.spike_samples)
 
         # spike_amps, templates_v, template_amps = self.model.get_amplitudes_true(self.ampfactor)
         spike_amps = self.model.amplitudes
-        templates_v = self.model.sparse_templates.data  # already in volts
         template_amps = self.model.template_amplitudes
 
         self._save_npy('spikes.amps.npy', spike_amps)
         self._save_npy('templates.amps.npy', template_amps)
 
-        if self.model.sparse_templates.cols:
-            raise(NotImplementedError("Sparse template export to ALF not implemented yet"))
-        else:
-            n_templates, n_wavsamps, nchall = templates_v.shape
-            # for some datasets, 32 may be too much
-            ncw = min(self.model.n_closest_channels, nchall)
-            assert(n_templates == self.model.n_templates)
-            templates = np.zeros((n_templates, n_wavsamps, ncw), dtype=np.float32)
-            templates_inds = np.zeros((n_templates, ncw), dtype=np.int32)
-            # for each template, find the nearest channels to keep (one the same probe...)
-            for t in np.arange(n_templates):
-                current_probe = self.model.channel_probes[self.model.templates_channels[t]]
-                channel_distance = np.sum(np.abs(
-                    self.model.channel_positions -
-                    self.model.channel_positions[self.model.templates_channels[t]]), axis=1)
-                channel_distance[self.model.channel_probes != current_probe] += np.inf
-                templates_inds[t, :] = np.argsort(channel_distance)[:ncw]
-                templates[t, ...] = templates_v[t, :][:, templates_inds[t, :]]
-            np.save(self.out_path.joinpath('templates.waveforms'), templates)
-            np.save(self.out_path.joinpath('templates.waveformsChannels'), templates_inds)
-            np.save(self.out_path.joinpath('clusters.waveforms'), templates)
-            np.save(self.out_path.joinpath('clusters.waveformsChannels'), templates_inds)
+        self._save_npy('templates.waveforms.npy', self.model.sparse_templates.data)
+        self._save_npy('templates.waveformsChannels.npy', self.model.sparse_templates.cols)
+        self._save_npy('clusters.waveforms.npy', self.model.sparse_templates.data)
+        self._save_npy('clusters.waveformsChannels.npy', self.model.sparse_templates.cols)
 
     def rename_with_label(self):
         """add the label as an ALF part name before the extension if any label provided"""
