@@ -183,6 +183,10 @@ class BaseEphysReader(object):
 
     def __init__(self):
         self._ops = []
+        # Automatic scaling of ephys data depending on the ampfactor factor
+        ampfactor = getattr(self, 'ampfactor', 1) or 1
+        assert ampfactor > 0
+        self._ops.append(('mul', ampfactor))
 
     @property
     def n_chunks(self):
@@ -304,6 +308,7 @@ class BaseEphysReader(object):
 
 class FlatEphysReader(BaseEphysReader):
     def __init__(self, paths, sample_rate=None, dtype=None, offset=0, n_channels=None, **kwargs):
+        self.ampfactor = kwargs.get('ampfactor', 1) or 1
         super(FlatEphysReader, self).__init__()
         if isinstance(paths, (str, Path)):
             paths = [paths]
@@ -333,6 +338,7 @@ class FlatEphysReader(BaseEphysReader):
 
 class MtscompEphysReader(BaseEphysReader):
     def __init__(self, reader, **kwargs):
+        self.ampfactor = kwargs.get('ampfactor', 1) or 1
         super(MtscompEphysReader, self).__init__()
         if isinstance(reader, (tuple, list)):  # pragma: no cover
             assert reader
@@ -394,6 +400,7 @@ class MtscompEphysReader(BaseEphysReader):
 
 class ArrayEphysReader(BaseEphysReader):
     def __init__(self, arr, **kwargs):
+        self.ampfactor = kwargs.get('ampfactor', 1) or 1
         super(ArrayEphysReader, self).__init__()
         self._arr = arr
         self.sample_rate = kwargs.pop('sample_rate', None)
@@ -426,6 +433,7 @@ class RandomEphysReader(BaseEphysReader):
     name = 'random'
 
     def __init__(self, n_samples, n_channels, sample_rate=None, **kwargs):
+        self.ampfactor = kwargs.get('ampfactor', 1) or 1
         super(RandomEphysReader, self).__init__()
         self.sample_rate = sample_rate
         assert self.sample_rate > 0

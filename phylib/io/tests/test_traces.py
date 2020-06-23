@@ -102,22 +102,28 @@ def sample_rate(request):
     return request.param
 
 
+@fixture(params=[1, 2])
+def ampfactor(request):
+    return request.param
+
+
 @fixture(params=['numpy', 'npy', 'flat', 'flat_concat', 'mtscomp', 'mtscomp_reader'])
-def traces(request, tempdir, arr, sample_rate):
+def traces(request, tempdir, arr, sample_rate, ampfactor):
     if request.param == 'numpy':
-        return get_ephys_reader(arr, sample_rate=sample_rate)
+        return get_ephys_reader(arr, sample_rate=sample_rate, ampfactor=ampfactor)
 
     elif request.param == 'npy':
         path = tempdir / 'data.npy'
         np.save(path, arr)
-        return get_ephys_reader(path, sample_rate=sample_rate)
+        return get_ephys_reader(path, sample_rate=sample_rate, ampfactor=ampfactor)
 
     elif request.param == 'flat':
         path = tempdir / 'data.bin'
         with open(path, 'wb') as f:
             arr.tofile(f)
         return get_ephys_reader(
-            path, sample_rate=sample_rate, dtype=arr.dtype, n_channels=arr.shape[1])
+            path, sample_rate=sample_rate, dtype=arr.dtype, n_channels=arr.shape[1],
+            ampfactor=ampfactor)
 
     elif request.param == 'flat_concat':
         path0 = tempdir / 'data0.bin'
@@ -127,7 +133,8 @@ def traces(request, tempdir, arr, sample_rate):
         with open(path1, 'wb') as f:
             arr[arr.shape[0] // 2:, :].tofile(f)
         return get_ephys_reader(
-            [path0, path1], sample_rate=sample_rate, dtype=arr.dtype, n_channels=arr.shape[1])
+            [path0, path1], sample_rate=sample_rate, dtype=arr.dtype, n_channels=arr.shape[1],
+            ampfactor=ampfactor)
 
     elif request.param in ('mtscomp', 'mtscomp_reader'):
         path = tempdir / 'data.bin'
@@ -141,12 +148,12 @@ def traces(request, tempdir, arr, sample_rate):
             n_threads=1, check_after_compress=False, quiet=True)
         reader = mtscomp.decompress(out, outmeta, check_after_decompress=False, quiet=True)
         if request.param == 'mtscomp':
-            return get_ephys_reader(reader)
+            return get_ephys_reader(reader, ampfactor=ampfactor)
         else:
-            return get_ephys_reader(out)
+            return get_ephys_reader(out, ampfactor=ampfactor)
 
 
-def test_ephys_reader_1(tempdir, arr, traces, sample_rate):
+def test_ephys_reader_1(tempdir, arr, traces, sample_rate, ampfactor):
     assert isinstance(traces, BaseEphysReader)
     assert traces.dtype == arr.dtype
     assert traces.ndim == 2
@@ -158,10 +165,10 @@ def test_ephys_reader_1(tempdir, arr, traces, sample_rate):
     assert len(traces.part_bounds) == traces.n_parts + 1
     assert len(traces.chunk_bounds) == traces.n_chunks + 1
 
-    ac(traces[:], arr)
+    ac(traces[:], arr * ampfactor)
 
     def _a(f):
-        ac(f(traces)[:], f(arr))
+        ac(f(traces)[:], f(arr * ampfactor))
 
     _a(lambda x: x[:, ::-1])
 
@@ -235,7 +242,7 @@ def test_get_spike_waveforms():
 
 @mark.parametrize('do_export', [False, True])
 @mark.parametrize('do_cache', [False, True])
-def test_waveform_extractor(tempdir, arr, traces, sample_rate, do_export, do_cache):
+def test_waveform_extractor(tempdir, arr, traces, sample_rate, do_export, do_cache, ampfactor):
     data = arr
 
     nsw = 20
@@ -268,11 +275,11 @@ def test_waveform_extractor(tempdir, arr, traces, sample_rate, do_export, do_cac
     ae(w, ww)
 
     assert np.all(w[0, :5, :] == 0)
-    ac(w[0, 5:, :], data[0:15, [1, 3, 5]])
+    ac(w[0, 5:, :], data[0:15, [1, 3, 5]] * ampfactor)
 
-    ac(w[1, ...], data[15:35, [1, 3, 5]])
-    ac(w[2, ...], data[90:110, [1, 3, 5]])
-    ac(w[3, ...], data[990:1010, [1, 3, 5]])
+    ac(w[1, ...], data[15:35, [1, 3, 5]] * ampfactor)
+    ac(w[2, ...], data[90:110, [1, 3, 5]] * ampfactor)
+    ac(w[3, ...], data[990:1010, [1, 3, 5]] * ampfactor)
 
     assert np.all(w[4, -5:, :] == 0)
-    ac(w[4, :-5, :], data[-15:, [1, 3, 5]])
+    ac(w[4, :-5, :], data[-15:, [1, 3, 5]] * ampfactor)
