@@ -266,8 +266,21 @@ class TemplateModel(object):
     # Internal loading methods
     #--------------------------------------------------------------------------
 
+    def _find_file_format(self):
+        if self._find_path('spikes.templates.npy', mandatory=False):
+            self.file_format = 'alf'
+        elif self._find_path('spike_templates.npy', mandatory=False):
+            self.file_format = 'ks2'
+        else:
+            raise NotImplementedError("Unknown file format: should be either ALF or KS2.")
+
     def _load_data(self):
         """Load all data."""
+
+        # Find the file format: either 'alf' or 'ks2'
+        self._find_file_format()
+        assert self.file_format
+
         # Spikes
         self.spike_samples, self.spike_times = self._load_spike_samples()
         ns, = self.n_spikes, = self.spike_times.shape
@@ -324,6 +337,20 @@ class TemplateModel(object):
         self.probes = np.unique(self.channel_probes)
         self.n_probes = len(self.probes)
 
+        # Whitening.
+        try:
+            self.wm = self._load_wm()
+        except IOError:
+            logger.debug("Whitening matrix file not found.")
+            self.wm = np.eye(nc)
+        assert self.wm.shape == (nc, nc)
+        try:
+            self.wmi = self._load_wmi()
+        except IOError:
+            logger.debug("Whitening matrix inverse file not found, computing it.")
+            self.wmi = self._compute_wmi(self.wm)
+        assert self.wmi.shape == (nc, nc)
+
         # Templates.
         self.sparse_templates = self._load_templates()
         if self.sparse_templates is not None:
@@ -339,19 +366,10 @@ class TemplateModel(object):
         # Spike waveforms (optional, otherwise fetched from raw data as needed).
         self.spike_waveforms = self._load_spike_waveforms()
 
-        # Whitening.
-        try:
-            self.wm = self._load_wm()
-        except IOError:
-            logger.debug("Whitening matrix file not found.")
-            self.wm = np.eye(nc)
-        assert self.wm.shape == (nc, nc)
-        try:
-            self.wmi = self._load_wmi()
-        except IOError:
-            logger.debug("Whitening matrix inverse file not found, computing it.")
-            self.wmi = self._compute_wmi(self.wm)
-        assert self.wmi.shape == (nc, nc)
+        # Template amplitudes.
+        self.template_amplitudes = self._load_template_amplitudes()
+        if self.template_amplitudes is not None:
+            assert self.template_amplitudes.shape == (ns,)
 
         # Similar templates.
         self.similar_templates = self._load_similar_templates()
@@ -381,6 +399,16 @@ class TemplateModel(object):
 
         # Spike attributes.
         self.spike_attributes = self._load_spike_attributes()
+
+        # Spike depths
+        self.spike_depths = self._load_spike_depths()
+        if self.spike_depths is not None:
+            assert self.spike_depths.shape == (ns,)
+
+        # Conversion to physical units if KS2 file format.
+        if self.file_format == 'ks2':
+            self.amplitudes, self.sparse_templates.data, self.template_amplitudes = \
+                self.get_amplitudes_true(self.ampfactor)
 
         # Metadata.
         self.metadata = self._load_metadata()
@@ -498,12 +526,33 @@ class TemplateModel(object):
 
     def _load_amplitudes(self):
         try:
-            out = self._read_array(self._find_path('amplitudes.npy', 'spikes.amps*.npy'))
+            # Loading from ALF, already in volt, no need to convert into volts.
+            out = self._read_array(self._find_path('spikes.amps.npy', mandatory=False))
+            assert out.ndim == 1
+            return out
+        except IOError:
+            pass
+        # If the ALF spike amplitudes doesn't exist, try loading it from KS2 format, but
+        # need to convert into volt.
+        try:
+            out = self._read_array(self._find_path('amplitudes.npy', mandatory=False))
+            # In this case, self.amplitudes will be rescaled at the end of _load_data().
             assert out.ndim == 1
             return out
         except IOError:
             logger.debug("No amplitude file found.")
-            return
+            return np.ones(self.n_spikes)
+
+    def _load_template_amplitudes(self):
+        try:
+            # Loading from ALF, already in volt, no need to convert into volts.
+            out = self._read_array(self._find_path('templates.amps.npy'))
+            assert out.ndim == 1
+            return out
+        except IOError:
+            # If the file doesn't exist, it will be computed at the end of _load_data(), in
+            # get_amplitudes_true().
+            return None
 
     def _load_spike_templates(self):
         path = self._find_path('spike_templates.npy', 'spikes.templates*.npy')
@@ -591,6 +640,15 @@ class TemplateModel(object):
             logger.warning("Could not load spike waveforms: %s.", e)
             return
 
+    def _load_spike_depths(self):
+        try:
+            # Loading from ALF, already in volt, no need to convert into volts.
+            out = self._read_array(self._find_path('spikes.depths.npy', mandatory=False))
+            assert out.ndim == 1
+            return out
+        except IOError:
+            return self.get_depths()
+
     def _load_similar_templates(self):
         try:
             out = self._read_array(self._find_path('similar_templates.npy'))
@@ -603,11 +661,13 @@ class TemplateModel(object):
     def _load_templates(self):
         logger.debug("Loading templates.")
 
-        # Sparse structure: regular array with col indices.
+        # Try ALF format first.
         try:
-            path = self._find_path(
-                'templates.npy', 'templates.waveforms.npy', 'templates.waveforms.*.npy')
-            data = self._read_array(path, mmap_mode='r')
+            path = self._find_path('templates.waveforms.npy', 'templates.npy')
+            # The templates array will be rescaled only if the file format is KS2, at the end of
+            # _load_data().
+            data = self._read_array(path)
+            logger.debug("Open ALF template waveforms.")
             data = np.atleast_3d(data)
             assert data.ndim == 3
             assert data.dtype in (np.float32, np.float64)
@@ -616,7 +676,7 @@ class TemplateModel(object):
             return
 
         try:
-            # WARNING: KS2 saves templates_ind.npy (with an s), and note template_ind.npy,
+            # WARNING: KS2 saves templates_ind.npy (with an s), and not template_ind.npy,
             # so that file is not taken into account here.
             # That means templates.npy is considered as a dense array.
             # Proper fix would be to save templates.npy as a true sparse array, with proper
@@ -786,7 +846,9 @@ class TemplateModel(object):
         if not self.sparse_templates:
             return
         template_w = self.sparse_templates.data[template_id, ...]
-        template = self._unwhiten(template_w).astype(np.float32)
+        # template = self._unwhiten(
+        #     template_w, format=self.sparse_templates.format).astype(np.float32)
+        template = template_w
         assert template.ndim == 2
         channel_ids_, amplitude, best_channel = self._find_best_channels(
             template, amplitude_threshold=amplitude_threshold)
@@ -822,8 +884,10 @@ class TemplateModel(object):
         channel_ids = channel_ids.astype(np.uint32)
 
         # Unwhiten.
-        template = self._unwhiten(template_w, channel_ids=channel_ids)
-        template = template.astype(np.float32)
+        # template = self._unwhiten(
+        #     template_w, channel_ids=channel_ids,
+        #     format=self.sparse_templates.format).astype(np.float32)
+        template = template_w
         assert template.ndim == 2
         assert template.shape[1] == len(channel_ids)
         # Compute the amplitude and the channel with max amplitude.
@@ -944,12 +1008,17 @@ class TemplateModel(object):
         c = 0
         spikes_depths = np.zeros_like(self.spike_times) * np.nan
         nspi = spikes_depths.shape[0]
+        if self.sparse_features is None:
+            return None
         while True:
             ispi = np.arange(c, min(c + nbatch, nspi))
             # take only first component
             features = self.sparse_features.data[ispi, :, 0]
             features = np.maximum(features, 0) ** 2  # takes only positive values into account
-            ichannels = self.sparse_features.cols[self.spike_clusters[ispi]].astype(np.uint32)
+            if self.sparse_features.cols is not None:
+                ichannels = self.sparse_features.cols[self.spike_clusters[ispi]].astype(np.uint32)
+            else:
+                ichannels = np.tile(np.arange(features.shape[1]), (self.n_spikes, 1))
             ypos = self.channel_positions[ichannels, 1]
             with np.errstate(divide='ignore'):
                 spikes_depths[ispi] = (np.sum(np.transpose(ypos * features) /
@@ -975,12 +1044,16 @@ class TemplateModel(object):
         # to rescale the template,
 
         # unwhiten template waveforms on their channels of max amplitude
-        if self.sparse_templates.cols:
-            raise NotImplementedError
         # apply the inverse whitening matrix to the template
         templates_wfs = np.zeros_like(self.sparse_templates.data)  # nt, ns, nc
         for n in np.arange(self.n_templates):
-            templates_wfs[n, :, :] = np.matmul(self.sparse_templates.data[n, :, :], self.wmi)
+            mat = self.wmi
+            if self.sparse_templates.cols is not None:
+                channel_ids = self.sparse_templates.cols[n]
+                assert self.sparse_templates.data.shape[2] == len(channel_ids)
+                mat = mat[np.ix_(channel_ids, channel_ids)]
+                assert mat.shape == (len(channel_ids),) * 2
+            templates_wfs[n, :, :] = np.matmul(self.sparse_templates.data[n, :, :], mat)
 
         # The amplitude on each channel is the positive peak minus the negative
         templates_ch_amps = np.max(templates_wfs, axis=1) - np.min(templates_wfs, axis=1)

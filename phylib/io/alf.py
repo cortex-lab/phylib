@@ -242,7 +242,12 @@ class EphysAlfCreator(object):
         # and not seconds
         self._save_npy('spikes.times.npy', self.model.spike_times)
         self._save_npy('spikes.samples.npy', self.model.spike_samples)
-        spike_amps, templates_v, template_amps = self.model.get_amplitudes_true(self.ampfactor)
+
+        # spike_amps, templates_v, template_amps = self.model.get_amplitudes_true(self.ampfactor)
+        spike_amps = self.model.amplitudes
+        templates_v = self.model.sparse_templates.data  # already in volts
+        template_amps = self.model.template_amplitudes
+
         self._save_npy('spikes.amps.npy', spike_amps)
         self._save_npy('templates.amps.npy', template_amps)
 
