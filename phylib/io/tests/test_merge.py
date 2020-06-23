@@ -101,7 +101,9 @@ def test_probe_merge_2(tempdir):
         assert np.all(merged_original_amps[spike_probes == 0] <= 15)
         assert np.all(merged_original_amps[spike_probes == 1] >= 20)
 
-        np.all(merged.sparse_templates.data[:64, :, 0:32] == single.sparse_templates.data)
+        # TODO: this fails
+        # assert np.all(
+        #     merged.sparse_templates.data[:64, :, 0:32] == single.sparse_templates.data)
 
     # Convert into ALF and load.
     alf = EphysAlfCreator(merged).convert(tempdir / 'alf')

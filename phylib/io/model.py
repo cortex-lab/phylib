@@ -988,7 +988,7 @@ class TemplateModel(object):
         templates_amps_au = np.max(templates_ch_amps, axis=1)
         spike_amps = templates_amps_au[self.spike_templates] * self.amplitudes
 
-        with np.errstate(divide='ignore'):
+        with np.errstate(all='ignore'):
             # take the average spike amplitude per template
             templates_amps_v = (np.bincount(self.spike_templates, weights=spike_amps) /
                                 np.bincount(self.spike_templates))
