@@ -368,6 +368,10 @@ class TemplateModel(object):
 
         # Spike waveforms (optional, otherwise fetched from raw data as needed).
         self.spike_waveforms = self._load_spike_waveforms()
+        # Control the number of template channels to show.
+        if self.spike_waveforms is not None:
+            self.n_closest_channels = min(
+                self.n_closest_channels, self.spike_waveforms.spike_channels.shape[1])
 
         # Template amplitudes.
         self.template_amplitudes = self._load_template_amplitudes()
@@ -1034,6 +1038,10 @@ class TemplateModel(object):
         data, cols = self.sparse_templates.data, self.sparse_templates.cols
         assert cols is not None
         template, channel_ids = data[template_id], cols[template_id]
+
+        # Truncate the templates with the n closest channels.
+        channel_ids = channel_ids[:self.n_closest_channels]
+        template = template[..., :self.n_closest_channels]
 
         # Remove unused channels = -1.
         used = channel_ids != -1
