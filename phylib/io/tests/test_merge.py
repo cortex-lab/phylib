@@ -95,18 +95,15 @@ def test_probe_merge_2(tempdir):
         assert np.all(merged.channel_probes == np.r_[single.channel_probes,
                                                      single.channel_probes + 1])
         assert np.all(merged.templates_channels[merged.templates_probes == 0] < single.n_channels)
-
-        # TODO: this test fails
-        # assert np.all(merged.templates_channels[merged.templates_probes == 1]>=single.n_channels)
+        assert np.all(merged.templates_channels[merged.templates_probes == 1] >= single.n_channels)
 
         spike_probes = merged.templates_probes[merged.spike_templates]
 
         assert np.all(merged_original_amps[spike_probes == 0] <= 15)
         assert np.all(merged_original_amps[spike_probes == 1] >= 20)
 
-        # TODO: this fails
-        # assert np.all(
-        #     merged.sparse_templates.data[:64, :, 0:32] == single.sparse_templates.data)
+        assert np.all(
+            merged.sparse_templates.data[:64, :, 0:32] == single.sparse_templates.data)
 
     # Convert into ALF and load.
     alf = EphysAlfCreator(merged).convert(tempdir / 'alf')
