@@ -228,7 +228,7 @@ class TemplateModel(object):
 
     """Fraction of the peak amplitude required by the closest channels to be kept as best
     channels."""
-    amplitude_threshold = 1e-2
+    amplitude_threshold = 1e-3
 
     def __init__(self, **kwargs):
         # Default empty values.
@@ -1162,7 +1162,7 @@ class TemplateModel(object):
             features = self.sparse_features.data[ispi, :, 0]
             features = np.maximum(features, 0) ** 2  # takes only positive values into account
             if self.sparse_features.cols is not None:
-                ichannels = self.sparse_features.cols[self.spike_clusters[ispi]].astype(np.uint32)
+                ichannels = self.sparse_features.cols[self.spike_templates[ispi]].astype(np.uint32)
             else:
                 ichannels = np.tile(np.arange(features.shape[1]), (self.n_spikes, 1))
             ypos = self.channel_positions[ichannels, 1]
