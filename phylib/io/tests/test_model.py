@@ -160,6 +160,11 @@ def test_model_spike_waveforms(template_path_full):
                 ae(waveforms[tid][i], wt)
                 ae(w[i], wt)
 
+        # Test computing features from the spike waveforms.
+        model.sparse_features = None
+        features = model.get_features(spike_ids, channel_ids)
+        assert features.shape == (len(spike_ids), len(channel_ids), 3)
+
     model.close()
 
 

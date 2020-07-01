@@ -15,9 +15,7 @@ from pathlib import Path
 import shutil
 
 import numpy as np
-# from numpy.lib.format import open_memmap
 import scipy.io as sio
-# from tqdm import tqdm
 
 from .array import _index_of, _spikes_in_clusters, _spikes_per_cluster, SpikeSelector
 from .traces import (
@@ -148,17 +146,78 @@ def _all_positions_distinct(positions):
     return len(set(tuple(row) for row in positions)) == len(positions)
 
 
-# def get_closest_channels(channel_positions, channel_index, n=None):
-#     """Get the channels closest to a given channel on the probe."""
-#     x = channel_positions[:, 0]
-#     y = channel_positions[:, 1]
-#     x0, y0 = channel_positions[channel_index]
-#     d = (x - x0) ** 2 + (y - y0) ** 2
-#     out = np.argsort(d)
-#     if n:
-#         out = out[:n]
-#     assert out[0] == channel_index
-#     return out
+def _compute_pcs(x, npcs):
+    """Compute the PCs of an array x, where each row is an observation.
+    x can be a 2D or 3D array. In the latter case, the PCs are computed
+    and concatenated iteratively along the last axis."""
+
+    # Ensure x is a 3D array.
+    assert x.ndim == 3
+    # Ensure double precision
+    x = x.astype(np.float64)
+
+    nspikes, nsamples, nchannels = x.shape
+
+    cov_reg = np.eye(nsamples)
+    assert cov_reg.shape == (nsamples, nsamples)
+
+    pcs_list = []
+    # Loop over channels
+    for channel in range(nchannels):
+        x_channel = x[:, :, channel]
+        # Compute cov matrix for the channel
+        assert x_channel.ndim == 2
+        # Don't compute the cov matrix if there are no unmasked spikes
+        # on that channel.
+        alpha = 1. / nspikes
+        if x_channel.shape[0] <= 1:
+            cov = alpha * cov_reg
+        else:
+            cov_channel = np.cov(x_channel, rowvar=0)
+            assert cov_channel.shape == (nsamples, nsamples)
+            cov = alpha * cov_reg + cov_channel
+        # Compute the eigenelements
+        vals, vecs = np.linalg.eigh(cov)
+        pcs = vecs.T.astype(np.float32)[np.argsort(vals)[::-1]]
+        # Take the first npcs components.
+        pcs_list.append(pcs[:npcs, ...])
+    # Return the concatenation of the PCs on all channels, along the 3d axis,
+    # except if there is only one element in the 3d axis. In this case
+    # we convert to a 2D array.
+    pcs = np.dstack(pcs_list)
+    assert pcs.ndim == 3
+    return pcs
+
+
+def _project_pcs(x, pcs):
+    """Project data points onto principal components.
+    Arguments:
+      * x: a 2D array.
+      * pcs: the PCs as returned by `compute_pcs`.
+    """
+    assert x.ndim == 3
+    assert pcs.ndim == 3
+    features = []
+    # for i, waveform in enumerate(x):
+    #     assert waveform.ndim == 2
+    #     # pcs.shape is (3, n_samples, n_channels)
+    #     # waveform.shape is (n_samples, n_channels)
+    #     features.append(np.einsum('ijk,jk->ki', pcs, waveform))
+    features = np.einsum('ijk,ljk->lki', pcs, x)
+    # features = np.stack(features, axis=0)
+    assert features.ndim == 3
+    return features
+
+
+def compute_features(waveforms):
+    assert waveforms.ndim == 3
+    nspk, nsmp, nc = waveforms.shape
+    pcs = _compute_pcs(waveforms, 3)
+    assert pcs.ndim == 3
+    features = _project_pcs(waveforms, pcs)
+    assert features.ndim == 3
+    assert features.shape == (nspk, nc, 3)
+    return features
 
 
 #------------------------------------------------------------------------------
@@ -228,7 +287,7 @@ class TemplateModel(object):
 
     """Fraction of the peak amplitude required by the closest channels to be kept as best
     channels."""
-    amplitude_threshold = 1e-3
+    amplitude_threshold = 1e-2
 
     def __init__(self, **kwargs):
         # Default empty values.
@@ -395,6 +454,8 @@ class TemplateModel(object):
 
         # Features.
         self.sparse_features = self._load_features()
+        # if self.sparse_features is None and self.spike_waveforms is not None:
+        #     self.sparse_features = self._compute_features_from_waveforms()
         self.features = self.sparse_features.data if self.sparse_features else None
         if self.sparse_features is not None:
             self.n_features_per_channel = self.sparse_features.data.shape[2]
@@ -839,15 +900,6 @@ class TemplateModel(object):
         self._write_array(self.dir_path / 'whitening_mat_inv.npy', wmi)
         return wmi
 
-    # def _unwhiten(self, x, channel_ids=None):
-    #     mat = self.wmi
-    #     if channel_ids is not None:
-    #         mat = mat[np.ix_(channel_ids, channel_ids)]
-    #         assert mat.shape == (len(channel_ids),) * 2
-    #     assert x.shape[1] == mat.shape[0]
-    #     out = np.dot(x, mat) * getattr(self, 'template_scaling', 1.0)
-    #     return np.ascontiguousarray(out)
-
     def _load_features(self):
 
         # Sparse structure: regular array with row and col indices.
@@ -914,127 +966,11 @@ class TemplateModel(object):
         return Bunch(data=data, cols=cols, rows=rows)
 
     #--------------------------------------------------------------------------
-    # Internal data access methods
-    #--------------------------------------------------------------------------
-
-    # def _find_best_channels(self, template, amplitude_threshold=None):
-    #     """Find the best channels for a given template."""
-    #     # Compute the template amplitude on each channel.
-    #     assert template.ndim == 2  # shape: (n_samples, n_channels)
-    #     amplitude = template.max(axis=0) - template.min(axis=0)
-    #     assert amplitude.ndim == 1  # shape: (n_channels,)
-    #     # Find the peak channel.
-    #     best_channel = np.argmax(amplitude)
-    #     max_amp = amplitude[best_channel]
-    #     # Find the channels X% peak.
-    #     amplitude_threshold = (
-    #         amplitude_threshold if amplitude_threshold is not None else self.amplitude_threshold)
-    #     peak_channels = np.nonzero(amplitude >= amplitude_threshold * max_amp)[0]
-    #     # Find N closest channels.
-    #     close_channels = get_closest_channels(
-    #         self.channel_positions, best_channel, self.n_closest_channels)
-    #     assert best_channel in close_channels
-    #     # Restrict to the channels belonging to the best channel's shank.
-    #     if self.channel_shanks is not None:
-    #         shank = self.channel_shanks[best_channel]  # shank of best channel
-    #         channels_on_shank = np.nonzero(self.channel_shanks == shank)[0]
-    #         close_channels = np.intersect1d(close_channels, channels_on_shank)
-    #     # Keep the intersection.
-    #     channel_ids = np.intersect1d(peak_channels, close_channels)
-    #     # Order the channels by decreasing amplitude.
-    #     order = np.argsort(amplitude[channel_ids])[::-1]
-    #     channel_ids = channel_ids[order]
-    #     amplitude = amplitude[order]
-    #     assert best_channel in channel_ids
-    #     assert amplitude.shape == (len(channel_ids),)
-    #     return channel_ids, amplitude, best_channel
-
-    # def _get_template_dense(self, template_id, channel_ids=None, amplitude_threshold=None):
-    #     """Return data for one template."""
-    #     if not self.sparse_templates:
-    #         return
-    #     template_w = self.sparse_templates.data[template_id, ...]
-    #     # template = self._unwhiten(
-    #     #     template_w, format=self.sparse_templates.format).astype(np.float32)
-    #     template = template_w
-    #     assert template.ndim == 2
-    #     channel_ids_, amplitude, best_channel = self._find_best_channels(
-    #         template, amplitude_threshold=amplitude_threshold)
-    #     channel_ids = channel_ids if channel_ids is not None else channel_ids_
-    #     template = template[:, channel_ids]
-    #     assert template.ndim == 2
-    #     assert template.shape[1] == channel_ids.shape[0]
-    #     return Bunch(
-    #         template=template,
-    #         amplitude=amplitude,
-    #         best_channel=best_channel,
-    #         channel_ids=channel_ids,
-    #     )
-
-    # def _template_n_channels(self, template_id, n_channels):
-    #     """Return the n best channels for a given template, filling with -1s if there isn't
-    #     enough best channels for that template."""
-    #     assert n_channels > 0
-    #     if template_id not in self.template_ids:
-    #         return [-1] * n_channels
-    #     template = self.get_template(template_id)
-    #     channel_ids = list(template.channel_ids[:n_channels])
-    #     if len(channel_ids) < n_channels:
-    #         channel_ids += [-1] * (n_channels - len(channel_ids))
-    #     return channel_ids
-
-    # def _get_template_sparse(self, template_id):
-    #     data, cols = self.sparse_templates.data, self.sparse_templates.cols
-    #     assert cols is not None
-    #     template_w, channel_ids = data[template_id], cols[template_id]
-
-    #     # KS2 HACK: dense templates may have been saved as sparse arrays (with all channels),
-    #     # we need to remove channels with no signal.
-
-    #     # # template_w is (n_samples, n_channels)
-    #     # template_max = np.abs(template_w).max(axis=0)  # n_channels
-    #     # has_signal = template_max > template_max.max() * 1e-6
-    #     # channel_ids = channel_ids[has_signal]
-    #     # template_w = template_w[:, has_signal]
-
-    #     # Remove unused channels = -1.
-    #     used = channel_ids != -1
-    #     template_w = template_w[:, used]
-    #     channel_ids = channel_ids[used]
-    #     channel_ids = channel_ids.astype(np.uint32)
-
-    #     # Unwhiten.
-    #     # template = self._unwhiten(
-    #     #     template_w, channel_ids=channel_ids,
-    #     #     format=self.sparse_templates.format).astype(np.float32)
-    #     template = template_w
-    #     assert template.ndim == 2
-    #     assert template.shape[1] == len(channel_ids)
-    #     # Compute the amplitude and the channel with max amplitude.
-    #     amplitude = template.max(axis=0) - template.min(axis=0)
-    #     best_channel = channel_ids[np.argmax(amplitude)]
-    #     # NOTE: it is expected that the channel_ids are reordered by decreasing amplitude.
-    #     # To each column of the template array corresponds the channel id given by channel_ids.
-    #     channels_reordered = np.argsort(amplitude)[::-1]
-    #     out = Bunch(
-    #         template=template[..., channels_reordered],
-    #         amplitude=amplitude,
-    #         best_channel=best_channel,
-    #         channel_ids=channel_ids[channels_reordered],
-    #     )
-    #     return out
-
-    #--------------------------------------------------------------------------
     # Data access methods
     #--------------------------------------------------------------------------
 
     def get_template(self, template_id, channel_ids=None, amplitude_threshold=None):
         """Get data about a template."""
-        # if self.sparse_templates and self.sparse_templates.cols is not None:
-        #     return self._get_template_sparse(template_id)
-        # else:
-        #     return self._get_template_dense(
-        #         template_id, channel_ids=channel_ids, amplitude_threshold=amplitude_threshold)
         data, cols = self.sparse_templates.data, self.sparse_templates.cols
         assert cols is not None
         template, channel_ids = data[template_id], cols[template_id]
@@ -1047,7 +983,7 @@ class TemplateModel(object):
         used = channel_ids != -1
         template = template[:, used]
         channel_ids = channel_ids[used]
-        channel_ids = channel_ids.astype(np.uint32)
+        channel_ids = channel_ids.astype(np.int32)
 
         assert template.ndim == 2
         assert template.shape[1] == len(channel_ids)
@@ -1084,7 +1020,23 @@ class TemplateModel(object):
     def get_features(self, spike_ids, channel_ids):
         """Return sparse features for given spikes."""
         sf = self.sparse_features
-        if sf is None:
+        if sf is None and self.spike_waveforms is not None:
+            ns = len(spike_ids)
+            nc = len(channel_ids)
+            n_pcs = 3
+            features = np.zeros((ns, nc, n_pcs), dtype=np.float32)
+            spike_ids_exist = np.intersect1d(spike_ids, self.spike_waveforms.spike_ids)
+            # Compute PCs from the waveforms for the spikes that are in spike_waveforms.spike_ids.
+            waveforms = self.get_waveforms(spike_ids_exist, channel_ids)
+            features_existing = compute_features(waveforms)
+            assert features.shape[1:] == (nc, n_pcs)
+            # Now we need to integrate the computed features into the output array, knowing
+            # that some spikes may be missing if there were requested here in spike_ids, but
+            # were absent in spike_waveforms.spike_ids.
+            ind = _index_of(spike_ids_exist, spike_ids)
+            features[ind, ...] = features_existing
+            return features
+        elif sf is None:
             return
         _, n_channels_loc, n_pcs = sf.data.shape
         ns = len(spike_ids)
@@ -1154,7 +1106,7 @@ class TemplateModel(object):
         c = 0
         spikes_depths = np.zeros_like(self.spike_times) * np.nan
         nspi = spikes_depths.shape[0]
-        if self.sparse_features is None:
+        if self.sparse_features is None or self.sparse_features.data.shape[0] != self.n_spikes:
             return None
         while True:
             ispi = np.arange(c, min(c + nbatch, nspi))
@@ -1162,7 +1114,7 @@ class TemplateModel(object):
             features = self.sparse_features.data[ispi, :, 0]
             features = np.maximum(features, 0) ** 2  # takes only positive values into account
             if self.sparse_features.cols is not None:
-                ichannels = self.sparse_features.cols[self.spike_templates[ispi]].astype(np.uint32)
+                ichannels = self.sparse_features.cols[self.spike_templates[ispi]].astype(np.int32)
             else:
                 ichannels = np.tile(np.arange(features.shape[1]), (self.n_spikes, 1))
             ypos = self.channel_positions[ichannels, 1]
@@ -1174,68 +1126,6 @@ class TemplateModel(object):
                 break
         spikes_depths[np.isnan(spikes_depths)] = 0
         return spikes_depths
-
-    # def get_amplitudes_true(self, sample2unit=1.):
-    #     """Convert spike amplitude values to input amplitudes units
-    #      via scaling by unwhitened template waveform.
-    #      :param sample2unit float: factor to convert the raw data to a physical unit: defaults 1
-    #      :returns: spike_amplitudes_volts: np.array [nspikes] spike amplitudes in raw data units
-    #      :returns: templates_volts: np.array[ntemplates, nsamples, nchannels]: templates
-    #      in raw data units
-    #      :returns: template_amps_volts: np.array[ntemplates]: average templates amplitudes
-    #       in raw data units
-    #      To scale the template for template matching,
-    #      raw_data_volts = templates_volts * spike_amplitudes_volts / template_amps_volts
-    #      """
-    #     # spike_amp = ks2_spike_amps * maxmin(inv_whitening(ks2_template_amps))
-    #     # to rescale the template,
-
-    #     # unwhiten template waveforms on their channels of max amplitude
-    #     # apply the inverse whitening matrix to the template
-    #     templates_wfs = np.zeros_like(self.sparse_templates.data)  # nt, ns, nc
-    #     for n in np.arange(self.n_templates):
-    #         mat = self.wmi
-    #         if self.sparse_templates.cols is not None:
-    #             channel_ids = self.sparse_templates.cols[n]
-    #             assert self.sparse_templates.data.shape[2] == len(channel_ids)
-
-    #             # template_w is (n_samples, n_channels)
-    #             template_w = self.sparse_templates.data[n, :, :]
-    #             template_max = np.abs(template_w).max(axis=0)  # n_channels
-    #             has_signal = template_max > template_max.max() * 1e-6
-    #             channel_ids = channel_ids[has_signal]
-    #             self.sparse_templates.cols[n, :len(channel_ids)] = channel_ids
-    #             self.sparse_templates.cols[n, len(channel_ids):] = 0
-    #             mat = mat[np.ix_(channel_ids, channel_ids)]
-    #             assert mat.shape == (len(channel_ids),) * 2
-    #             print(self.sparse_templates.data[n, :, has_signal].shape[1])
-    #             print(channel_ids)
-    #             assert self.sparse_templates.data[n, :, has_signal].shape[1] == len(channel_ids)
-    #         else:
-    #             has_signal = slice(None, None, None)
-
-    #         templates_wfs[n, :, has_signal] = np.matmul(
-    #             self.sparse_templates.data[n, :, has_signal], mat)
-
-    #     # The amplitude on each channel is the positive peak minus the negative
-    #     templates_ch_amps = np.max(templates_wfs, axis=1) - np.min(templates_wfs, axis=1)
-
-    #     # The template arbitrary unit amplitude is the amplitude of its largest channel
-    #     # (but see below for true tempAmps)
-    #     templates_amps_au = np.max(templates_ch_amps, axis=1)
-    #     spike_amps = templates_amps_au[self.spike_templates] * self.amplitudes
-
-    #     with np.errstate(all='ignore'):
-    #         # take the average spike amplitude per template
-    #         templates_amps_v = (np.bincount(self.spike_templates, weights=spike_amps) /
-    #                             np.bincount(self.spike_templates))
-    #         # scale back the template according to the spikes units
-    #         templates_physical_unit = templates_wfs * (templates_amps_v / templates_amps_au
-    #                                                    )[:, np.newaxis, np.newaxis]
-
-    #     return (spike_amps * sample2unit,
-    #             templates_physical_unit * sample2unit,
-    #             templates_amps_v * sample2unit)
 
     #--------------------------------------------------------------------------
     # Internal helper methods for public high-level methods
@@ -1336,21 +1226,6 @@ class TemplateModel(object):
         spike_ids = self.get_cluster_spikes(cluster_id)
         channel_ids = self.get_cluster_channels(cluster_id)
         return self.get_waveforms(spike_ids, channel_ids)
-
-    # @ property
-    # def templates_channels(self):
-    #     """Returns a vector of peak channels for all templates"""
-    #     tmp = self.sparse_templates.data
-    #     n_templates, n_samples, n_channels = tmp.shape
-    #     # if self.sparse_templates.cols is None:
-    #     #     template_peak_channels = np.argmax(tmp.max(axis=1) - tmp.min(axis=1), axis=1)
-    #     # else:
-    #     # when the templates are sparse, the first channel is the highest amplitude channel
-    #     assert self.sparse_templates.cols is not None
-    #     template_peak_channels = self.sparse_templates.cols[:, 0]
-    #     assert np.all(template_peak_channels >= 0)
-    #     assert template_peak_channels.shape == (n_templates,)
-    #     return template_peak_channels
 
     @ property
     def templates_probes(self):
