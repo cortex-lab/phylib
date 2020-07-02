@@ -33,8 +33,8 @@ class Dataset(object):
         self.tmp_dir = tempdir
         p = Path(self.tmp_dir)
         self.ns = 100
-        self.nsamp = 25
-        self.ncmax = 42
+        self.nsamp = 50
+        self.ncmax = 10
         self.nc = 10
         self.nt = 5
         self.ncd = 1000
@@ -43,16 +43,16 @@ class Dataset(object):
         shutil.copy(p / 'spike_clusters.npy', p / 'spike_templates.npy')
         np.save(p / 'amplitudes.npy', nr.uniform(low=0.5, high=1.5, size=self.ns))
         np.save(p / 'channel_positions.npy', np.c_[np.arange(self.nc), np.zeros(self.nc)])
-        np.save(p / 'templates.npy', np.random.normal(size=(self.nt, 50, self.nc)))
+        np.save(p / 'templates.npy', np.random.normal(size=(self.nt, self.nsamp, self.nc)))
         np.save(p / 'similar_templates.npy', np.tile(np.arange(self.nt), (self.nt, 1)))
         np.save(p / 'channel_map.npy', np.c_[np.arange(self.nc)])
         np.save(p / 'channel_probe.npy', np.zeros(self.nc))
         np.save(p / 'whitening_mat.npy', np.eye(self.nc, self.nc))
-        np.save(p / '_phy_spikes_subset.channels.npy', np.zeros([self.ns, self.ncmax]))
-        np.save(p / '_phy_spikes_subset.spikes.npy', np.zeros([self.ns]))
-        np.save(p / '_phy_spikes_subset.waveforms.npy', np.zeros(
-            [self.ns, self.nsamp, self.ncmax])
-        )
+        np.save(p / '_phy_spikes_subset.channels.npy',
+                np.tile(np.arange(self.ncmax), (self.ns, 1)))
+        np.save(p / '_phy_spikes_subset.spikes.npy', np.arange(self.ns, dtype=np.int64))
+        np.save(p / '_phy_spikes_subset.waveforms.npy', np.random.uniform(
+            size=(self.ns, self.nsamp, self.ncmax)).astype(np.float32))
 
         _write_tsv_simple(p / 'cluster_group.tsv', 'group', {2: 'good', 3: 'mua', 5: 'noise'})
         _write_tsv_simple(p / 'cluster_Amplitude.tsv', field_name='Amplitude',
@@ -202,6 +202,13 @@ def test_creator(dataset):
             assert len(uuids[cl]) == 36
         if dataset._param == 1:
             assert c.cluster_uuids[2] == UUID
+
+        # Cluster waveforms
+        cl_wave = _load(next(out_path.glob('clusters.waveforms.*npy')))
+        assert cl_wave.shape == (
+            len(model.cluster_ids), model.n_samples_waveforms, model.n_channels_loc)
+        cl_wave_ch = _load(next(out_path.glob('clusters.waveformsChannels.*npy')))
+        assert cl_wave_ch.shape == (len(model.cluster_ids), model.n_channels_loc)
 
     def read_after_write():
         model = TemplateModel(dir_path=out_path, dat_path=dataset.dat_path,

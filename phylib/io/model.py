@@ -433,6 +433,8 @@ class TemplateModel(object):
         if self.spike_waveforms is not None:
             self.n_closest_channels = min(
                 self.n_closest_channels, self.spike_waveforms.spike_channels.shape[1])
+            assert self.spike_waveforms.waveforms.shape[1:] == (
+                self.n_samples_waveforms, self.n_channels_loc)
 
         # Template amplitudes.
         self.template_amplitudes = self._load_template_amplitudes()
@@ -1308,12 +1310,10 @@ class TemplateModel(object):
         np.save(path_spikes, spike_ids)
 
         # Save the spike channels.
-        # best_channels = np.vstack([
-        #     self._template_n_channels(t, nc) for t in range(self.n_templates)]).astype(np.int32)
         best_channels = self.sparse_templates.cols
         assert best_channels.ndim == 2
         assert best_channels.shape[0] == self.n_templates
-        if best_channels.shape[1] < nc:
+        if best_channels.shape[1] < nc:  # pragma: no cover
             best_channels = np.hstack(
                 (best_channels, -1 * np.ones((self.n_templates, nc - best_channels.shape[1])))) \
                 .astype(best_channels.dtype)

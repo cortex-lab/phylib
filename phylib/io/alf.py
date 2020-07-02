@@ -191,6 +191,26 @@ class EphysAlfCreator(object):
         logger.debug("Save %s.", self.out_path / filename)
         np.save(self.out_path / filename, arr)
 
+    def get_cluster_channels(self, cluster_id):
+        spike_ids = self.spc[cluster_id]
+        assert spike_ids.dtype == np.int64
+        if self.model.spike_waveforms is not None:
+            assert self.model.spike_waveforms.spike_ids.dtype == np.int64
+            spike_ids = np.intersect1d(spike_ids, self.model.spike_waveforms.spike_ids)
+        assert spike_ids.dtype == np.int64
+        st = self.model.spike_templates[spike_ids]
+        template_ids, counts = np.unique(st, return_counts=True)
+        ind = np.argmax(counts)
+        template_id = template_ids[ind]
+        channel_ids = self.model.get_template(template_id).channel_ids[:self.model.n_channels_loc]
+        return channel_ids
+
+    def get_cluster_waveform(self, cluster_id, channel_ids):
+        spike_ids = self.spc[cluster_id]
+        waveforms = self.model.get_waveforms(spike_ids, channel_ids)
+        if waveforms is not None:
+            return waveforms.mean(axis=0)
+
     def make_cluster_objects(self):
         """Create clusters.channels, clusters.waveformsDuration and clusters.amps"""
 
@@ -209,6 +229,32 @@ class EphysAlfCreator(object):
 
         # Save clusters uuids
         _write_tsv_simple(self.out_path / 'clusters.uuids.csv', "uuids", self.cluster_uuids)
+
+        self.make_cluster_waveforms()
+
+    def make_cluster_waveforms(self):
+        n_clusters = len(self.cluster_ids)
+        nsw = self.model.n_samples_waveforms
+        nc = self.model.n_channels_loc
+
+        cluster_waveforms = np.empty((n_clusters, nsw, nc), dtype=np.float32)
+        cluster_waveforms_channels = np.empty((n_clusters, nc), dtype=np.int32)
+
+        for i, cl in enumerate(self.cluster_ids):
+            channel_ids = self.get_cluster_channels(cl)
+            w = self.get_cluster_waveform(cl, channel_ids)
+            if w is None:
+                logger.debug("Skipping the export of unavailable cluster waveforms")
+                return
+            ncw = w.shape[1]
+            assert ncw == len(channel_ids)
+            assert ncw <= nc
+            assert cluster_waveforms[i, :, :ncw].shape == w.shape
+            cluster_waveforms[i, :, :ncw] = w
+            cluster_waveforms_channels[i, :ncw] = channel_ids
+
+        self._save_npy('clusters.waveforms.npy', cluster_waveforms)
+        self._save_npy('clusters.waveformsChannels.npy', cluster_waveforms_channels)
 
     def make_channel_objects(self):
         """If there is no rawInd file, create it"""
@@ -261,8 +307,6 @@ class EphysAlfCreator(object):
 
         self._save_npy('templates.waveforms.npy', self.model.sparse_templates.data)
         self._save_npy('templates.waveformsChannels.npy', self.model.sparse_templates.cols)
-        self._save_npy('clusters.waveforms.npy', self.model.sparse_templates.data)
-        self._save_npy('clusters.waveformsChannels.npy', self.model.sparse_templates.cols)
 
     def rename_with_label(self):
         """add the label as an ALF part name before the extension if any label provided"""
