@@ -153,6 +153,7 @@ def _compute_pcs(x, npcs):
 
     # Ensure x is a 3D array.
     assert x.ndim == 3
+    assert x.shape[0] > 0
     # Ensure double precision
     x = x.astype(np.float64)
 
@@ -212,6 +213,7 @@ def _project_pcs(x, pcs):
 def compute_features(waveforms):
     assert waveforms.ndim == 3
     nspk, nsmp, nc = waveforms.shape
+    assert nspk > 0
     pcs = _compute_pcs(waveforms, 3)
     assert pcs.ndim == 3
     features = _project_pcs(waveforms, pcs)
@@ -454,8 +456,6 @@ class TemplateModel(object):
 
         # Features.
         self.sparse_features = self._load_features()
-        # if self.sparse_features is None and self.spike_waveforms is not None:
-        #     self.sparse_features = self._compute_features_from_waveforms()
         self.features = self.sparse_features.data if self.sparse_features else None
         if self.sparse_features is not None:
             self.n_features_per_channel = self.sparse_features.data.shape[2]
@@ -1021,6 +1021,8 @@ class TemplateModel(object):
         """Return sparse features for given spikes."""
         sf = self.sparse_features
         if sf is None and self.spike_waveforms is not None:
+            # Compute features on the fly from the spike waveforms if the features array
+            # is not available.
             ns = len(spike_ids)
             nc = len(channel_ids)
             n_pcs = 3
