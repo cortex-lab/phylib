@@ -16,7 +16,7 @@ import uuid
 from tqdm import tqdm
 import numpy as np
 
-from phylib.utils._misc import _read_tsv_simple, ensure_dir_exists
+from phylib.utils._misc import _read_tsv_simple, _write_tsv_simple, ensure_dir_exists
 from phylib.io.array import _spikes_per_cluster, _unique
 from phylib.io.model import load_model
 
@@ -104,6 +104,7 @@ class EphysAlfCreator(object):
         self.dir_path = Path(model.dir_path)
         self.spc = _spikes_per_cluster(model.spike_clusters)
         self.cluster_ids = _unique(self.model.spike_clusters)
+        self.cluster_uuids = self.load_uuids()  # dict cluster_id => uuid
 
     def convert(self, out_path, force=False, label='', ampfactor=1):
         """Convert from KS/phy format to ALF."""
@@ -140,6 +141,17 @@ class EphysAlfCreator(object):
         params_path = self.out_path / 'params.py'
         if params_path.exists():
             return load_model(params_path)
+
+    def load_uuids(self):
+        """Load or create cluster UUIDs."""
+        path = self.dir_path / 'clusters.uuids.csv'
+        uuids = {}
+        if path.exists():
+            uuids.update(_load(path))
+        missing = set(self.cluster_ids) - uuids.keys()
+        uuids.update({cl: str(uuid.uuid4()) for cl in missing})
+        assert set(uuids) == set(self.cluster_ids)
+        return uuids
 
     def copy_files(self, force=False):
         for fn0, fn1, squeeze in _FILE_RENAMES:
@@ -193,14 +205,10 @@ class EphysAlfCreator(object):
         # group by average over cluster number
         camps = np.zeros(np.max(self.cluster_ids) - np.min(self.cluster_ids) + 1,) * np.nan
         camps[self.cluster_ids - np.min(self.cluster_ids)] = self.model.templates_amplitudes
-        amps_path = self.dir_path / 'clusters.amps.npy'
-        self._save_npy(amps_path.name, camps * self.ampfactor)
+        self._save_npy('clusters.amps.npy', camps * self.ampfactor)
 
-        # clusters uuids
-        uuid_list = ['uuids']
-        uuid_list.extend([str(uuid.uuid4()) for _ in range(camps.size)])
-        with open(self.out_path / 'clusters.uuids.csv', 'w+') as fid:
-            fid.write('\n'.join(uuid_list))
+        # Save clusters uuids
+        _write_tsv_simple(self.out_path / 'clusters.uuids.csv', "uuids", self.cluster_uuids)
 
     def make_channel_objects(self):
         """If there is no rawInd file, create it"""

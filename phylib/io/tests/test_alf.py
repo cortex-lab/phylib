@@ -10,6 +10,7 @@
 import os
 from pathlib import Path
 import shutil
+import uuid
 from pytest import fixture, raises
 
 import numpy as np
@@ -25,6 +26,8 @@ from ..model import TemplateModel
 #------------------------------------------------------------------------------
 
 class Dataset(object):
+    _param = 0
+
     def __init__(self, tempdir):
         np.random.seed(42)
         self.tmp_dir = tempdir
@@ -73,9 +76,17 @@ class Dataset(object):
         return _load(p / fn)
 
 
-@fixture
-def dataset(tempdir):
-    return Dataset(tempdir)
+UUID = str(uuid.uuid4())
+
+
+@fixture(params=[0, 1])
+def dataset(request, tempdir):
+    ds = Dataset(tempdir)
+    ds._param = request.param
+    # Existing cluster UUIDs file to check that it is properly loaded and not overriden.
+    if request.param == 1:
+        _write_tsv_simple(ds.tmp_dir / 'clusters.uuids.csv', "uuids", {2: UUID})
+    return ds
 
 
 def test_ephys_1(dataset):
@@ -184,6 +195,13 @@ def test_creator(dataset):
 
         dur = np.load(next(out_path.glob('clusters.peakToTrough*.npy')))
         assert np.all(dur == np.array([18., -1., 9.5, 2.5, -2.]))
+
+        # Check cluster UUIDs.
+        uuids = _load(next(out_path.glob('clusters.uuids*.csv')))
+        for cl in c.cluster_uuids:
+            assert len(uuids[cl]) == 36
+        if dataset._param == 1:
+            assert c.cluster_uuids[2] == UUID
 
     def read_after_write():
         model = TemplateModel(dir_path=out_path, dat_path=dataset.dat_path,
