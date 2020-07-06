@@ -205,10 +205,14 @@ def test_creator(dataset):
 
         # Cluster waveforms
         cl_wave = _load(next(out_path.glob('clusters.waveforms.*npy')))
-        assert cl_wave.shape == (
-            len(model.cluster_ids), model.n_samples_waveforms, model.n_channels_loc)
+        ncl = len(model.cluster_ids)
+        assert cl_wave.shape == (ncl, model.n_samples_waveforms, model.n_channels_loc)
         cl_wave_ch = _load(next(out_path.glob('clusters.waveformsChannels.*npy')))
         assert cl_wave_ch.shape == (len(model.cluster_ids), model.n_channels_loc)
+
+        # Cluster amplitudes
+        clamps = _load(next(out_path.glob('clusters.amps.*npy')))
+        clamps.shape == (ncl,)
 
     def read_after_write():
         model = TemplateModel(dir_path=out_path, dat_path=dataset.dat_path,
