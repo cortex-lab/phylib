@@ -214,18 +214,20 @@ class EphysAlfCreator(object):
     def make_cluster_objects(self):
         """Create clusters objects."""
 
-        # peak_channel_path = self.dir_path / 'clusters.channels.npy'
-        # if not peak_channel_path.exists():
-        #     self._save_npy(peak_channel_path.name, self.model.templates_channels)
+        # Cluster channels and amplitudes, which may be overriden below if spike waveforms
+        # or raw data are available.
+        peak_channel_path = self.dir_path / 'clusters.channels.npy'
+        if not peak_channel_path.exists():
+            self._save_npy(peak_channel_path.name, self.model.templates_channels)
 
         waveform_duration_path = self.dir_path / 'clusters.peakToTrough.npy'
         if not waveform_duration_path.exists():
             self._save_npy(waveform_duration_path.name, self.model.templates_waveforms_durations)
 
-        # # group by average over cluster number
-        # camps = np.zeros(np.max(self.cluster_ids) - np.min(self.cluster_ids) + 1,) * np.nan
-        # camps[self.cluster_ids - np.min(self.cluster_ids)] = self.model.templates_amplitudes
-        # self._save_npy('clusters.amps.npy', camps * self.ampfactor)
+        # group by average over cluster number
+        camps = np.zeros(np.max(self.cluster_ids) - np.min(self.cluster_ids) + 1,) * np.nan
+        camps[self.cluster_ids - np.min(self.cluster_ids)] = self.model.templates_amplitudes
+        self._save_npy('clusters.amps.npy', camps * self.ampfactor)
 
         # Save clusters uuids
         _write_tsv_simple(self.out_path / 'clusters.uuids.csv', "uuids", self.cluster_uuids)
