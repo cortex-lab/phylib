@@ -253,12 +253,27 @@ class EphysAlfCreator(object):
             cluster_waveforms[i, :, :ncw] = w
             cluster_waveforms_channels[i, :ncw] = channel_ids
 
+        # Save cluster waveforms.
         self._save_npy('clusters.waveforms.npy', cluster_waveforms)
         self._save_npy('clusters.waveformsChannels.npy', cluster_waveforms_channels)
-        cluster_amps = np.max(np.max(cluster_waveforms, axis=1) -
-                              np.min(cluster_waveforms, axis=1), axis=1)
+
+        # Cluster amplitudes.
+        wave_max = np.max(cluster_waveforms, axis=1) - np.min(cluster_waveforms, axis=1)
+        assert wave_max.shape == (n_clusters, nc)
+
+        cluster_amps = np.max(wave_max, axis=1)
         assert cluster_amps.shape == (n_clusters,)
         self._save_npy('clusters.amps.npy', cluster_amps)
+
+        # Cluster channels.
+        ind = np.argmax(wave_max, axis=1)
+        assert ind.shape == (n_clusters,)
+        assert np.all(ind < nc)
+        assert cluster_waveforms_channels.shape == (n_clusters, nc)
+        cluster_ch = cluster_waveforms_channels[np.arange(n_clusters), ind]
+        assert cluster_ch.shape == (n_clusters,)
+        assert np.all(cluster_ch >= 0)
+        self._save_npy('clusters.channels.npy', cluster_ch)
 
     def make_channel_objects(self):
         """If there is no rawInd file, create it"""

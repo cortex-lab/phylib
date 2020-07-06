@@ -212,7 +212,16 @@ def test_creator(dataset):
 
         # Cluster amplitudes
         clamps = _load(next(out_path.glob('clusters.amps.*npy')))
-        clamps.shape == (ncl,)
+        assert clamps.shape == (ncl,)
+        assert not np.any(np.isnan(clamps))
+        assert np.all(clamps >= 0)
+
+        # Cluster channels
+        clch = _load(next(out_path.glob('clusters.channels.*npy')))
+        assert clch.shape == (ncl,)
+        assert clch.dtype == np.int32
+        assert not np.any(np.isnan(clamps))
+        assert np.all(clch >= 0)
 
     def read_after_write():
         model = TemplateModel(dir_path=out_path, dat_path=dataset.dat_path,
