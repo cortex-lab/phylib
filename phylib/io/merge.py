@@ -80,6 +80,7 @@ class Merger(object):
         All fields will be saved in `probes.description.tsv`.
 
     """
+
     def __init__(self, subdirs, out_dir, probe_info=None):
         assert subdirs
         self.subdirs = [Path(subdir) for subdir in subdirs]
@@ -229,19 +230,28 @@ class Merger(object):
         n_channels = sum(tmp.shape[2] for tmp in templates_l)
         shape = (n_templates, n_samples, n_channels)
 
+        template_channels = np.zeros((n_templates, n_channels), dtype=np.int32)
+        template_channels -= 1  # initially, -1 everywhere
         np.save(path, np.empty(shape, dtype=templates_l[0].dtype))
         offset = 0
         with open(path, 'r+b') as fid:
             fid.seek(8)
             offset = int.from_bytes(fid.read(2), byteorder='little')
             fid.seek(offset, 1)
+            template_idx = 0
             for i in range(len(self.subdirs)):
                 j0 = templates_l[i - 1].shape[2] if i > 0 else 0
                 j1 = j0 + templates_l[i].shape[2]
                 for it in np.arange(templates_l[i].shape[0]):
                     one_template = np.zeros((n_samples, n_channels), dtype=templates_l[0].dtype)
                     one_template[:, j0:j1] = templates_l[i][it, :]
+                    template_channels[template_idx, j0:j1] = np.arange(j0, j1)
+                    # template_channels[template_idx, :] = np.arange(n_channels)
                     fid.write(one_template.tobytes())
+                    template_idx += 1
+
+        # Template indices to save as fake sparse format.
+        np.save(self.out_dir / 'templates_ind.npy', template_channels)
 
     def write_template_data(self):
         template_data = [

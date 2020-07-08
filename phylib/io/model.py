@@ -500,8 +500,11 @@ class TemplateModel(object):
         if self.file_format == 'ks2':
             if self.template_amplitudes is None and self.sparse_templates is not None:
                 self.template_amplitudes = self.sparse_templates.get('template_amplitudes', None)
-            if self.amplitudes is None and self.sparse_templates is not None:  # pragma: no cover
-                self.amplitudes = self.sparse_templates.get('amplitudes', None)
+            if 'amplitudes' in self.sparse_templates or {}:  # pragma: no cover
+                # NOTE: backup the original unscaled KS2 amplitudes.
+                self.ks2_amplitudes = self.amplitudes
+                self.amplitudes = self.sparse_templates['amplitudes']
+                assert self.amplitudes.shape == (self.n_spikes,)
 
         # Metadata.
         self.metadata = self._load_metadata()
@@ -795,7 +798,11 @@ class TemplateModel(object):
             n_templates, n_samples, n_channels_loc = data.shape
 
             # Load template channels.
-            path = self._find_path('template*_ind*.npy', mandatory=False)
+
+            # WARNING: do NOT use 'template*_ind*.npy' to try matching both template_ind and
+            # templates_ind, as this would wrongfully include template_features_ind.npy as well!
+            path = self._find_path('template_ind*.npy', 'templates_ind*.npy', mandatory=False)
+
             if path is None:
                 logger.debug("Templates are dense.")
                 cols = np.tile(np.arange(n_channels_loc), (n_templates, 1))
@@ -806,10 +813,11 @@ class TemplateModel(object):
                     cols = np.atleast_2d(cols).T
                 assert cols.ndim == 2
 
-            if cols.shape[1] < n_channels_loc:
-                logger.debug("data/cols mismatch in sparse template waveforms, trying to fix")
-                n_channels_loc = cols.shape[1]
-                data = data[:, :, :n_channels_loc]
+            assert cols.shape[1] == n_channels_loc
+            # NOTE: the commented code below should be deleted
+            # logger.warning("data/cols mismatch in sparse template waveforms, trying to fix")
+            # n_channels_loc = cols.shape[1]
+            # data = data[:, :, :n_channels_loc]
 
             assert np.isnan(cols).sum() == 0
             assert cols.shape == (n_templates, n_channels_loc)
@@ -842,8 +850,8 @@ class TemplateModel(object):
                 template_max = np.abs(template_w).max(axis=0)  # n_channels
                 has_signal = template_max > template_max.max() * self.amplitude_threshold
                 assert has_signal.shape == (n_channels_loc,)
-                if np.all(~has_signal):
-                    # logger.warn("Skipping empty template %d.", n)
+                if np.all(~has_signal):  # pragma: no cover
+                    logger.warning("Skipping empty template %d.", n)
                     continue
                 # Remove channels with no signal.
                 cols[n, ~has_signal] = -1

@@ -195,6 +195,7 @@ def _make_mock_dataset(tempdir):
         offset = 0
         sample_rate = {sample_rate}
         hp_filtered = False
+        ampfactor = 1.0 / 1e4
     '''))
     return root / 'params.py'
 

@@ -108,7 +108,13 @@ def test_model_4(template_model_full):
     assert mean_waveforms.mean_waveforms.shape[1] == len(mean_waveforms.channel_ids)
 
 
-def test_model_depth(template_model):
+def test_model_5(template_model_full):
+    m = template_model_full
+    if 'mock' in str(m.dir_path):
+        assert 1e-4 < m.amplitudes.mean() < 1e-2
+
+
+def test_model_spikes(template_model):
     depths = template_model.get_depths()
     assert depths.shape == (template_model.n_spikes,)
 
