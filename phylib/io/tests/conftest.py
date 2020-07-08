@@ -8,6 +8,7 @@
 
 import logging
 import shutil
+from textwrap import dedent
 
 import numpy as np
 from pytest import fixture
@@ -15,6 +16,12 @@ from pytest import fixture
 from phylib.utils._misc import write_text, write_tsv
 from ..model import load_model, write_array
 from phylib.io.datasets import download_test_file
+from phylib.io.mock import (
+    artificial_spike_samples,
+    artificial_spike_clusters,
+    artificial_waveforms,
+    artificial_traces,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -120,9 +127,80 @@ def _make_dataset(tempdir, param='dense', has_spike_attributes=True):
     return template_path
 
 
-@fixture(scope='function', params=('dense', 'sparse', 'misc'))
+def _make_mock_dataset(tempdir):
+    root = tempdir / 'mock'
+    root.mkdir(parents=True, exist_ok=True)
+
+    def _save(path, arr):
+        np.save(root / path, arr)
+
+    # Params.
+    n_channels = 164
+    n_channels_loc = 32
+    n_spikes = 5_000
+    n_clusters = 112
+    n_samples_waveforms = 82
+    sample_rate = 15e3
+
+    n_templates = n_clusters
+
+    # Channel positions.
+    channel_positions = np.random.normal(size=(n_channels, 2))
+    _save('channel_positions.npy', channel_positions)
+
+    channel_mapping = np.arange(0, n_channels).astype(np.int32)
+    _save("channel_map.npy", channel_mapping)
+
+    # Spike times.
+    # for simplicity, assume all spikes are complete on the raw data
+    spike_samples = n_samples_waveforms + artificial_spike_samples(n_spikes, max_isi=20)
+    # spike_times = spike_samples / sample_rate
+    # WARNING: not that the KS2 file format uses "spike_times.npy" for spike SAMPLES in integers!
+    _save('spike_times.npy', spike_samples.reshape((-1, 1)))
+
+    # Spike amplitudes
+    amplitudes = np.random.normal(size=n_spikes, loc=1, scale=.1)
+    _save('amplitudes.npy', amplitudes.reshape((-1, 1)))
+
+    # Spike templates.
+    spike_templates = artificial_spike_clusters(n_spikes, n_clusters)
+    _save('spike_templates.npy', spike_templates.astype(np.int64))
+
+    # Template waveforms.
+    templates = artificial_waveforms(n_templates, n_samples_waveforms, n_channels)
+    template_channels = np.zeros((n_templates, n_channels_loc), dtype=np.int64)
+    # Space localization.
+    amp = np.exp(-np.arange(n_channels) / n_channels_loc)
+    for i in range(n_templates):
+        perm = np.random.permutation(np.arange(n_channels))
+        templates[i, :, perm] *= amp[:, np.newaxis]
+        template_channels[i, :] = perm[:n_channels_loc]
+    _save('templates.npy', templates.astype(np.float32))
+    _save('template_ind.npy', template_channels)
+
+    # Raw data.
+    # for simplicity, assume all spikes are complete on the raw data
+    duration = spike_samples[-1] + n_samples_waveforms
+    traces = artificial_traces(duration, n_channels)
+    (50000 * traces / traces.max()).astype(np.int16).tofile(root / 'raw.dat')
+
+    write_text(root / 'params.py', dedent(f'''
+        dat_path = 'raw.dat'
+        n_channels_dat = {n_channels}
+        dtype = 'int16'
+        offset = 0
+        sample_rate = {sample_rate}
+        hp_filtered = False
+    '''))
+    return root / 'params.py'
+
+
+@fixture(scope='function', params=('dense', 'sparse', 'misc', 'mock'))
 def template_path_full(tempdir, request):
-    return _make_dataset(tempdir, request.param)
+    if request.param != 'mock':
+        return _make_dataset(tempdir, request.param)
+    else:
+        return _make_mock_dataset(tempdir)
 
 
 @fixture(scope='function')

@@ -428,13 +428,18 @@ class TemplateModel(object):
             self.templates_channels = None
 
         # Spike waveforms (optional, otherwise fetched from raw data as needed).
+        assert self.n_channels_loc < 100  # DEBUG
         self.spike_waveforms = self._load_spike_waveforms()
         # Control the number of template channels to show.
         if self.spike_waveforms is not None:
             self.n_closest_channels = min(
                 self.n_closest_channels, self.spike_waveforms.spike_channels.shape[1])
             assert self.spike_waveforms.waveforms.shape[1:] == (
-                self.n_samples_waveforms, self.n_channels_loc)
+                self.n_samples_waveforms, self.n_channels_loc), \
+                "sw.w %s, nsw %d, ncl %d" % (
+                str(self.spike_waveforms.waveforms.shape),
+                self.n_samples_waveforms,
+                self.n_channels_loc)
 
         # Template amplitudes.
         self.template_amplitudes = self._load_template_amplitudes()
@@ -731,7 +736,7 @@ class TemplateModel(object):
             return np.zeros((self.n_templates, self.n_templates))
 
     def _load_templates(self):
-        logger.debug("Loading templates.")
+        logger.debug("Loading templates with format %s.", self.file_format)
 
         if self.file_format == 'alf':
             # Load template waveforms, already sparse, unwhitened, and in volts.

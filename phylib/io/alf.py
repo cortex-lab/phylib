@@ -117,23 +117,30 @@ class EphysAlfCreator(object):
         if not self.out_path.exists():
             self.out_path.mkdir()
 
-        with tqdm(desc="Converting to ALF", total=125) as bar:
-            bar.update(10)
-            self.make_cluster_objects()
-            bar.update(10)
-            self.make_channel_objects()
-            bar.update(5)
-            self.make_template_and_spikes_objects()
-            bar.update(30)
+        with tqdm(desc="Converting to ALF", total=135) as bar:
+            # NOTE: this must occur BEFORE make_cluster_objects which will load subset waveforms.
             self.model.save_spikes_subset_waveforms(
                 NSAMPLE_WAVEFORMS, sample2unit=self.ampfactor)
             bar.update(50)
+
+            self.make_cluster_objects()
+            bar.update(10)
+
+            self.make_channel_objects()
+            bar.update(5)
+
+            self.make_template_and_spikes_objects()
+            bar.update(30)
+
             self.make_depths()
             bar.update(20)
+
             self.rm_files()
             bar.update(10)
+
             self.copy_files(force=force)
             bar.update(10)
+
             self.rename_with_label()
             self.update_params()
 
@@ -194,9 +201,6 @@ class EphysAlfCreator(object):
     def get_cluster_channels(self, cluster_id):
         spike_ids = self.spc[cluster_id]
         assert spike_ids.dtype == np.int64
-        if self.model.spike_waveforms is not None:
-            assert self.model.spike_waveforms.spike_ids.dtype == np.int64
-            spike_ids = np.intersect1d(spike_ids, self.model.spike_waveforms.spike_ids)
         assert spike_ids.dtype == np.int64
         st = self.model.spike_templates[spike_ids]
         template_ids, counts = np.unique(st, return_counts=True)
@@ -207,6 +211,19 @@ class EphysAlfCreator(object):
 
     def get_cluster_waveform(self, cluster_id, channel_ids):
         spike_ids = self.spc[cluster_id]
+        # NOTE: keep the subset spikes so that we load the spike waveforms from the
+        # already-extracted _phy_subset.waveforms.npy rather than from compressed raw data
+        # which is extremely slow.
+        if self.model.spike_waveforms is not None:
+            assert self.model.spike_waveforms.spike_ids.dtype == np.int64
+            spike_ids = np.intersect1d(spike_ids, self.model.spike_waveforms.spike_ids)
+        else:
+            logger.warning(
+                "Loading cluster waveforms from raw data as subset spike waveforms "
+                "are not available: this may be slow")
+        if len(spike_ids) == 0:  # pragma: no cover
+            logger.error("Empty spikes from subset waveforms for cluster %d", cluster_id)
+            return
         waveforms = self.model.get_waveforms(spike_ids, channel_ids)
         if waveforms is not None:
             return waveforms.mean(axis=0)
