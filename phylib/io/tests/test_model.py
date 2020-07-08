@@ -144,7 +144,7 @@ def test_model_spike_waveforms(template_path_full):
     for tid in model.template_ids:
         spike_ids = model.get_template_spikes(tid)
         channel_ids = model.get_template_channels(tid)
-        assert len(channel_ids) <= 12
+        assert len(channel_ids) <= 16
         spike_ids = np.intersect1d(spike_ids, model.spike_waveforms.spike_ids)
         w = model.get_waveforms(spike_ids, channel_ids)
 

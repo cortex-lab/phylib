@@ -285,7 +285,8 @@ class TemplateModel(object):
     """
 
     """Number of closest channels used for templates."""
-    n_closest_channels = 12
+    # n_closest_channels = 16
+    default_n_channels_loc = 16  # normally this comes from the data, otherwise we use this value
 
     """Fraction of the peak amplitude required by the closest channels to be kept as best
     channels."""
@@ -414,6 +415,16 @@ class TemplateModel(object):
         assert self.wmi.shape == (nc, nc)
 
         # Templates.
+        # n_channels_loc is loaded from the templates data, either dense, sparse, or fake sparse
+        #
+        # 1. dense: there is no template_ind.npy, we should use the default n_channels_loc to
+        #    make the templates parse
+        #
+        # 2. sparse: there is a template_ind.npy with a correct n_channels_loc as number of columns
+        #
+        # 3. fake sparse: there is a trivial templates_ind.npy that contains all channels. We need
+        #    to compute the close channels manually upon loading.
+        #
         self.sparse_templates = self._load_templates()
         if self.sparse_templates is not None and self.sparse_templates.data is not None:
             self.n_templates, self.n_samples_waveforms, self.n_channels_loc = \
@@ -428,12 +439,17 @@ class TemplateModel(object):
             self.templates_channels = None
 
         # Spike waveforms (optional, otherwise fetched from raw data as needed).
-        assert self.n_channels_loc < 100  # DEBUG
+
+        # DEBUG: check that fake sparse template channels has been fixed above
+        assert self.n_channels_loc < 100
+
         self.spike_waveforms = self._load_spike_waveforms()
         # Control the number of template channels to show.
         if self.spike_waveforms is not None:
-            self.n_closest_channels = min(
-                self.n_closest_channels, self.spike_waveforms.spike_channels.shape[1])
+            # If there are too few channels on the spike waveforms, decrease n_channels_loc
+            # accordingly.
+            self.n_channels_loc = min(
+                self.n_channels_loc, self.spike_waveforms.spike_channels.shape[1])
             assert self.spike_waveforms.waveforms.shape[1:] == (
                 self.n_samples_waveforms, self.n_channels_loc), \
                 "sw.w %s, nsw %d, ncl %d" % (
@@ -794,6 +810,7 @@ class TemplateModel(object):
                 logger.debug("data/cols mismatch in sparse template waveforms, trying to fix")
                 n_channels_loc = cols.shape[1]
                 data = data[:, :, :n_channels_loc]
+
             assert np.isnan(cols).sum() == 0
             assert cols.shape == (n_templates, n_channels_loc)
             assert data.shape == (n_templates, n_samples, n_channels_loc)
@@ -869,9 +886,18 @@ class TemplateModel(object):
             templates_volt[np.isnan(templates_volt)] = 0
             assert np.isnan(templates_volt).sum() == 0
 
+            # HACK: detect fake sparse KS2 output where templates_ind.npy is trivial and contains
+            # all channels. So n_channels_loc is wrong. In this case we should manually correct it
+            # and compute channel localization.
+            if n_channels_loc == self.n_channels:
+                logger.warning("Fixing fake sparse templates from KS2: "
+                               "reducing n_channels_loc from %d to %d",
+                               n_channels_loc, self.default_n_channels_loc)
+                n_channels_loc = min(self.n_channels, self.default_n_channels_loc)
+
             return Bunch(
-                data=templates_volt,  # templates in volts
-                cols=cols,
+                data=templates_volt[:, :, :n_channels_loc],  # templates in volts
+                cols=cols[:, :n_channels_loc],
                 amplitudes=spike_amps * self.ampfactor,
                 template_amplitudes=templates_amps_v * self.ampfactor,
             )
@@ -983,8 +1009,8 @@ class TemplateModel(object):
         template, channel_ids = data[template_id], cols[template_id]
 
         # Truncate the templates with the n closest channels.
-        channel_ids = channel_ids[:self.n_closest_channels]
-        template = template[..., :self.n_closest_channels]
+        channel_ids = channel_ids[:self.n_channels_loc]
+        template = template[..., :self.n_channels_loc]
 
         # Remove unused channels = -1.
         used = channel_ids != -1
@@ -1290,8 +1316,8 @@ class TemplateModel(object):
 
         n_chunks_kept = 20  # TODO: better choice
         nst = max_n_spikes_per_template
-        nc = max_n_channels or self.n_closest_channels
-        nc = max(nc, self.n_closest_channels)
+        nc = max_n_channels or self.n_channels_loc
+        nc = max(nc, self.n_channels_loc)
 
         assert nst > 0
         assert nc > 0

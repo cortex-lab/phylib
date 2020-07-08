@@ -168,15 +168,19 @@ def _make_mock_dataset(tempdir):
 
     # Template waveforms.
     templates = artificial_waveforms(n_templates, n_samples_waveforms, n_channels)
-    template_channels = np.zeros((n_templates, n_channels_loc), dtype=np.int64)
+    # NOTE: simulate "fake sparse" output by KS2. The template channels is trivial and does
+    # not contain localization information, which will have to be recovered by the
+    # TemplateModel.
+    template_channels = np.zeros((n_templates, n_channels), dtype=np.int64)
     # Space localization.
-    amp = np.exp(-np.arange(n_channels) / n_channels_loc)
+    ch = np.arange(n_channels)
+    amp = np.exp(-ch / n_channels_loc)
     for i in range(n_templates):
-        perm = np.random.permutation(np.arange(n_channels))
+        perm = np.random.permutation(ch)
         templates[i, :, perm] *= amp[:, np.newaxis]
-        template_channels[i, :] = perm[:n_channels_loc]
+        template_channels[i, :] = ch
     _save('templates.npy', templates.astype(np.float32))
-    _save('template_ind.npy', template_channels)
+    _save('templates_ind.npy', template_channels)
 
     # Raw data.
     # for simplicity, assume all spikes are complete on the raw data
