@@ -418,6 +418,7 @@ class ArrayEphysReader(BaseEphysReader):
 
 class NpyEphysReader(ArrayEphysReader):
     def __init__(self, path, **kwargs):
+        self.ampfactor = kwargs.get('ampfactor', 1) or 1
         if isinstance(path, (tuple, list)):
             if len(path) != 1:
                 raise ValueError("There should be exactly one path to a npy file.")

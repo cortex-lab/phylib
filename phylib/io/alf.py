@@ -176,13 +176,12 @@ class EphysAlfCreator(object):
 
     def update_params(self):
         # Append ampfactor = xxx in params.py if needed.
-        path = self.out_path / 'params.py'
-        if not path.exists():
-            return
+        path = self.dir_path / 'params.py'
+        assert path.exists()
         if 'ampfactor' in path.read_text():
             return
         with path.open('a') as f:
-            f.write('ampfactor = %.5f' % self.ampfactor)
+            f.write('ampfactor = %.5e' % self.ampfactor)
 
     def rm_files(self):
         for fn0 in FILE_DELETES:
@@ -244,7 +243,7 @@ class EphysAlfCreator(object):
         # group by average over cluster number
         camps = np.zeros(np.max(self.cluster_ids) - np.min(self.cluster_ids) + 1,) * np.nan
         camps[self.cluster_ids - np.min(self.cluster_ids)] = self.model.templates_amplitudes
-        self._save_npy('clusters.amps.npy', camps * self.ampfactor)
+        self._save_npy('clusters.amps.npy', camps)
 
         # Save clusters uuids
         _write_tsv_simple(self.out_path / 'clusters.uuids.csv', "uuids", self.cluster_uuids)
@@ -334,7 +333,6 @@ class EphysAlfCreator(object):
         self._save_npy('spikes.times.npy', self.model.spike_times)
         self._save_npy('spikes.samples.npy', self.model.spike_samples)
 
-        # spike_amps, templates_v, template_amps = self.model.get_amplitudes_true(self.ampfactor)
         spike_amps = self.model.amplitudes
         template_amps = self.model.template_amplitudes
 

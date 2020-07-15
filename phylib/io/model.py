@@ -500,7 +500,8 @@ class TemplateModel(object):
         # Conversion to physical units if KS2 file format.
         if self.file_format == 'ks2':
             if self.template_amplitudes is None and self.sparse_templates is not None:
-                self.template_amplitudes = self.sparse_templates.get('template_amplitudes', None)
+                self.template_amplitudes = self.sparse_templates['template_amplitudes']
+                print(self.template_amplitudes)
             if 'amplitudes' in self.sparse_templates or {}:  # pragma: no cover
                 # NOTE: backup the original unscaled KS2 amplitudes.
                 self.ks2_amplitudes = self.amplitudes
@@ -717,7 +718,7 @@ class TemplateModel(object):
         assert samples.ndim == times.ndim == 1
         return samples, times
 
-    def _load_spike_waveforms(self):  # pragma: no cover
+    def _load_spike_waveforms(self):
         path = self.dir_path / '_phy_spikes_subset.waveforms.npy'
         path_channels = self.dir_path / '_phy_spikes_subset.channels.npy'
         path_spikes = self.dir_path / '_phy_spikes_subset.spikes.npy'
@@ -733,7 +734,7 @@ class TemplateModel(object):
                 spike_channels=self._read_array(path_channels),
                 spike_ids=self._read_array(path_spikes),
             )
-        except Exception as e:
+        except Exception as e:  # pragma: no cover
             logger.warning("Could not load spike waveforms: %s.", e)
             return
 

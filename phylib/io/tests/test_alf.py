@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import shutil
 import uuid
+from textwrap import dedent
 from pytest import fixture, raises
 
 import numpy as np
@@ -18,7 +19,7 @@ import numpy.random as nr
 
 from phylib.utils._misc import _write_tsv_simple
 from ..alf import _FILE_RENAMES, _load, EphysAlfCreator
-from ..model import TemplateModel
+from ..model import TemplateModel, load_model
 
 
 #------------------------------------------------------------------------------
@@ -28,7 +29,8 @@ from ..model import TemplateModel
 class Dataset(object):
     _param = 0
 
-    def __init__(self, tempdir):
+    def __init__(self, tempdir, param=0):
+        self._param = param
         np.random.seed(42)
         self.tmp_dir = tempdir
         p = Path(self.tmp_dir)
@@ -38,6 +40,10 @@ class Dataset(object):
         self.nc = 10
         self.nt = 5
         self.ncd = 1000
+
+        # ampfactor is the default (1) with param 0, and 0.1 with param 1
+        self.ampfactor = .1 if self._param == 1 else 1
+
         np.save(p / 'spike_times.npy', .01 * np.cumsum(nr.exponential(size=self.ns)))
         np.save(p / 'spike_clusters.npy', nr.randint(low=0, high=self.nt, size=self.ns))
         shutil.copy(p / 'spike_clusters.npy', p / 'spike_templates.npy')
@@ -51,7 +57,7 @@ class Dataset(object):
         np.save(p / '_phy_spikes_subset.channels.npy',
                 np.tile(np.arange(self.ncmax), (self.ns, 1)))
         np.save(p / '_phy_spikes_subset.spikes.npy', np.arange(self.ns, dtype=np.int64))
-        np.save(p / '_phy_spikes_subset.waveforms.npy', np.random.uniform(
+        np.save(p / '_phy_spikes_subset.waveforms.npy', self.ampfactor * np.random.uniform(
             size=(self.ns, self.nsamp, self.ncmax)).astype(np.float32))
 
         _write_tsv_simple(p / 'cluster_group.tsv', 'group', {2: 'good', 3: 'mua', 5: 'noise'})
@@ -62,7 +68,7 @@ class Dataset(object):
 
         # Raw data
         self.dat_path = p / 'rawdata.npy'
-        np.save(self.dat_path, np.random.normal(size=(self.ncd, self.nc)))
+        np.save(self.dat_path, self.ampfactor * np.random.normal(size=(self.ncd, self.nc)))
 
         # LFP data.
         lfdata = (100 * np.random.normal(size=(1000, self.nc))).astype(np.int16)
@@ -70,6 +76,16 @@ class Dataset(object):
             lfdata.tofile(f)
 
         self.files = os.listdir(self.tmp_dir)
+
+        ampfactor_str = 'ampfactor = .1\n' if self._param == 1 else ''
+        (p / 'params.py').write_text(dedent(f'''
+        dat_path = 'rawdata.npy'
+        n_channels_dat = {self.nc}
+        dtype = 'int16'
+        offset = 0
+        sample_rate = 2000.
+        hp_filtered = False
+        {ampfactor_str}'''))
 
     def _load(self, fn):
         p = Path(self.tmp_dir)
@@ -81,8 +97,7 @@ UUID = str(uuid.uuid4())
 
 @fixture(params=[0, 1])
 def dataset(request, tempdir):
-    ds = Dataset(tempdir)
-    ds._param = request.param
+    ds = Dataset(tempdir, request.param)
     # Existing cluster UUIDs file to check that it is properly loaded and not overriden.
     if request.param == 1:
         _write_tsv_simple(ds.tmp_dir / 'clusters.uuids.csv', "uuids", {2: UUID})
@@ -164,8 +179,7 @@ def test_creator(dataset):
     path = Path(dataset.tmp_dir)
     out_path = path / 'alf'
 
-    model = TemplateModel(
-        dir_path=path, dat_path=dataset.dat_path, sample_rate=2000, n_channels_dat=dataset.nc)
+    model = load_model(path / 'params.py')
 
     c = EphysAlfCreator(model)
     with raises(IOError):
@@ -183,6 +197,9 @@ def test_creator(dataset):
             f = next(out_path.glob(new))
             new_files.append(f)
             assert f.exists()
+
+        params = (model.dir_path / 'params.py').read_text()
+        assert 'ampfactor' in params
 
         # makes sure the output dimensions match (especially clusters which should be 4)
         cl_shape = [np.load(f).shape[0] for f in new_files if f.name.startswith('clusters.') and
@@ -207,6 +224,9 @@ def test_creator(dataset):
         cl_wave = _load(next(out_path.glob('clusters.waveforms.*npy')))
         ncl = len(model.cluster_ids)
         assert cl_wave.shape == (ncl, model.n_samples_waveforms, model.n_channels_loc)
+        assert .01 < cl_wave.mean() / dataset.ampfactor < .1
+
+        # Cluster waveforms channels
         cl_wave_ch = _load(next(out_path.glob('clusters.waveformsChannels.*npy')))
         assert cl_wave_ch.shape == (len(model.cluster_ids), model.n_channels_loc)
 
@@ -215,6 +235,7 @@ def test_creator(dataset):
         assert clamps.shape == (ncl,)
         assert not np.any(np.isnan(clamps))
         assert np.all(clamps >= 0)
+        assert 1 < clamps.mean() / dataset.ampfactor < 10
 
         # Cluster channels
         clch = _load(next(out_path.glob('clusters.channels.*npy')))
@@ -222,6 +243,23 @@ def test_creator(dataset):
         assert clch.dtype == np.int32
         assert not np.any(np.isnan(clamps))
         assert np.all(clch >= 0)
+
+        # Template amplitudes
+        tmpamps = _load(next(out_path.glob('templates.amps.*npy')))
+        assert tmpamps.shape == (ncl,)
+        assert not np.any(np.isnan(tmpamps))
+        assert np.all(tmpamps >= 0)
+        # Check scaling by ampfactor.
+        assert 1 < np.median(tmpamps) / dataset.ampfactor < 10
+
+        # Templates
+        templates = _load(next(out_path.glob('templates.waveforms.*npy')))
+        assert templates.shape == (dataset.nt, dataset.nsamp, dataset.nc)
+        assert .01 < templates.mean() / dataset.ampfactor < .1
+
+        # Templates channels
+        templates_channels = _load(next(out_path.glob('templates.waveformsChannels.*npy')))
+        assert templates_channels.shape == (dataset.nt, dataset.nc)
 
     def read_after_write():
         model = TemplateModel(dir_path=out_path, dat_path=dataset.dat_path,
