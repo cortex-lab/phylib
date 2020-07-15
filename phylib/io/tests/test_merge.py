@@ -80,12 +80,12 @@ def test_probe_merge_2(tempdir):
     # Check the spikes.
     single = load_model(tempdir / probe_names[0] / 'params.py')
 
-    def test_merged_single(merged, merged_original_amps=None):
-        assert merged.sparse_templates.data.shape == (
+    def test_merged_single(merged_, merged_original_amps=None):
+        assert merged_.sparse_templates.data.shape == (
             2 * single.n_templates, 82, 2 * single.n_channels)
 
         if merged_original_amps is None:
-            merged_original_amps = merged.ks2_amplitudes
+            merged_original_amps = merged_.ks2_amplitudes
 
         ampm = merged_original_amps
         amps = single.ks2_amplitudes
@@ -95,33 +95,36 @@ def test_probe_merge_2(tempdir):
         _, im2, i2 = np.intersect1d(ampm, ampss, return_indices=True)
 
         # intersection spans the full vector
-        assert i1.size + i2.size == merged.amplitudes.size
+        assert i1.size + i2.size == merged_.amplitudes.size
         # test spikes
-        assert np.allclose(merged.spike_times[im1], single.spike_times[i1])
-        assert np.allclose(merged.spike_times[im2], single.spike_times[i2] + 4e-5)
+        assert np.allclose(merged_.spike_times[im1], single.spike_times[i1])
+        assert np.allclose(merged_.spike_times[im2], single.spike_times[i2] + 4e-5)
         # test clusters
-        assert np.allclose(merged.spike_clusters[im2], single.spike_clusters[i2] + 64)
-        assert np.allclose(merged.spike_clusters[im1], single.spike_clusters[i1])
+        assert np.allclose(merged_.spike_clusters[im2], single.spike_clusters[i2] + 64)
+        assert np.allclose(merged_.spike_clusters[im1], single.spike_clusters[i1])
         # test templates
-        assert np.all(merged.spike_templates[im1] - single.spike_templates[i1] == 0)
-        assert np.all(merged.spike_templates[im2] - single.spike_templates[i2] == 64)
+        assert np.all(merged_.spike_templates[im1] - single.spike_templates[i1] == 0)
+        assert np.all(merged_.spike_templates[im2] - single.spike_templates[i2] == 64)
         # test probes
-        assert np.all(merged.channel_probes == np.r_[single.channel_probes,
-                                                     single.channel_probes + 1])
-        assert np.all(merged.templates_channels[merged.templates_probes == 0] < single.n_channels)
-        assert np.all(merged.templates_channels[merged.templates_probes == 1] >= single.n_channels)
+        assert np.all(merged_.channel_probes == np.r_[single.channel_probes,
+                                                      single.channel_probes + 1])
+        assert np.all(
+            merged_.templates_channels[merged_.templates_probes == 0] < single.n_channels)
+        assert np.all(
+            merged_.templates_channels[merged_.templates_probes == 1] >= single.n_channels)
 
-        spike_probes = merged.templates_probes[merged.spike_templates]
+        spike_probes = merged_.templates_probes[merged_.spike_templates]
 
         assert np.all(merged_original_amps[spike_probes == 0] <= 15)
         assert np.all(merged_original_amps[spike_probes == 1] >= 20)
 
         assert np.allclose(
-            merged.sparse_templates.data[:64, :, :32], single.sparse_templates.data)
+            merged_.sparse_templates.data[:64, :, :32], single.sparse_templates.data)
 
+        assert not np.all(merged_.sparse_templates.data[64:, :, 32:] == 0)
         # WARNING: this test currently fails!
         # assert np.allclose(
-        #     merged.sparse_templates.data[64:, :, 32:], single.sparse_templates.data)
+        #     merged_.sparse_templates.data[64:, :, 32:], single.sparse_templates.data)
 
     # Convert into ALF and load.
     alf = EphysAlfCreator(merged).convert(tempdir / 'alf')

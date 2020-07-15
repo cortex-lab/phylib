@@ -430,6 +430,7 @@ class TemplateModel(object):
             self.n_templates, self.n_samples_waveforms, self.n_channels_loc = \
                 self.sparse_templates.data.shape
             assert self.sparse_templates.cols.shape == (self.n_templates, self.n_channels_loc)
+            # Best channel of each template is in the first column.
             self.templates_channels = self.sparse_templates.cols[:, 0]
             assert np.all(self.templates_channels >= 0)
         else:  # pragma: no cover
@@ -829,9 +830,33 @@ class TemplateModel(object):
                 (n_templates, n_samples, n_channels_loc), dtype=data.dtype)  # nt, ns, nc
             for n in np.arange(n_templates):
                 channel_ids = cols[n]
-                # template_w is (n_samples, n_channels)
-                template_w = data[n, :, :]  # ns, nc
-                assert template_w.shape[1] == len(channel_ids)
+                if channel_ids[0] < 0:  # first channel should be best channel
+                    logger.warning("Template %d has empty first channel", n)  # pragma: no cover
+
+                # Remove empty channels (=-1)
+                channel_ids = channel_ids[channel_ids >= 0]
+                n_channels_tmp = len(channel_ids)
+
+                # Select the channels with signal.
+                template_max = np.abs(data[n, :, channel_ids].T).max(axis=0)  # n_channels
+                # HACK: transpose is a work-around this NumPy issue
+                # https://stackoverflow.com/a/35020886/1595060
+
+                assert template_max.shape == (n_channels_tmp,)
+                has_signal = template_max > template_max.max() * self.amplitude_threshold
+                assert has_signal.shape == (n_channels_tmp,)
+
+                # Remove channels with no signal.
+                channel_ids = channel_ids[has_signal]
+                n_channels_tmp = len(channel_ids)
+
+                if n_channels_tmp == 0:  # pragma: no cover
+                    logger.warning("Skipping empty template %d.", n)
+                    continue
+
+                # template_w is (n_samples, n_channels_tmp)a
+                template_w = data[n, :, channel_ids].T  # ns, n_channels_tmp
+                assert template_w.shape == (n_samples, n_channels_tmp)
 
                 # Reorder the channels by decreasing amplitude.
                 amplitude = template_w.max(axis=0) - template_w.min(axis=0)
@@ -840,32 +865,20 @@ class TemplateModel(object):
                 # amplitude. To each column of the template array corresponds the channel id
                 # given by channel_ids.
                 reorder = np.argsort(amplitude)[::-1]
-                assert reorder.shape == (template_w.shape[1],)
+                assert reorder.shape == (n_channels_tmp,)
+                # Reorder template data and channels.
                 template_w = template_w[:, reorder]
-                # data[n, :, :] = template_w
-                assert reorder.shape == (cols.shape[1],)
-                cols[n, :] = cols[n, reorder]
-
-                # Select the channels with signal.
-                template_max = np.abs(template_w).max(axis=0)  # n_channels
-                has_signal = template_max > template_max.max() * self.amplitude_threshold
-                assert has_signal.shape == (n_channels_loc,)
-                if np.all(~has_signal):  # pragma: no cover
-                    logger.warning("Skipping empty template %d.", n)
-                    continue
-                # Remove channels with no signal.
-                cols[n, ~has_signal] = -1
+                channel_ids = channel_ids[reorder]
+                cols[n, :n_channels_tmp] = channel_ids
+                cols[n, n_channels_tmp:] = -1
 
                 # Get the unwhitening submatrix and unwhiten the template waveform.
-                channel_ids = channel_ids[has_signal]
+                # Reorder the whitening matrix.
                 mat = self.wmi[np.ix_(channel_ids, channel_ids)]
-                assert mat.shape == (len(channel_ids),) * 2
+                assert mat.shape == (n_channels_tmp,) * 2
                 assert np.sum(np.isnan(mat.ravel())) == 0
-                assert template_w[:, has_signal].shape == (n_samples, len(channel_ids),)
-                assert templates_wfs[n, :, :len(channel_ids)].shape == (
-                    n_samples, len(channel_ids),)
-                templates_wfs[n, :, :len(channel_ids)] = np.matmul(
-                    template_w[:, has_signal], mat)
+                assert template_w.shape == (n_samples, n_channels_tmp,)
+                templates_wfs[n, :, channel_ids] = np.matmul(template_w, mat).T
 
             # each template should have at least one channel with some signal
             if (np.max(cols, axis=1) < 0).sum() > 0:  # pragma: no cover
