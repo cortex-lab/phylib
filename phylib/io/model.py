@@ -825,7 +825,7 @@ class TemplateModel(object):
             templates_wfs = np.zeros(
                 (n_templates, n_samples, n_channels_loc), dtype=data.dtype)  # nt, ns, nc
             for n in np.arange(n_templates):
-                logger.debug("template %d", n)
+                # logger.debug("template %d", n)
                 channel_ids = cols[n]
                 if channel_ids[0] < 0:  # first channel should be best channel
                     logger.warning("Template %d has empty first channel", n)  # pragma: no cover
@@ -833,7 +833,7 @@ class TemplateModel(object):
                 # Remove empty channels (=-1)
                 channel_ids = channel_ids[channel_ids >= 0]
                 n_channels_tmp = len(channel_ids)
-                logger.debug("%d channels", n_channels_tmp)
+                # logger.debug("%d channels", n_channels_tmp)
 
                 # Get the current template.
                 # template_w is (n_samples, n_channels_tmp)
@@ -867,7 +867,7 @@ class TemplateModel(object):
                 if n_channels_tmp == 0:  # pragma: no cover
                     logger.warning("Skipping empty template %d.", n)
                     continue
-                logger.debug("%d channels", n_channels_tmp)
+                # logger.debug("%d channels", n_channels_tmp)
 
                 # Reorder the channels by decreasing amplitude.
                 reorder = np.argsort(amplitude)[::-1]
