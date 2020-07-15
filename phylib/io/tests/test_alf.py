@@ -261,6 +261,13 @@ def test_creator(dataset):
         templates_channels = _load(next(out_path.glob('templates.waveformsChannels.*npy')))
         assert templates_channels.shape == (dataset.nt, dataset.nc)
 
+        # Spike amplitudes
+        spkamps = _load(next(out_path.glob('spikes.amps.*npy')))
+        assert spkamps.shape == (dataset.ns,)
+        assert not np.any(np.isnan(spkamps))
+        assert np.all(spkamps >= 0)
+        assert 1 < spkamps.mean() / dataset.ampfactor < 10
+
     def read_after_write():
         model = TemplateModel(dir_path=out_path, dat_path=dataset.dat_path,
                               sample_rate=2000, n_channels_dat=dataset.nc)
