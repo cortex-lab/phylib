@@ -88,6 +88,11 @@ def test_model_3(template_model_full):
     assert tw.ndim == 2
     assert tw.shape[1] == n_channels
 
+    # Check the template amplitude is decreasing across the reordered channels.
+    tmp = m.sparse_templates.data
+    amp = tmp.max(axis=1) - tmp.min(axis=1)
+    assert np.all(np.diff(amp, axis=1) <= 0)
+
 
 def test_model_4(template_model_full):
     m = template_model_full

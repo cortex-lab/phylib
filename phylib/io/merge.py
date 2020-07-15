@@ -246,7 +246,6 @@ class Merger(object):
                     one_template = np.zeros((n_samples, n_channels), dtype=templates_l[0].dtype)
                     one_template[:, j0:j1] = templates_l[i][it, :]
                     template_channels[template_idx, :j1 - j0] = np.arange(j0, j1)
-                    # template_channels[template_idx, :] = np.arange(n_channels)
                     fid.write(one_template.tobytes())
                     template_idx += 1
 

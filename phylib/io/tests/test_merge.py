@@ -121,10 +121,10 @@ def test_probe_merge_2(tempdir):
         assert np.allclose(
             merged_.sparse_templates.data[:64, :, :32], single.sparse_templates.data)
 
-        assert not np.all(merged_.sparse_templates.data[64:, :, 32:] == 0)
-        # WARNING: this test currently fails!
-        # assert np.allclose(
-        #     merged_.sparse_templates.data[64:, :, 32:], single.sparse_templates.data)
+        assert np.all(merged_.sparse_templates.data[64:, :, 32:] == 0)
+        # WARNING: this test currently fails because the templates are normalized as a function
+        # of the amplitude, which changes between the two sets.
+        # f = merged_.sparse_templates.data[64:, :, :32] / single.sparse_templates.data
 
     # Convert into ALF and load.
     alf = EphysAlfCreator(merged).convert(tempdir / 'alf')
