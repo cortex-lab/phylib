@@ -501,7 +501,6 @@ class TemplateModel(object):
         if self.file_format == 'ks2':
             if self.template_amplitudes is None and self.sparse_templates is not None:
                 self.template_amplitudes = self.sparse_templates['template_amplitudes']
-                print(self.template_amplitudes)
             if 'amplitudes' in self.sparse_templates or {}:  # pragma: no cover
                 # NOTE: backup the original unscaled KS2 amplitudes.
                 self.ks2_amplitudes = self.amplitudes
