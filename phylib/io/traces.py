@@ -466,6 +466,7 @@ def _get_ephys_constructor(obj, **kwargs):
         if not path.exists():  # pragma: no cover
             logger.warning("File %s does not exist.", path)
             return None, None, {}
+        logger.debug("File %s exists.", path)
         assert path.exists()
         ext = path.suffix
         # Mtscomp file
@@ -610,7 +611,9 @@ def extract_waveforms(traces, spike_samples, channel_ids, n_samples_waveforms=No
     assert nsw > 0, "Please specify n_samples_waveforms > 0"
     nc = len(channel_ids)
     # Extract the spike waveforms.
-    out = np.zeros((ns, nsw, nc), dtype=traces.dtype)
+    # WARNING: using the same dtype (generally integer) causes problems with ampfactor
+    # renormalization.
+    out = np.zeros((ns, nsw, nc), dtype=np.float64)
     for i, ts in enumerate(spike_samples):
         out[i] = _extract_waveform(
             traces, ts, channel_ids=channel_ids, n_samples_waveforms=nsw)[np.newaxis, ...]
@@ -657,7 +660,8 @@ def export_waveforms(
     spike_channels = np.asarray(spike_channels, dtype=np.int32)
     n_channels_loc = spike_channels.shape[1]
     shape = (n_spikes, n_samples_waveforms, n_channels_loc)
-    dtype = traces.dtype
+    # WARNING: using the original (integer) dtype creates problem with renormalization
+    dtype = np.float64
     writer = NpyWriter(path, shape, dtype)
     size_written = 0
     for waveforms in iter_waveforms(

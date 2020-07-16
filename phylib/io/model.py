@@ -616,7 +616,7 @@ class TemplateModel(object):
         # self.dat_path could be any object accepted by get_ephys_reader().
         traces = get_ephys_reader(
             self.dat_path, n_channels_dat=n, dtype=self.dtype, offset=self.offset,
-            sample_rate=self.sample_rate)
+            sample_rate=self.sample_rate, ampfactor=self.ampfactor)
         if traces is not None:
             traces = traces[:, channel_map]  # lazy permutation on the channel axis
         return traces
@@ -1067,7 +1067,9 @@ class TemplateModel(object):
 
     def get_waveforms(self, spike_ids, channel_ids=None):
         """Return spike waveforms on specified channels."""
-        if self.traces is None and self.spike_waveforms is None:
+        if self.traces is None and self.spike_waveforms is None:  # pragma: no cover
+            logger.warning("Impossible to get waveforms as there is now raw data file and "
+                           "no spike waveforms subset")
             return
         # Create the output array.
         nsw = self.n_samples_waveforms
@@ -1300,15 +1302,6 @@ class TemplateModel(object):
     def templates_probes(self):
         """Returns a vector of probe index for all templates"""
         return self.channel_probes[self.templates_channels]
-
-    @property
-    def templates_amplitudes(self):
-        """Returns the average amplitude per cluster"""
-        tid = np.unique(self.spike_templates)
-        n = np.bincount(self.spike_templates)[tid]
-        a = np.bincount(self.spike_templates, weights=self.amplitudes)[tid]
-        n[np.isnan(n)] = 1
-        return a / n
 
     @property
     def templates_waveforms_durations(self):

@@ -62,6 +62,7 @@ def test_model_2(template_model_full):
 
     w = m.get_waveforms(spike_ids, channel_ids)
     assert w is None or w.shape == (len(spike_ids), tmp.template.shape[0], len(channel_ids))
+    assert not np.all(w == 0)
 
     f = m.get_features(spike_ids, channel_ids)
     assert f is None or f.shape == (len(spike_ids), len(channel_ids), 3)
@@ -74,8 +75,7 @@ def test_model_2(template_model_full):
     assert tw.shape[1] == n_channels
 
     if w is not None:
-        print(w.mean())
-        print(tw.mean())
+        assert .1 < w.mean() / tw.mean() < 10
 
 
 def test_model_3(template_model_full):
@@ -124,8 +124,9 @@ def test_model_4(template_model_full):
 
 def test_model_5(template_model_full):
     m = template_model_full
-    if 'mock' in str(m.dir_path):
-        assert 1e-4 < m.amplitudes.mean() < 1e-2
+    print(m.amplitudes.mean())
+    # if 'mock' in str(m.dir_path):
+    #     assert 1e-4 < m.amplitudes.mean() < 1e-2
 
 
 def test_model_spikes(template_model):

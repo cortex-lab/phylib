@@ -183,24 +183,24 @@ def _make_mock_dataset(tempdir):
     # Raw data.
     # for simplicity, assume all spikes are complete on the raw data
     duration = spike_samples[-1] + n_samples_waveforms
-    traces = 1e-3 * artificial_traces(duration, n_channels)
+    traces = artificial_traces(duration, n_channels)
     factor = 50000 / traces.max()
     (factor * traces).astype(np.int16).tofile(root / 'raw.dat')
 
     # NOTE: need to take the factor into account in the templates
-    templates *= 1e-3 * factor
+    templates *= factor
     _save('templates.npy', templates.astype(np.float32))
     _save('templates_ind.npy', template_channels)
 
     write_text(root / 'params.py', dedent(f'''
-        dat_path = 'raw.dat'
+        dat_path = '{root / "raw.dat"}'
         n_channels_dat = {n_channels}
         dtype = 'int16'
         offset = 0
         sample_rate = {sample_rate}
         hp_filtered = False
-        ampfactor = 1.0 / %.5e
-    ''' % factor))
+        ampfactor = 1.0 / {factor:.5e}
+    '''))
     return root / 'params.py'
 
 
