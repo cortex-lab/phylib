@@ -136,11 +136,11 @@ def _make_mock_dataset(tempdir):
 
     # Params.
     n_channels = 164
-    n_channels_loc = 32
-    n_spikes = 5_000
-    n_clusters = 112
-    n_samples_waveforms = 82
-    sample_rate = 15e3
+    n_channels_loc = 24
+    n_spikes = 4_000
+    n_clusters = 72
+    n_samples_waveforms = 62
+    sample_rate = 5e3
 
     n_templates = n_clusters
 
@@ -179,14 +179,18 @@ def _make_mock_dataset(tempdir):
         perm = np.random.permutation(ch)
         templates[i, :, perm] *= amp[:, np.newaxis]
         template_channels[i, :] = ch
-    _save('templates.npy', templates.astype(np.float32))
-    _save('templates_ind.npy', template_channels)
 
     # Raw data.
     # for simplicity, assume all spikes are complete on the raw data
     duration = spike_samples[-1] + n_samples_waveforms
-    traces = artificial_traces(duration, n_channels)
-    (50000 * traces / traces.max()).astype(np.int16).tofile(root / 'raw.dat')
+    traces = 1e-3 * artificial_traces(duration, n_channels)
+    factor = 50000 / traces.max()
+    (factor * traces).astype(np.int16).tofile(root / 'raw.dat')
+
+    # NOTE: need to take the factor into account in the templates
+    templates *= 1e-3 * factor
+    _save('templates.npy', templates.astype(np.float32))
+    _save('templates_ind.npy', template_channels)
 
     write_text(root / 'params.py', dedent(f'''
         dat_path = 'raw.dat'
@@ -195,8 +199,8 @@ def _make_mock_dataset(tempdir):
         offset = 0
         sample_rate = {sample_rate}
         hp_filtered = False
-        ampfactor = 1.0 / 1e4
-    '''))
+        ampfactor = 1.0 / %.5e
+    ''' % factor))
     return root / 'params.py'
 
 

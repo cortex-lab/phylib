@@ -57,6 +57,7 @@ def test_model_2(template_model_full):
     m = template_model_full
     tmp = m.get_template(3)
     channel_ids = tmp.channel_ids
+    n_channels = len(channel_ids)
     spike_ids = m.get_cluster_spikes(3)
 
     w = m.get_waveforms(spike_ids, channel_ids)
@@ -67,6 +68,14 @@ def test_model_2(template_model_full):
 
     tf = m.get_template_features(spike_ids)
     assert tf is None or tf.shape == (len(spike_ids), m.n_templates)
+
+    tw = m.get_template_waveforms(3)
+    assert tw.ndim == 2
+    assert tw.shape[1] == n_channels
+
+    if w is not None:
+        print(w.mean())
+        print(tw.mean())
 
 
 def test_model_3(template_model_full):

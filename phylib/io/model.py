@@ -1341,8 +1341,7 @@ class TemplateModel(object):
         logger.debug("Save spike clusters to `%s`.", path)
         np.save(path, spike_clusters)
 
-    def save_spikes_subset_waveforms(self, max_n_spikes_per_template=None, max_n_channels=None,
-                                     sample2unit=1.):
+    def save_spikes_subset_waveforms(self, max_n_spikes_per_template=None, max_n_channels=None):
         if self.traces is None:
             logger.warning(
                 "Spike waveforms could not be extracted as the raw data file is not available.")
@@ -1392,7 +1391,7 @@ class TemplateModel(object):
         # Extract waveforms from the raw data on a chunk by chunk basis.
         export_waveforms(
             path, self.traces, self.spike_samples[spike_ids], spike_channels,
-            n_samples_waveforms=self.n_samples_waveforms, sample2unit=sample2unit)
+            n_samples_waveforms=self.n_samples_waveforms)
 
         # Reload spike waveforms.
         self.spike_waveforms = self._load_spike_waveforms()

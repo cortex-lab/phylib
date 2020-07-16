@@ -650,21 +650,20 @@ def iter_waveforms(traces, spike_samples, spike_channels, n_samples_waveforms=No
 
 
 def export_waveforms(
-        path, traces, spike_samples, spike_channels, n_samples_waveforms=None, cache=False,
-        sample2unit=1):
+        path, traces, spike_samples, spike_channels, n_samples_waveforms=None, cache=False):
     """Export a selection of spike waveforms to a npy file by iterating over the data on a chunk
     by chunk basis."""
     n_spikes = len(spike_samples)
     spike_channels = np.asarray(spike_channels, dtype=np.int32)
     n_channels_loc = spike_channels.shape[1]
     shape = (n_spikes, n_samples_waveforms, n_channels_loc)
-    dtype = traces.dtype if sample2unit is None else np.float
+    dtype = traces.dtype
     writer = NpyWriter(path, shape, dtype)
     size_written = 0
     for waveforms in iter_waveforms(
             traces, spike_samples, spike_channels, n_samples_waveforms=n_samples_waveforms,
             cache=cache):
-        writer.append(waveforms * sample2unit)
+        writer.append(waveforms)
         size_written += waveforms.size
     writer.close()
     assert prod(shape) == size_written
