@@ -101,17 +101,19 @@ class EphysAlfCreator(object):
 
     def __init__(self, model):
         self.model = model
+        self.ampfactor = model.ampfactor
         self.dir_path = Path(model.dir_path)
         self.spc = _spikes_per_cluster(model.spike_clusters)
         self.cluster_ids = _unique(self.model.spike_clusters)
         self.cluster_uuids = self.load_uuids()  # dict cluster_id => uuid
 
-    def convert(self, out_path, force=False, label='', ampfactor=1):
+    def convert(self, out_path, force=False, label=''):
         """Convert from KS/phy format to ALF."""
-        logger.info("Converting dataset to ALF in %s.", out_path)
+        # TODO: no longer need the ampfactor parameter as it is a model attribute
+        logger.info("Converting dataset to ALF in %s with ampfactor %.5f.",
+                    out_path, self.ampfactor)
         self.out_path = Path(out_path)
         self.label = label
-        self.ampfactor = ampfactor
         if self.out_path.resolve() == self.dir_path.resolve():
             raise IOError("The source and target directories cannot be the same.")
         if not self.out_path.exists():
@@ -119,8 +121,7 @@ class EphysAlfCreator(object):
 
         with tqdm(desc="Converting to ALF", total=135) as bar:
             # NOTE: this must occur BEFORE make_cluster_objects which will load subset waveforms.
-            self.model.save_spikes_subset_waveforms(
-                NSAMPLE_WAVEFORMS, sample2unit=self.ampfactor)
+            self.model.save_spikes_subset_waveforms(NSAMPLE_WAVEFORMS)
             bar.update(50)
 
             self.make_cluster_objects()
@@ -242,7 +243,12 @@ class EphysAlfCreator(object):
 
         # group by average over cluster number
         camps = np.zeros(np.max(self.cluster_ids) - np.min(self.cluster_ids) + 1,) * np.nan
-        camps[self.cluster_ids - np.min(self.cluster_ids)] = self.model.templates_amplitudes
+        # camps[self.cluster_ids - np.min(self.cluster_ids)] = self.model.template_amplitudes
+        camps[:] = self.model.template_amplitudes
+        if camps.mean() >= 1:
+            logger.warning(
+                "Cluster amplitudes are > 1, there might be a unit problem "
+                "(check ampfactor in params.py)")
         self._save_npy('clusters.amps.npy', camps)
 
         # Save clusters uuids
@@ -335,6 +341,12 @@ class EphysAlfCreator(object):
 
         spike_amps = self.model.amplitudes
         template_amps = self.model.template_amplitudes
+
+        # Make sure we're in volts.
+        if not (np.all(spike_amps < 1) and
+                np.all(template_amps < 1) and
+                np.all(self.model.sparse_templates.data < 1)):
+            logger.warning("Unit doesn't seem to be in volts, ampfactor may be incorrect!")
 
         self._save_npy('spikes.amps.npy', spike_amps)
         self._save_npy('templates.amps.npy', template_amps)
