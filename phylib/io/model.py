@@ -213,7 +213,8 @@ def _project_pcs(x, pcs):
 def compute_features(waveforms):
     assert waveforms.ndim == 3
     nspk, nsmp, nc = waveforms.shape
-    assert nspk > 0
+    if nspk == 0:
+        return np.zeros((nspk, nc, 3), dtype=np.float32)
     pcs = _compute_pcs(waveforms, 3)
     assert pcs.ndim == 3
     features = _project_pcs(waveforms, pcs)
@@ -323,6 +324,7 @@ class TemplateModel(object):
         assert self.ampfactor > 0
 
         self._load_data()
+        logger.debug("Model fully loaded.")
 
     #--------------------------------------------------------------------------
     # Internal loading methods
@@ -530,7 +532,7 @@ class TemplateModel(object):
     def _load_metadata(self):
         """Load cluster metadata from all CSV/TSV files in the data directory."""
         # Files to exclude.
-        excluded_names = ('cluster_info',)
+        excluded_names = ('cluster_info', 'clusters.metrics', 'cluster_metrics')
         # Get all CSV/TSV files in the directory.
         files = list(self.dir_path.glob('*.csv'))
         files.extend(self.dir_path.glob('*.tsv'))
@@ -729,7 +731,7 @@ class TemplateModel(object):
         logger.debug("Loading spikes subset waveforms to avoid fetching waveforms from raw data.")
         try:
             return Bunch(
-                waveforms=self._read_array(path, mmap_mode='r'),
+                waveforms=self._read_array(path),  # , mmap_mode='r'),
                 spike_channels=self._read_array(path_channels),
                 spike_ids=self._read_array(path_spikes),
             )
@@ -1068,7 +1070,7 @@ class TemplateModel(object):
     def get_waveforms(self, spike_ids, channel_ids=None):
         """Return spike waveforms on specified channels."""
         if self.traces is None and self.spike_waveforms is None:  # pragma: no cover
-            logger.warning("Impossible to get waveforms as there is now raw data file and "
+            logger.warning("Impossible to get waveforms as there is no raw data file and "
                            "no spike waveforms subset")
             return
         # Create the output array.
@@ -1077,14 +1079,17 @@ class TemplateModel(object):
 
         if self.spike_waveforms is not None:
             # Load from precomputed spikes.
-            return get_spike_waveforms(
+            out = get_spike_waveforms(
                 spike_ids, channel_ids, spike_waveforms=self.spike_waveforms,
                 n_samples_waveforms=nsw)
         else:
             # Or load directly from raw data (slower).
             spike_samples = self.spike_samples[spike_ids]
-            return extract_waveforms(
+            out = extract_waveforms(
                 self.traces, spike_samples, channel_ids, n_samples_waveforms=nsw)
+        assert out.ndim == 3
+        assert out.shape == (len(spike_ids), nsw, len(channel_ids))
+        return out
 
     def get_features(self, spike_ids, channel_ids):
         """Return sparse features for given spikes."""
@@ -1286,17 +1291,17 @@ class TemplateModel(object):
         assert mean_waveforms.shape == (ns, len(channel_ids))
         return Bunch(mean_waveforms=mean_waveforms, channel_ids=channel_ids)
 
-    def get_template_spike_waveforms(self, template_id):
-        """Return all spike waveforms of a template, on the most relevant channels."""
-        spike_ids = self.get_template_spikes(template_id)
-        channel_ids = self.get_template_channels(template_id)
-        return self.get_waveforms(spike_ids, channel_ids)
+    # def get_template_spike_waveforms(self, template_id):
+    #     """Return all spike waveforms of a template, on the most relevant channels."""
+    #     spike_ids = self.get_template_spikes(template_id)
+    #     channel_ids = self.get_template_channels(template_id)
+    #     return self.get_waveforms(spike_ids, channel_ids)
 
-    def get_cluster_spike_waveforms(self, cluster_id):
-        """Return all spike waveforms of a cluster, on the most relevant channels."""
-        spike_ids = self.get_cluster_spikes(cluster_id)
-        channel_ids = self.get_cluster_channels(cluster_id)
-        return self.get_waveforms(spike_ids, channel_ids)
+    # def get_cluster_spike_waveforms(self, cluster_id):
+    #     """Return all spike waveforms of a cluster, on the most relevant channels."""
+    #     spike_ids = self.get_cluster_spikes(cluster_id)
+    #     channel_ids = self.get_cluster_channels(cluster_id)
+    #     return self.get_waveforms(spike_ids, channel_ids)
 
     @property
     def templates_probes(self):
@@ -1342,6 +1347,8 @@ class TemplateModel(object):
 
         n_chunks_kept = 20  # TODO: better choice
         nst = max_n_spikes_per_template
+        if nst <= 0:
+            nst = 1e9
         nc = max_n_channels or self.n_channels_loc
         nc = max(nc, self.n_channels_loc)
 

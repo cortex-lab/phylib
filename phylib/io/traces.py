@@ -569,7 +569,7 @@ class NpyWriter(object):
             assert chunk.shape[1:] == self.shape[1:]
         else:  # pragma: no cover
             assert chunk.shape == self.shape[1:]
-        self.fp.write(chunk.tobytes())
+        self.fp.write(chunk.astype(self.dtype).tobytes())
 
     def close(self):
         self.fp.close()
@@ -661,12 +661,15 @@ def export_waveforms(
     n_channels_loc = spike_channels.shape[1]
     shape = (n_spikes, n_samples_waveforms, n_channels_loc)
     # WARNING: using the original (integer) dtype creates problem with renormalization
-    dtype = np.float64
+    # BUT we decide for now to renormalize on the fly, not in the subset file
+    dtype = traces.dtype
+    # dtype = np.float64
     writer = NpyWriter(path, shape, dtype)
     size_written = 0
     for waveforms in iter_waveforms(
             traces, spike_samples, spike_channels, n_samples_waveforms=n_samples_waveforms,
             cache=cache):
+        assert waveforms.dtype == traces.dtype
         writer.append(waveforms)
         size_written += waveforms.size
     writer.close()

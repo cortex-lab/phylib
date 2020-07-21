@@ -7,8 +7,10 @@
 #------------------------------------------------------------------------------
 
 import logging
+import os
+from pathlib import Path
 import shutil
-from textwrap import dedent
+# from textwrap import dedent
 
 import numpy as np
 from pytest import fixture
@@ -16,12 +18,6 @@ from pytest import fixture
 from phylib.utils._misc import write_text, write_tsv
 from ..model import load_model, write_array
 from phylib.io.datasets import download_test_file
-from phylib.io.mock import (
-    artificial_spike_samples,
-    artificial_spike_clusters,
-    artificial_waveforms,
-    artificial_traces,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -30,34 +26,83 @@ logger = logging.getLogger(__name__)
 # Fixtures
 #------------------------------------------------------------------------------
 
-_FILES = [
-    'template/params.py',
-    'template/sim_binary.dat',
-    'template/spike_times.npy',
-    'template/spike_templates.npy',
-    'template/spike_clusters.npy',
-    'template/amplitudes.npy',
+DATASETS = {
+    'template': [
+        'template/params.py',
+        'template/sim_binary.dat',
+        'template/spike_times.npy',
+        'template/spike_templates.npy',
+        'template/spike_clusters.npy',
+        'template/amplitudes.npy',
+        'template/cluster_group.tsv',
+        'template/channel_map.npy',
+        'template/channel_positions.npy',
+        'template/channel_shanks.npy',
+        'template/similar_templates.npy',
+        'template/whitening_mat.npy',
+        'template/templates.npy',
+        'template/template_ind.npy',
+        'template/pc_features.npy',
+        'template/pc_feature_ind.npy',
+        'template/pc_feature_spike_ids.npy',
+        'template/template_features.npy',
+        'template/template_feature_ind.npy',
+        'template/template_feature_spike_ids.npy',
+    ],
+    'ks2': [
+        'ibl/raw_ephys_data/probe00/params.py',
+        'ibl/raw_ephys_data/probe00/_spikeglx_ephysData_g0_t0.imec0.ap.bin',
+        'ibl/raw_ephys_data/probe00/_spikeglx_ephysData_g0_t0.imec0.ap.cbin',
+        'ibl/raw_ephys_data/probe00/_spikeglx_ephysData_g0_t0.imec0.ap.ch',
+        'ibl/raw_ephys_data/probe00/amplitudes.npy',
+        'ibl/raw_ephys_data/probe00/channel_map.npy',
+        'ibl/raw_ephys_data/probe00/channel_positions.npy',
+        'ibl/raw_ephys_data/probe00/pc_feature_ind.npy',
+        'ibl/raw_ephys_data/probe00/pc_features.npy',
+        'ibl/raw_ephys_data/probe00/similar_templates.npy',
+        'ibl/raw_ephys_data/probe00/spike_clusters.npy',
+        'ibl/raw_ephys_data/probe00/spike_templates.npy',
+        'ibl/raw_ephys_data/probe00/spike_times.npy',
+        'ibl/raw_ephys_data/probe00/template_feature_ind.npy',
+        'ibl/raw_ephys_data/probe00/template_features.npy',
+        'ibl/raw_ephys_data/probe00/templates_ind.npy',
+        'ibl/raw_ephys_data/probe00/templates.npy',
+        'ibl/raw_ephys_data/probe00/whitening_mat_inv.npy',
+        'ibl/raw_ephys_data/probe00/whitening_mat.npy',
+    ],
+    'alf': [
+        'ibl/alf/probe00/params.py',
+        'ibl/raw_ephys_data/probe00/_spikeglx_ephysData_g0_t0.imec0.ap.bin',
+        'ibl/raw_ephys_data/probe00/_spikeglx_ephysData_g0_t0.imec0.ap.cbin',
+        'ibl/raw_ephys_data/probe00/_spikeglx_ephysData_g0_t0.imec0.ap.ch',
+        'ibl/alf/probe00/channels.localCoordinates.npy',
+        'ibl/alf/probe00/channels.rawInd.npy',
+        'ibl/alf/probe00/clusters.amps.npy',
+        'ibl/alf/probe00/clusters.channels.npy',
+        'ibl/alf/probe00/clusters.depths.npy',
+        'ibl/alf/probe00/clusters.metrics.csv',
+        'ibl/alf/probe00/clusters.peakToTrough.npy',
+        'ibl/alf/probe00/clusters.uuids.csv',
+        'ibl/alf/probe00/clusters.waveformsChannels.npy',
+        'ibl/alf/probe00/clusters.waveforms.npy',
+        'ibl/alf/probe00/_kilosort_whitening.matrix.npy',
+        'ibl/alf/probe00/_phy_spikes_subset.channels.npy',
+        'ibl/alf/probe00/_phy_spikes_subset.spikes.npy',
+        'ibl/alf/probe00/_phy_spikes_subset.waveforms.npy',
+        'ibl/alf/probe00/spikes.amps.npy',
+        'ibl/alf/probe00/spikes.clusters.npy',
+        'ibl/alf/probe00/spikes.depths.npy',
+        'ibl/alf/probe00/spikes.samples.npy',
+        'ibl/alf/probe00/spikes.templates.npy',
+        'ibl/alf/probe00/spikes.times.npy',
+        'ibl/alf/probe00/templates.amps.npy',
+        'ibl/alf/probe00/templates.waveformsChannels.npy',
+        'ibl/alf/probe00/templates.waveforms.npy',
+        'ibl/alf/probe00/whitening_mat_inv.npy',
+    ],
+}
 
-    'template/cluster_group.tsv',
-
-    'template/channel_map.npy',
-    'template/channel_positions.npy',
-    'template/channel_shanks.npy',
-
-    'template/similar_templates.npy',
-    'template/whitening_mat.npy',
-
-    'template/templates.npy',
-    'template/template_ind.npy',
-
-    'template/pc_features.npy',
-    'template/pc_feature_ind.npy',
-    'template/pc_feature_spike_ids.npy',
-
-    'template/template_features.npy',
-    'template/template_feature_ind.npy',
-    'template/template_feature_spike_ids.npy',
-]
+DATASETS_PARAMS = ('dense', 'sparse', 'misc', 'ks2', 'alf')
 
 
 def _remove(path):
@@ -66,50 +111,36 @@ def _remove(path):
         logger.debug("Removed %s.", path)
 
 
-def _make_dataset(tempdir, param='dense', has_spike_attributes=True):
-    np.random.seed(0)
+def _make_misc(tempdir):
+    # Remove spike_clusters and recreate it from spike_templates.
+    _remove(tempdir / 'spike_clusters.npy')
+    # Replace spike_times.npy, in samples, by spikes.times.npy, in seconds.
+    if (tempdir / 'spike_times.npy').exists():
+        st = np.load(tempdir / 'spike_times.npy').squeeze()
+        st_r = st + np.random.randint(low=-20000, high=+20000, size=st.size)
+        assert st_r.shape == st.shape
+        # Reordered spikes.
+        np.save(tempdir / 'spike_times_reordered.npy', st_r)
+        np.save(tempdir / 'spikes.times.npy', st / 25000.)  # sample rate
+        _remove(tempdir / 'spike_times.npy')
+    # Buggy TSV file should not cause a crash.
+    write_text(tempdir / 'error.tsv', '')
+    # Remove some non-necessary files.
+    _remove(tempdir / 'template_features.npy')
+    _remove(tempdir / 'pc_features.npy')
+    _remove(tempdir / 'channel_probes.npy')
+    _remove(tempdir / 'channel_shanks.npy')
+    _remove(tempdir / 'amplitudes.npy')
+    _remove(tempdir / 'whitening_mat.npy')
+    _remove(tempdir / 'whitening_mat_inv.npy')
+    _remove(tempdir / 'sim_binary.dat')
 
-    # Download the dataset.
-    paths = list(map(download_test_file, _FILES))
-    # Copy the dataset to a temporary directory.
-    for path in paths:
-        to_path = tempdir / path.name
-        # Skip sparse arrays if is_sparse is False.
-        if param == 'sparse' and ('_ind.' in str(to_path) or 'spike_ids.' in str(to_path)):
-            continue
-        logger.debug("Copying file to %s.", to_path)
-        shutil.copy(path, to_path)
 
-    # Some changes to files if 'misc' fixture parameter.
-    if param == 'misc':
-        # Remove spike_clusters and recreate it from spike_templates.
-        _remove(tempdir / 'spike_clusters.npy')
-        # Replace spike_times.npy, in samples, by spikes.times.npy, in seconds.
-        if (tempdir / 'spike_times.npy').exists():
-            st = np.load(tempdir / 'spike_times.npy').squeeze()
-            st_r = st + np.random.randint(low=-20000, high=+20000, size=st.size)
-            assert st_r.shape == st.shape
-            # Reordered spikes.
-            np.save(tempdir / 'spike_times_reordered.npy', st_r)
-            np.save(tempdir / 'spikes.times.npy', st / 25000.)  # sample rate
-            _remove(tempdir / 'spike_times.npy')
-        # Buggy TSV file should not cause a crash.
-        write_text(tempdir / 'error.tsv', '')
-        # Remove some non-necessary files.
-        _remove(tempdir / 'template_features.npy')
-        _remove(tempdir / 'pc_features.npy')
-        _remove(tempdir / 'channel_probes.npy')
-        _remove(tempdir / 'channel_shanks.npy')
-        _remove(tempdir / 'amplitudes.npy')
-        _remove(tempdir / 'whitening_mat.npy')
-        _remove(tempdir / 'whitening_mat_inv.npy')
-        _remove(tempdir / 'sim_binary.dat')
-
-    # Spike attributes.
-    if has_spike_attributes:
-        write_array(tempdir / 'spike_fail.npy', np.full(10, np.nan))  # wrong number of spikes
-        write_array(tempdir / 'spike_works.npy', np.random.rand(314))
-        write_array(tempdir / 'spike_randn.npy', np.random.randn(314, 2))
+def _make_extra_files(tempdir):
+    logger.debug("Make extra files for mock datasets.")
+    write_array(tempdir / 'spike_fail.npy', np.full(10, np.nan))  # wrong number of spikes
+    write_array(tempdir / 'spike_works.npy', np.random.rand(314))
+    write_array(tempdir / 'spike_randn.npy', np.random.randn(314, 2))
 
     # TSV file with cluster data.
     write_tsv(
@@ -117,115 +148,62 @@ def _make_dataset(tempdir, param='dense', has_spike_attributes=True):
         first_field='cluster_id')
 
     write_tsv(
-        tempdir / 'cluster_metrics.tsv', [
+        tempdir / 'cluster_met.tsv', [
             {'cluster_id': 2, 'met1': 123.4, 'met2': 'hello world 1'},
             {'cluster_id': 3, 'met1': 5.678},
             {'cluster_id': 5, 'met2': 'hello world 2'},
         ])
 
-    template_path = tempdir / paths[0].name
-    return template_path
+
+class Dataset(object):
+    def __init__(self, tempdir, param):
+        np.random.seed(0)
+        self.tempdir = Path(tempdir)
+        self.param = param
+        self.files = DATASETS.get(param, DATASETS['template'])
+        self.params_path = tempdir / 'params.py'
+        if self.param == 'sparse':
+            self.files = [
+                f for f in self.files if not ('_ind.' in str(f) or 'spike_ids.' in str(f))]
+
+    def path(self, name):
+        return self.tempdir / name
+
+    def copy(self):
+        paths = list(map(download_test_file, self.files))
+        # Copy the dataset to a temporary directory.
+        for path in paths:
+            to_path = self.tempdir / path.name
+            to_path.parent.mkdir(exist_ok=True, parents=True)
+            logger.debug("Symlinking file to %s.", to_path)
+            if path.exists():
+                if (path.suffix in ('.csv', '.tsv') or
+                        path.name in ('spike_clusters.npy', 'spikes.clusters.npy')):
+                    shutil.copy(path, to_path)
+                else:
+                    os.symlink(path, to_path)
+            else:
+                logger.warning("File %s does not exist", path)
+        if self.param == 'misc':
+            _make_misc(self.tempdir)
+        _make_extra_files(self.tempdir)
+
+    def create_model(self):
+        self.copy()
+        self.model = load_model(self.params_path)
+        self.model.param = self.param
+        return self.model
+
+    def destroy_model(self):
+        self.model.close()
 
 
-def _make_mock_dataset(tempdir):
-    root = tempdir / 'mock'
-    root.mkdir(parents=True, exist_ok=True)
-
-    def _save(path, arr):
-        np.save(root / path, arr)
-
-    # Params.
-    n_channels = 164
-    n_channels_loc = 24
-    n_spikes = 4_000
-    n_clusters = 72
-    n_samples_waveforms = 62
-    sample_rate = 5e3
-
-    n_templates = n_clusters
-
-    # Channel positions.
-    channel_positions = np.random.normal(size=(n_channels, 2))
-    _save('channel_positions.npy', channel_positions)
-
-    channel_mapping = np.arange(0, n_channels).astype(np.int32)
-    _save("channel_map.npy", channel_mapping)
-
-    # Spike times.
-    # for simplicity, assume all spikes are complete on the raw data
-    spike_samples = n_samples_waveforms + artificial_spike_samples(n_spikes, max_isi=20)
-    # spike_times = spike_samples / sample_rate
-    # WARNING: not that the KS2 file format uses "spike_times.npy" for spike SAMPLES in integers!
-    _save('spike_times.npy', spike_samples.reshape((-1, 1)))
-
-    # Spike amplitudes
-    amplitudes = np.random.normal(size=n_spikes, loc=1, scale=.1)
-    _save('amplitudes.npy', amplitudes.reshape((-1, 1)))
-
-    # Spike templates.
-    spike_templates = artificial_spike_clusters(n_spikes, n_clusters)
-    _save('spike_templates.npy', spike_templates.astype(np.int64))
-
-    # Template waveforms.
-    templates = artificial_waveforms(n_templates, n_samples_waveforms, n_channels)
-    # NOTE: simulate "fake sparse" output by KS2. The template channels is trivial and does
-    # not contain localization information, which will have to be recovered by the
-    # TemplateModel.
-    template_channels = np.zeros((n_templates, n_channels), dtype=np.int64)
-    # Space localization.
-    ch = np.arange(n_channels)
-    amp = np.exp(-ch / n_channels_loc)
-    for i in range(n_templates):
-        perm = np.random.permutation(ch)
-        templates[i, :, perm] *= amp[:, np.newaxis]
-        template_channels[i, :] = ch
-
-    # Raw data.
-    # for simplicity, assume all spikes are complete on the raw data
-    duration = spike_samples[-1] + n_samples_waveforms
-    traces = artificial_traces(duration, n_channels)
-    factor = 50000 / traces.max()
-    (factor * traces).astype(np.int16).tofile(root / 'raw.dat')
-
-    # NOTE: need to take the factor into account in the templates
-    templates *= factor
-    _save('templates.npy', templates.astype(np.float32))
-    _save('templates_ind.npy', template_channels)
-
-    write_text(root / 'params.py', dedent(f'''
-        dat_path = '{root / "raw.dat"}'
-        n_channels_dat = {n_channels}
-        dtype = 'int16'
-        offset = 0
-        sample_rate = {sample_rate}
-        hp_filtered = False
-        ampfactor = 1.0 / {factor:.5e}
-    '''))
-    return root / 'params.py'
-
-
-@fixture(scope='function', params=('dense', 'sparse', 'misc', 'mock'))
-def template_path_full(tempdir, request):
-    if request.param != 'mock':
-        return _make_dataset(tempdir, request.param)
-    else:
-        return _make_mock_dataset(tempdir)
-
-
-@fixture(scope='function')
-def template_path(tempdir, request):
-    return _make_dataset(tempdir, param='dense', has_spike_attributes=False)
+@fixture(scope='function', params=DATASETS_PARAMS)
+def dset(tempdir, request):
+    return Dataset(tempdir, request.param)
 
 
 @fixture
-def template_model_full(template_path_full):
-    model = load_model(template_path_full)
-    yield model
-    model.close()
-
-
-@fixture
-def template_model(template_path):
-    model = load_model(template_path)
-    yield model
-    model.close()
+def template_model(dset):
+    yield dset.create_model()
+    dset.destroy_model()
