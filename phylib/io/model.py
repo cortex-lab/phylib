@@ -162,6 +162,84 @@ def get_closest_channels(channel_positions, channel_index, n=None):
 
 
 #------------------------------------------------------------------------------
+# PC computation
+#------------------------------------------------------------------------------
+
+def _compute_pcs(x, npcs):
+    """Compute the PCs of an array x, where each row is an observation.
+    x can be a 2D or 3D array. In the latter case, the PCs are computed
+    and concatenated iteratively along the last axis."""
+
+    # Ensure x is a 3D array.
+    assert x.ndim == 3
+    # Ensure double precision
+    x = x.astype(np.float64)
+
+    nspikes, nsamples, nchannels = x.shape
+
+    cov_reg = np.eye(nsamples)
+    assert cov_reg.shape == (nsamples, nsamples)
+
+    pcs_list = []
+    # Loop over channels
+    for channel in range(nchannels):
+        x_channel = x[:, :, channel]
+        # Compute cov matrix for the channel
+        assert x_channel.ndim == 2
+        # Don't compute the cov matrix if there are no unmasked spikes
+        # on that channel.
+        alpha = 1. / nspikes
+        if x_channel.shape[0] <= 1:
+            cov = alpha * cov_reg
+        else:
+            cov_channel = np.cov(x_channel, rowvar=0)
+            assert cov_channel.shape == (nsamples, nsamples)
+            cov = alpha * cov_reg + cov_channel
+        # Compute the eigenelements
+        vals, vecs = np.linalg.eigh(cov)
+        pcs = vecs.T.astype(np.float32)[np.argsort(vals)[::-1]]
+        # Take the first npcs components.
+        pcs_list.append(pcs[:npcs, ...])
+    # Return the concatenation of the PCs on all channels, along the 3d axis,
+    # except if there is only one element in the 3d axis. In this case
+    # we convert to a 2D array.
+    pcs = np.dstack(pcs_list)
+    assert pcs.ndim == 3
+    return pcs
+
+
+def _project_pcs(x, pcs):
+    """Project data points onto principal components.
+    Arguments:
+      * x: a 2D array.
+      * pcs: the PCs as returned by `compute_pcs`.
+    """
+    assert x.ndim == 3
+    assert pcs.ndim == 3
+    features = []
+    # for i, waveform in enumerate(x):
+    #     assert waveform.ndim == 2
+    #     # pcs.shape is (3, n_samples, n_channels)
+    #     # waveform.shape is (n_samples, n_channels)
+    #     features.append(np.einsum('ijk,jk->ki', pcs, waveform))
+    features = np.einsum('ijk,ljk->lki', pcs, x)
+    # features = np.stack(features, axis=0)
+    assert features.ndim == 3
+    return features
+
+
+def compute_features(waveforms):
+    assert waveforms.ndim == 3
+    nspk, nsmp, nc = waveforms.shape
+    pcs = _compute_pcs(waveforms, 3)
+    assert pcs.ndim == 3
+    features = _project_pcs(waveforms, pcs)
+    assert features.ndim == 3
+    assert features.shape == (nspk, nc, 3)
+    return features
+
+
+#-----------------------------------------------------------------------------
 # I/O util functions
 #------------------------------------------------------------------------------
 
@@ -872,7 +950,23 @@ class TemplateModel(object):
     def get_features(self, spike_ids, channel_ids):
         """Return sparse features for given spikes."""
         sf = self.sparse_features
-        if sf is None:
+        if sf is None and self.spike_waveforms is not None:
+            ns = len(spike_ids)
+            nc = len(channel_ids)
+            n_pcs = 3
+            features = np.zeros((ns, nc, n_pcs), dtype=np.float32)
+            spike_ids_exist = np.intersect1d(spike_ids, self.spike_waveforms.spike_ids)
+            # Compute PCs from the waveforms for the spikes that are in spike_waveforms.spike_ids.
+            waveforms = self.get_waveforms(spike_ids_exist, channel_ids)
+            features_existing = compute_features(waveforms)
+            assert features.shape[1:] == (nc, n_pcs)
+            # Now we need to integrate the computed features into the output array, knowing
+            # that some spikes may be missing if there were requested here in spike_ids, but
+            # were absent in spike_waveforms.spike_ids.
+            ind = _index_of(spike_ids_exist, spike_ids)
+            features[ind, ...] = features_existing
+            return features
+        elif sf is None:
             return
         _, n_channels_loc, n_pcs = sf.data.shape
         ns = len(spike_ids)
@@ -942,6 +1036,8 @@ class TemplateModel(object):
         c = 0
         spikes_depths = np.zeros_like(self.spike_times) * np.nan
         nspi = spikes_depths.shape[0]
+        if self.sparse_features is None or self.sparse_features.data.shape[0] != self.n_spikes:
+            return None
         while True:
             ispi = np.arange(c, min(c + nbatch, nspi))
             # take only first component
