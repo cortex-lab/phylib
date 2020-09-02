@@ -24,6 +24,7 @@ import shutil
 import numpy as np
 
 from phylib.utils._misc import read_python
+from phylib.utils.geometry import linear_positions
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +85,11 @@ def read_params(params_path):
     return params
 
 
+def _all_positions_distinct(positions):
+    """Return whether all positions are distinct."""
+    return len(set(tuple(row) for row in positions)) == len(positions)
+
+
 #------------------------------------------------------------------------------
 # Validators
 #------------------------------------------------------------------------------
@@ -133,6 +139,24 @@ def validate_channel_map(f):
     return wrapped
 
 
+def validate_channel_positions(f):
+    @wraps(f)
+    def wrapped(*args, **kwargs):
+        out = f(*args, **kwargs)
+        assert isinstance(out, np.ndarray)
+        assert out.dtype == np.float64
+        if out.ndim != 2:
+            raise ValueError("The channel_positions array should have 2 dimensions.")
+        if out.shape[1] not in (2, 3):
+            raise ValueError("The channel_positions array should have 2/3 columns.")
+        if not _all_positions_distinct(out):
+            logger.error(
+                "Some channels are on the same position, please check the channel positions file.")
+            out = linear_positions(out.shape[0])
+        return out
+    return wrapped
+
+
 #------------------------------------------------------------------------------
 # Loading functions
 #------------------------------------------------------------------------------
@@ -162,13 +186,19 @@ def _load_spike_templates(spike_templates):
     return np.asarray(spike_templates, dtype=np.int64).ravel()
 
 
-# Channel map
-#------------
+# Channels
+#---------
 
 @validate_channel_map
 def _load_channel_map(channel_map):
     """Corresponds to channel_map.npy, channels.rawInd.npy"""
     return np.asarray(channel_map, dtype=np.int32).ravel()
+
+
+@validate_channel_positions
+def _load_channel_positions(channel_positions):
+    """Corresponds to channel_positions.npy"""
+    return np.atleast_2d(np.asarray(channel_positions, dtype=np.float64))
 
 
 #------------------------------------------------------------------------------

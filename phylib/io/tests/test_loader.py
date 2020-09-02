@@ -58,13 +58,24 @@ def test_load_spike_templates():
     ac(l._load_spike_templates([0, 0, 5, -1]), [0, 0, 5, -1])
 
 
-# Channel map
-#----------------
+# Channels
+#---------
 
 def test_load_channel_map():
     ac(l._load_channel_map([0, 1, 3, 2]), [0, 1, 3, 2])
     with raises(ValueError):
         l._load_channel_map([0, 1, 2, 2])
+
+
+def test_load_channel_positions():
+    ac(l._load_channel_positions([[0, 0], [1, 0]]), [[0, 0], [1, 0]])
+    with raises(ValueError):
+        l._load_channel_positions([0, 0, 1, 2])
+    with raises(ValueError):
+        l._load_channel_positions([[0, 0, 1, 2]])
+    # Duplicate channels should not raise an error, but default to a linear probe with
+    # an error message.
+    ac(l._load_channel_positions([[0, 0], [0, 0]]), [[0, 0], [0, 1]])
 
 
 #------------------------------------------------------------------------------
