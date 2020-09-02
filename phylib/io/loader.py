@@ -157,6 +157,30 @@ def validate_channel_positions(f):
     return wrapped
 
 
+def validate_channel_shanks(f):
+    @wraps(f)
+    def wrapped(*args, **kwargs):
+        out = f(*args, **kwargs)
+        assert isinstance(out, np.ndarray)
+        assert out.dtype == np.int32
+        assert out.ndim == 1
+        assert np.all(out >= -1)
+        return out
+    return wrapped
+
+
+def validate_channel_probes(f):
+    @wraps(f)
+    def wrapped(*args, **kwargs):
+        out = f(*args, **kwargs)
+        assert isinstance(out, np.ndarray)
+        assert out.dtype == np.int32
+        assert out.ndim == 1
+        assert np.all(out >= -1)
+        return out
+    return wrapped
+
+
 #------------------------------------------------------------------------------
 # Loading functions
 #------------------------------------------------------------------------------
@@ -199,6 +223,22 @@ def _load_channel_map(channel_map):
 def _load_channel_positions(channel_positions):
     """Corresponds to channel_positions.npy"""
     return np.atleast_2d(np.asarray(channel_positions, dtype=np.float64))
+
+
+@validate_channel_shanks
+def _load_channel_shanks(channel_shanks):
+    """Corresponds to channel_shanks.npy
+
+    Each probe might have multiple shanks. Shank numbers are *relative* to the each probe.
+
+    """
+    return np.asarray(channel_shanks, dtype=np.int32).ravel()
+
+
+@validate_channel_probes
+def _load_channel_probes(channel_probes):
+    """Corresponds to channel_probes.npy"""
+    return np.asarray(channel_probes, dtype=np.int32).ravel()
 
 
 #------------------------------------------------------------------------------

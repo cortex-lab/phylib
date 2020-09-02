@@ -78,6 +78,14 @@ def test_load_channel_positions():
     ac(l._load_channel_positions([[0, 0], [0, 0]]), [[0, 0], [0, 1]])
 
 
+def test_load_channel_shanks():
+    ac(l._load_channel_shanks([0, 0, 1, 2]), [0, 0, 1, 2])
+
+
+def test_load_channel_probes():
+    ac(l._load_channel_probes([0, 0, 1, 2]), [0, 0, 1, 2])
+
+
 #------------------------------------------------------------------------------
 # Test loading functions
 #------------------------------------------------------------------------------
