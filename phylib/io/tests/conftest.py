@@ -49,60 +49,60 @@ DATASETS = {
         'template/template_feature_ind.npy',
         'template/template_feature_spike_ids.npy',
     ],
-    'ks2': [
-        'ibl/raw_ephys_data/probe00/params.py',
-        'ibl/raw_ephys_data/probe00/_spikeglx_ephysData_g0_t0.imec0.ap.bin',
-        'ibl/raw_ephys_data/probe00/_spikeglx_ephysData_g0_t0.imec0.ap.cbin',
-        'ibl/raw_ephys_data/probe00/_spikeglx_ephysData_g0_t0.imec0.ap.ch',
-        'ibl/raw_ephys_data/probe00/amplitudes.npy',
-        'ibl/raw_ephys_data/probe00/channel_map.npy',
-        'ibl/raw_ephys_data/probe00/channel_positions.npy',
-        'ibl/raw_ephys_data/probe00/pc_feature_ind.npy',
-        'ibl/raw_ephys_data/probe00/pc_features.npy',
-        'ibl/raw_ephys_data/probe00/similar_templates.npy',
-        'ibl/raw_ephys_data/probe00/spike_clusters.npy',
-        'ibl/raw_ephys_data/probe00/spike_templates.npy',
-        'ibl/raw_ephys_data/probe00/spike_times.npy',
-        'ibl/raw_ephys_data/probe00/template_feature_ind.npy',
-        'ibl/raw_ephys_data/probe00/template_features.npy',
-        'ibl/raw_ephys_data/probe00/templates_ind.npy',
-        'ibl/raw_ephys_data/probe00/templates.npy',
-        'ibl/raw_ephys_data/probe00/whitening_mat_inv.npy',
-        'ibl/raw_ephys_data/probe00/whitening_mat.npy',
-    ],
+    # 'ks2': [
+    #     'ibl/raw_ephys_data/probe00/params.py',
+    #     'ibl/raw_ephys_data/probe00/_spikeglx_ephysData_g0_t0.imec0.ap.bin',
+    #     'ibl/raw_ephys_data/probe00/_spikeglx_ephysData_g0_t0.imec0.ap.cbin',
+    #     'ibl/raw_ephys_data/probe00/_spikeglx_ephysData_g0_t0.imec0.ap.ch',
+    #     'ibl/raw_ephys_data/probe00/amplitudes.npy',
+    #     'ibl/raw_ephys_data/probe00/channel_map.npy',
+    #     'ibl/raw_ephys_data/probe00/channel_positions.npy',
+    #     'ibl/raw_ephys_data/probe00/pc_feature_ind.npy',
+    #     'ibl/raw_ephys_data/probe00/pc_features.npy',
+    #     'ibl/raw_ephys_data/probe00/similar_templates.npy',
+    #     'ibl/raw_ephys_data/probe00/spike_clusters.npy',
+    #     'ibl/raw_ephys_data/probe00/spike_templates.npy',
+    #     'ibl/raw_ephys_data/probe00/spike_times.npy',
+    #     'ibl/raw_ephys_data/probe00/template_feature_ind.npy',
+    #     'ibl/raw_ephys_data/probe00/template_features.npy',
+    #     'ibl/raw_ephys_data/probe00/templates_ind.npy',
+    #     'ibl/raw_ephys_data/probe00/templates.npy',
+    #     'ibl/raw_ephys_data/probe00/whitening_mat_inv.npy',
+    #     'ibl/raw_ephys_data/probe00/whitening_mat.npy',
+    # ],
     'alf': [
-        'ibl/alf/probe00/params.py',
-        'ibl/raw_ephys_data/probe00/_spikeglx_ephysData_g0_t0.imec0.ap.bin',
-        'ibl/raw_ephys_data/probe00/_spikeglx_ephysData_g0_t0.imec0.ap.cbin',
-        'ibl/raw_ephys_data/probe00/_spikeglx_ephysData_g0_t0.imec0.ap.ch',
-        'ibl/alf/probe00/channels.localCoordinates.npy',
-        'ibl/alf/probe00/channels.rawInd.npy',
-        'ibl/alf/probe00/clusters.amps.npy',
-        'ibl/alf/probe00/clusters.channels.npy',
-        'ibl/alf/probe00/clusters.depths.npy',
-        'ibl/alf/probe00/clusters.metrics.csv',
-        'ibl/alf/probe00/clusters.peakToTrough.npy',
-        'ibl/alf/probe00/clusters.uuids.csv',
-        'ibl/alf/probe00/clusters.waveformsChannels.npy',
-        'ibl/alf/probe00/clusters.waveforms.npy',
-        'ibl/alf/probe00/_kilosort_whitening.matrix.npy',
-        'ibl/alf/probe00/_phy_spikes_subset.channels.npy',
-        'ibl/alf/probe00/_phy_spikes_subset.spikes.npy',
-        'ibl/alf/probe00/_phy_spikes_subset.waveforms.npy',
-        'ibl/alf/probe00/spikes.amps.npy',
-        'ibl/alf/probe00/spikes.clusters.npy',
-        'ibl/alf/probe00/spikes.depths.npy',
-        'ibl/alf/probe00/spikes.samples.npy',
-        'ibl/alf/probe00/spikes.templates.npy',
-        'ibl/alf/probe00/spikes.times.npy',
-        'ibl/alf/probe00/templates.amps.npy',
-        'ibl/alf/probe00/templates.waveformsChannels.npy',
-        'ibl/alf/probe00/templates.waveforms.npy',
-        'ibl/alf/probe00/whitening_mat_inv.npy',
+        'ibl/alf/params.py',
+        # 'ibl/alf/_spikeglx_ephysData_g0_t0.imec0.ap.bin',
+        'ibl/alf/_spikeglx_ephysData_g0_t0.imec0.ap.cbin',
+        'ibl/alf/_spikeglx_ephysData_g0_t0.imec0.ap.ch',
+        'ibl/alf/channels.localCoordinates.npy',
+        'ibl/alf/channels.rawInd.npy',
+        'ibl/alf/clusters.amps.npy',
+        'ibl/alf/clusters.channels.npy',
+        'ibl/alf/clusters.depths.npy',
+        'ibl/alf/clusters.metrics.csv',
+        # 'ibl/alf/clusters.peakToTrough.npy',
+        'ibl/alf/clusters.uuids.csv',
+        'ibl/alf/clusters.waveformsChannels.npy',
+        'ibl/alf/clusters.waveforms.npy',
+        # 'ibl/alf/_kilosort_whitening.matrix.npy',
+        'ibl/alf/_phy_spikes_subset.channels.npy',
+        'ibl/alf/_phy_spikes_subset.spikes.npy',
+        'ibl/alf/_phy_spikes_subset.waveforms.npy',
+        'ibl/alf/spikes.amps.npy',
+        'ibl/alf/spikes.clusters.npy',
+        'ibl/alf/spikes.depths.npy',
+        'ibl/alf/spikes.samples.npy',
+        'ibl/alf/spikes.templates.npy',
+        'ibl/alf/spikes.times.npy',
+        # 'ibl/alf/templates.amps.npy',
+        'ibl/alf/templates.waveformsChannels.npy',
+        'ibl/alf/templates.waveforms.npy',
+        # 'ibl/alf/whitening_mat_inv.npy',
     ],
 }
 
-DATASETS_PARAMS = ('dense', 'sparse', 'misc', 'ks2', 'alf')
+DATASETS_PARAMS = ('dense', 'sparse', 'misc', 'alf')
 
 
 def _remove(path):
@@ -165,6 +165,7 @@ class Dataset(object):
         if self.param == 'sparse':
             self.files = [
                 f for f in self.files if not ('_ind.' in str(f) or 'spike_ids.' in str(f))]
+        self.copy()
 
     def path(self, name):
         return self.tempdir / name
@@ -189,7 +190,6 @@ class Dataset(object):
         _make_extra_files(self.tempdir)
 
     def create_model(self):
-        self.copy()
         self.model = load_model(self.params_path)
         self.model.param = self.param
         return self.model

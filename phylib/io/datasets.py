@@ -137,6 +137,7 @@ def download_test_file(name, config_dir=None, force=False):
     ensure_dir_exists(path.parent)
     if not force and path.exists():
         return path
+    logger.debug("File %s doesn't exist, downloading it", path)
     url = _BASE_URL + name
     download_file(url, output_path=path)
     return path
