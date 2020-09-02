@@ -94,6 +94,7 @@ def validate_spike_times(f):
         out = f(*args, **kwargs)
         assert isinstance(out, np.ndarray)
         assert out.dtype == np.float64
+        assert out.ndim == 1
         if not np.all(out >= 0):
             raise ValueError("The spike times must be positive.")
         if not np.all(np.diff(out) >= 0):
@@ -108,10 +109,26 @@ def validate_spike_templates(f):
         out = f(*args, **kwargs)
         assert isinstance(out, np.ndarray)
         assert out.dtype == np.int64
+        assert out.ndim == 1
+        assert np.all(out >= -1)
         uc = np.unique(out)
         if np.max(uc) - np.min(uc) + 1 != uc.size:
             logger.warning(
                 "Unreferenced clusters found in templates (generally not a problem)")
+        return out
+    return wrapped
+
+
+def validate_channel_map(f):
+    @wraps(f)
+    def wrapped(*args, **kwargs):
+        out = f(*args, **kwargs)
+        assert isinstance(out, np.ndarray)
+        assert out.dtype == np.int32
+        assert out.ndim == 1
+        assert np.all(out >= -1)
+        if len(np.unique(out)) != len(out):
+            raise ValueError("Duplicate channel ids in the channel mapping")
         return out
     return wrapped
 
@@ -126,13 +143,13 @@ def validate_spike_templates(f):
 @validate_spike_times
 def _load_spike_times_ks2(spike_samples, sample_rate):
     """Corresponds to spike_times.npy"""
-    return np.asarray(spike_samples, dtype=np.float64) / float(sample_rate)
+    return np.asarray(spike_samples, dtype=np.float64).ravel() / float(sample_rate)
 
 
 @validate_spike_times
 def _load_spike_times_alf(spike_times):
     """Corresponds to spikes.times.npy"""
-    return np.asarray(spike_times, dtype=np.float64)
+    return np.asarray(spike_times, dtype=np.float64).ravel()
 
 
 # Spike templates
@@ -142,7 +159,16 @@ def _load_spike_times_alf(spike_times):
 def _load_spike_templates(spike_templates):
     """Corresponds to spike_templates.npy, spike_clusters.npy, spikes.templates.npy,
     spikes.clusters.npy"""
-    return np.asarray(spike_templates, dtype=np.int64)
+    return np.asarray(spike_templates, dtype=np.int64).ravel()
+
+
+# Channel map
+#------------
+
+@validate_channel_map
+def _load_channel_map(channel_map):
+    """Corresponds to channel_map.npy, channels.rawInd.npy"""
+    return np.asarray(channel_map, dtype=np.int32).ravel()
 
 
 #------------------------------------------------------------------------------

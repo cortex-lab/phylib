@@ -58,6 +58,15 @@ def test_load_spike_templates():
     ac(l._load_spike_templates([0, 0, 5, -1]), [0, 0, 5, -1])
 
 
+# Channel map
+#----------------
+
+def test_load_channel_map():
+    ac(l._load_channel_map([0, 1, 3, 2]), [0, 1, 3, 2])
+    with raises(ValueError):
+        l._load_channel_map([0, 1, 2, 2])
+
+
 #------------------------------------------------------------------------------
 # Test loading functions
 #------------------------------------------------------------------------------
@@ -65,13 +74,13 @@ def test_load_spike_templates():
 class TemplateLoaderDenseTests(unittest.TestCase):
     param = 'dense'
 
-    @classmethod
+    @ classmethod
     def setUpClass(cls):
         cls.ibl = cls.param in ('ks2', 'alf')
         cls.tempdir = Path(tempfile.mkdtemp())
         cls.dset = Dataset(cls.tempdir, cls.param)
 
-    @classmethod
+    @ classmethod
     def tearDownClass(cls):
         shutil.rmtree(cls.tempdir)
 
