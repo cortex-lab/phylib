@@ -18,6 +18,7 @@ import unittest
 import numpy as np
 import numpy.random as npr
 from numpy.testing import assert_allclose as ac
+from pytest import raises
 
 from .conftest import Dataset
 from .. import loader as l
@@ -29,12 +30,32 @@ logger = logging.getLogger(__name__)
 # Test loading helpers
 #------------------------------------------------------------------------------
 
+# Spike times
+#------------
+
 def test_load_spike_times_ks2():
     ac(l._load_spike_times_ks2([0, 10, 100], 10.), [0, 1, 10])
 
 
 def test_load_spike_times_alf():
     ac(l._load_spike_times_alf([0., 1., 10.]), [0, 1, 10])
+
+
+def test_validate_spike_times():
+    wrong = [[-1, 1], [2, 3, 7, 5]]
+    sr = 10
+    for st in wrong:
+        with raises(ValueError):
+            l._load_spike_times_ks2(st, sr)
+        with raises(ValueError):
+            l._load_spike_times_alf(st)
+
+
+# Spike templates
+#----------------
+
+def test_load_spike_templates():
+    ac(l._load_spike_templates([0, 0, 5, -1]), [0, 0, 5, -1])
 
 
 #------------------------------------------------------------------------------

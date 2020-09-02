@@ -1,12 +1,20 @@
 # -*- coding: utf-8 -*-
 
-"""Template model loading functions."""
+"""Template model loading functions.
+
+Supported file formats:
+
+- KS2
+- ALF
+
+"""
 
 
 #------------------------------------------------------------------------------
 # Imports
 #------------------------------------------------------------------------------
 
+from functools import wraps
 import logging
 import os
 import os.path as op
@@ -77,26 +85,64 @@ def read_params(params_path):
 
 
 #------------------------------------------------------------------------------
+# Validators
+#------------------------------------------------------------------------------
+
+def validate_spike_times(f):
+    @wraps(f)
+    def wrapped(*args, **kwargs):
+        out = f(*args, **kwargs)
+        assert isinstance(out, np.ndarray)
+        assert out.dtype == np.float64
+        if not np.all(out >= 0):
+            raise ValueError("The spike times must be positive.")
+        if not np.all(np.diff(out) >= 0):
+            raise ValueError("The spike times must be increasing.")
+        return out
+    return wrapped
+
+
+def validate_spike_templates(f):
+    @wraps(f)
+    def wrapped(*args, **kwargs):
+        out = f(*args, **kwargs)
+        assert isinstance(out, np.ndarray)
+        assert out.dtype == np.int64
+        uc = np.unique(out)
+        if np.max(uc) - np.min(uc) + 1 != uc.size:
+            logger.warning(
+                "Unreferenced clusters found in templates (generally not a problem)")
+        return out
+    return wrapped
+
+
+#------------------------------------------------------------------------------
 # Loading functions
 #------------------------------------------------------------------------------
 
-"""
-Supported file formats are:
+# Spike times
+#------------
 
-- KS2
-- ALF
-
-"""
-
-
+@validate_spike_times
 def _load_spike_times_ks2(spike_samples, sample_rate):
     """Corresponds to spike_times.npy"""
     return np.asarray(spike_samples, dtype=np.float64) / float(sample_rate)
 
 
+@validate_spike_times
 def _load_spike_times_alf(spike_times):
     """Corresponds to spikes.times.npy"""
     return np.asarray(spike_times, dtype=np.float64)
+
+
+# Spike templates
+#----------------
+
+@validate_spike_templates
+def _load_spike_templates(spike_templates):
+    """Corresponds to spike_templates.npy, spike_clusters.npy, spikes.templates.npy,
+    spikes.clusters.npy"""
+    return np.asarray(spike_templates, dtype=np.int64)
 
 
 #------------------------------------------------------------------------------
