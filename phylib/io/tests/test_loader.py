@@ -98,6 +98,16 @@ def test_load_template_waveforms_alf():
     assert tw.cols.shape == (ns, nc)
 
 
+def test_load_spike_waveforms_alf():
+    ns, nw, nc = 3, 4, 2
+    w = npr.randn(ns, nw, nc)
+    ch = npr.permutation(ns * nc).reshape((ns, nc))
+    tw = l._load_spike_waveforms_alf(w, ch, [2, 3, 5])
+    assert tw.data.shape == (ns, nw, nc)
+    assert tw.cols.shape == (ns, nc)
+    assert tw.rows.shape == (ns,)
+
+
 #------------------------------------------------------------------------------
 # Test loading functions
 #------------------------------------------------------------------------------

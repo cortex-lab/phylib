@@ -182,7 +182,7 @@ def validate_channel_probes(f):
     return wrapped
 
 
-def validate_template_waveforms(f):
+def validate_waveforms(f):
     @wraps(f)
     def wrapped(*args, **kwargs):
         out = f(*args, **kwargs)
@@ -190,13 +190,20 @@ def validate_template_waveforms(f):
         assert isinstance(out.data, np.ndarray)
         assert out.data.dtype in (np.float32, np.float64)
         assert out.data.ndim == 3
-        n_templates, n_samples, n_channels_loc = out.data.shape
+        n_waveforms, n_samples, n_channels_loc = out.data.shape
 
         assert isinstance(out.cols, np.ndarray)
         assert out.cols.dtype == np.int32
         assert out.cols.ndim == 2
         assert np.all(out.cols >= -1)
-        assert out.cols.shape == (n_templates, n_channels_loc)
+        assert out.cols.shape == (n_waveforms, n_channels_loc)
+
+        if 'rows' in out:
+            assert isinstance(out.rows, np.ndarray)
+            assert out.rows.dtype == np.int32
+            assert out.rows.ndim == 1
+            assert np.all(out.rows >= -1)
+            assert out.rows.shape == (n_waveforms,)
 
         return out
     return wrapped
@@ -265,17 +272,31 @@ def _load_channel_probes(channel_probes):
 # Templates
 #----------
 
-@validate_template_waveforms
-def _load_template_waveforms_alf(t_waveforms, t_channels):
-    t_waveforms = np.asarray(t_waveforms, dtype=np.float64)
-    t_waveforms = np.atleast_3d(t_waveforms)
+@validate_waveforms
+def _load_template_waveforms_alf(waveforms, channels):
+    waveforms = np.asarray(waveforms, dtype=np.float32)
+    waveforms = np.atleast_3d(waveforms)
 
-    t_channels = np.asarray(t_channels, dtype=np.int32)
-    t_channels = np.atleast_2d(t_channels)
-    if t_channels.ndim != 2:  # pragma: no cover
-        t_channels = t_channels.T
+    channels = np.asarray(channels, dtype=np.int32)
+    channels = np.atleast_2d(channels)
+    if channels.ndim != 2:  # pragma: no cover
+        channels = channels.T
 
-    return Bunch(data=t_waveforms, cols=t_channels)
+    return Bunch(data=waveforms, cols=channels)
+
+
+@validate_waveforms
+def _load_spike_waveforms_alf(waveforms, channels, spikes):
+    waveforms = np.asarray(waveforms, dtype=np.float64)
+    waveforms = np.atleast_3d(waveforms)
+
+    channels = np.asarray(channels, dtype=np.int32)
+    channels = np.atleast_2d(channels)
+    if channels.ndim != 2:  # pragma: no cover
+        channels = channels.T
+
+    spikes = np.asarray(spikes, dtype=np.int32)
+    return Bunch(data=waveforms, cols=channels, rows=spikes)
 
 
 #------------------------------------------------------------------------------
