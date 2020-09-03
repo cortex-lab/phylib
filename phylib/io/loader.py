@@ -209,6 +209,33 @@ def validate_waveforms(f):
     return wrapped
 
 
+def validate_features(f):
+    @wraps(f)
+    def wrapped(*args, **kwargs):
+        out = f(*args, **kwargs)
+
+        assert isinstance(out.data, np.ndarray)
+        assert out.data.dtype in (np.float32, np.float64)
+        assert out.data.ndim == 3
+        n_waveforms, n_channels_loc, n_pcs = out.data.shape
+
+        assert isinstance(out.cols, np.ndarray)
+        assert out.cols.dtype == np.int32
+        assert out.cols.ndim == 2
+        assert np.all(out.cols >= -1)
+        assert out.cols.shape == (n_waveforms, n_channels_loc)
+
+        if 'rows' in out:
+            assert isinstance(out.rows, np.ndarray)
+            assert out.rows.dtype == np.int32
+            assert out.rows.ndim == 1
+            assert np.all(out.rows >= -1)
+            assert out.rows.shape == (n_waveforms,)
+
+        return out
+    return wrapped
+
+
 #------------------------------------------------------------------------------
 # Loading functions
 #------------------------------------------------------------------------------
@@ -286,7 +313,7 @@ def _load_template_waveforms_alf(waveforms, channels):
 
 
 @validate_waveforms
-def _load_spike_waveforms_alf(waveforms, channels, spikes):
+def _load_spike_waveforms(waveforms, channels, spikes):
     waveforms = np.asarray(waveforms, dtype=np.float64)
     waveforms = np.atleast_3d(waveforms)
 
@@ -297,6 +324,24 @@ def _load_spike_waveforms_alf(waveforms, channels, spikes):
 
     spikes = np.asarray(spikes, dtype=np.int32)
     return Bunch(data=waveforms, cols=channels, rows=spikes)
+
+
+# Features
+#----------
+
+@validate_features
+def _load_features(features, channels=None, spikes=None):
+    features = np.asarray(features, dtype=np.float32)
+    features = np.atleast_3d(features)
+
+    if channels is not None:
+        channels = np.asarray(channels, dtype=np.int32)
+        channels = np.atleast_2d(channels)
+
+    if spikes is not None:
+        spikes = np.asarray(spikes, dtype=np.int32)
+
+    return Bunch(data=features, cols=channels, rows=spikes)
 
 
 #------------------------------------------------------------------------------
