@@ -121,6 +121,16 @@ def test_load_features():
     assert fet.rows.shape == (ns,)
 
 
+def test_load_template_features():
+    ns, nc = 3, 4
+    w = npr.randn(ns, nc)
+    ch = npr.permutation(2 * nc).reshape((2, nc))
+    fet = l._load_template_features(w, ch, [2, 3, 5])
+    assert fet.data.shape == (ns, nc)
+    assert fet.cols.shape == (2, nc)
+    assert fet.rows.shape == (ns,)
+
+
 #------------------------------------------------------------------------------
 # Test loading functions
 #------------------------------------------------------------------------------

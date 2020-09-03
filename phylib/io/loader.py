@@ -236,6 +236,34 @@ def validate_features(f):
     return wrapped
 
 
+def validate_template_features(f):
+    @wraps(f)
+    def wrapped(*args, **kwargs):
+        out = f(*args, **kwargs)
+
+        assert isinstance(out.data, np.ndarray)
+        assert out.data.dtype in (np.float32, np.float64)
+        assert out.data.ndim == 2
+        n_spikes, n_channels_loc = out.data.shape
+
+        assert isinstance(out.cols, np.ndarray)
+        assert out.cols.dtype == np.int32
+        assert out.cols.ndim == 2
+        assert np.all(out.cols >= -1)
+        # NOTE: the first axis has n_templates rows rather than n_spikes rows
+        assert out.cols.shape[1] == n_channels_loc
+
+        if 'rows' in out:
+            assert isinstance(out.rows, np.ndarray)
+            assert out.rows.dtype == np.int32
+            assert out.rows.ndim == 1
+            assert np.all(out.rows >= -1)
+            assert out.rows.shape == (n_spikes,)
+
+        return out
+    return wrapped
+
+
 #------------------------------------------------------------------------------
 # Loading functions
 #------------------------------------------------------------------------------
@@ -333,6 +361,21 @@ def _load_spike_waveforms(waveforms, channels, spikes):
 def _load_features(features, channels=None, spikes=None):
     features = np.asarray(features, dtype=np.float32)
     features = np.atleast_3d(features)
+
+    if channels is not None:
+        channels = np.asarray(channels, dtype=np.int32)
+        channels = np.atleast_2d(channels)
+
+    if spikes is not None:
+        spikes = np.asarray(spikes, dtype=np.int32)
+
+    return Bunch(data=features, cols=channels, rows=spikes)
+
+
+@validate_template_features
+def _load_template_features(features, channels=None, spikes=None):
+    features = np.asarray(features, dtype=np.float32)
+    features = np.atleast_2d(features)
 
     if channels is not None:
         channels = np.asarray(channels, dtype=np.int32)
