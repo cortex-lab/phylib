@@ -23,6 +23,7 @@ import shutil
 
 import numpy as np
 
+from phylib.utils import Bunch
 from phylib.utils._misc import read_python
 from phylib.utils.geometry import linear_positions
 
@@ -181,6 +182,26 @@ def validate_channel_probes(f):
     return wrapped
 
 
+def validate_template_waveforms(f):
+    @wraps(f)
+    def wrapped(*args, **kwargs):
+        out = f(*args, **kwargs)
+
+        assert isinstance(out.data, np.ndarray)
+        assert out.data.dtype in (np.float32, np.float64)
+        assert out.data.ndim == 3
+        n_templates, n_samples, n_channels_loc = out.data.shape
+
+        assert isinstance(out.cols, np.ndarray)
+        assert out.cols.dtype == np.int32
+        assert out.cols.ndim == 2
+        assert np.all(out.cols >= -1)
+        assert out.cols.shape == (n_templates, n_channels_loc)
+
+        return out
+    return wrapped
+
+
 #------------------------------------------------------------------------------
 # Loading functions
 #------------------------------------------------------------------------------
@@ -239,6 +260,22 @@ def _load_channel_shanks(channel_shanks):
 def _load_channel_probes(channel_probes):
     """Corresponds to channel_probes.npy"""
     return np.asarray(channel_probes, dtype=np.int32).ravel()
+
+
+# Templates
+#----------
+
+@validate_template_waveforms
+def _load_template_waveforms_alf(t_waveforms, t_channels):
+    t_waveforms = np.asarray(t_waveforms, dtype=np.float64)
+    t_waveforms = np.atleast_3d(t_waveforms)
+
+    t_channels = np.asarray(t_channels, dtype=np.int32)
+    t_channels = np.atleast_2d(t_channels)
+    if t_channels.ndim != 2:  # pragma: no cover
+        t_channels = t_channels.T
+
+    return Bunch(data=t_waveforms, cols=t_channels)
 
 
 #------------------------------------------------------------------------------
