@@ -8,14 +8,14 @@
 #------------------------------------------------------------------------------
 
 import logging
-import os
-import os.path as op
+# import os
+# import os.path as op
 from pathlib import Path
 import shutil
 import tempfile
 import unittest
 
-import numpy as np
+# import numpy as np
 import numpy.random as npr
 from numpy.testing import assert_allclose as ac
 from pytest import raises

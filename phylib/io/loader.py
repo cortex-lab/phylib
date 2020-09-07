@@ -16,12 +16,13 @@ Supported file formats:
 
 from functools import wraps
 import logging
-import os
+# import os
 import os.path as op
 from pathlib import Path
-import shutil
+# import shutil
 
 import numpy as np
+import scipy.io as sio
 
 from phylib.utils import Bunch
 from phylib.utils._misc import read_python
