@@ -399,6 +399,7 @@ def _times_in_chunks(times, chunks_kept):
 
 class SpikeSelector(object):
     """Select a given number of spikes per cluster among a subset of the chunks."""
+
     def __init__(
             self, get_spikes_per_cluster=None, spike_times=None,
             chunk_bounds=None, n_chunks_kept=None):

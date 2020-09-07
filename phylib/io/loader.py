@@ -325,6 +325,36 @@ def validate_similarity_matrix(f):
 
 
 #------------------------------------------------------------------------------
+# Computations
+#------------------------------------------------------------------------------
+
+@validate_depths
+def _compute_spike_depths_from_features(features, spike_templates, channel_pos, batch=50_000):
+    ns, nch, nf = features.data.shape
+    n_batches = int(np.ceil(ns / float(batch)))
+    assert ns > 0
+    assert n_batches > 0
+
+    depths = np.zeros(ns, dtype=np.float64)
+    for b in range(n_batches):
+        spk = slice(b * batch, (b + 1) * batch)
+        assert b * batch < ns
+
+        fet = np.maximum(features.data[spk, :, 0], 0) ** 2
+        ch = features.cols[spike_templates[spk]] if features.get('cols', None) is not None \
+            else np.tile(np.arange(nch), (fet.shape[0], 1))
+        ypos = channel_pos[ch, 1]
+        assert ypos.shape == (fet.shape[0], nch)
+
+        with np.errstate(all='ignore'):
+            d = np.sum(np.transpose(ypos * fet) / np.sum(fet, axis=1), axis=0)
+            d[np.isnan(d)] = 0
+            depths[spk] = d
+
+    return depths
+
+
+#------------------------------------------------------------------------------
 # Loading functions
 #------------------------------------------------------------------------------
 

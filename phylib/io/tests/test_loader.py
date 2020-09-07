@@ -21,9 +21,34 @@ from numpy.testing import assert_allclose as ac
 from pytest import raises
 
 from .conftest import Dataset
+from phylib.utils import Bunch
 from .. import loader as l
 
 logger = logging.getLogger(__name__)
+
+
+#------------------------------------------------------------------------------
+# Test computations
+#------------------------------------------------------------------------------
+
+def test_compute_spike_depths_from_features():
+    ns, nc, nf = 4, 3, 2
+
+    fet = 5 + npr.randn(ns, nc, nf)
+    ch = np.tile(np.arange(nc), (ns, 1))
+    features = Bunch(data=fet, cols=ch)
+
+    st = [0, 0, 1, 1]
+    channel_pos = np.array([[0, 100], [0, 200], [0, 300]])
+
+    features_dense = Bunch(data=fet)
+    for batch in (50_000, 2):
+        for F in (features, features_dense):
+            sd = l._compute_spike_depths_from_features(F, st, channel_pos, batch=batch)
+            assert sd.dtype == np.float64
+            assert sd.ndim == 1
+            assert sd.shape == (ns,)
+            assert np.all((10 <= sd) & (sd <= 1000))
 
 
 #------------------------------------------------------------------------------
