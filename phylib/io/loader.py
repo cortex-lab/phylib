@@ -294,6 +294,23 @@ def validate_depths(f):
     return wrapped
 
 
+def validate_whitening_matrix(f):
+    @wraps(f)
+    def wrapped(*args, **kwargs):
+        wm, wmi = f(*args, **kwargs)
+        assert isinstance(wm, np.ndarray)
+        assert isinstance(wmi, np.ndarray)
+        assert wm.ndim == wmi.ndim == 2
+        assert wm.shape == wmi.shape
+        assert wm.shape[0] == wm.shape[1]
+        assert wm.dtype == wmi.dtype == np.float64
+        assert np.all(~np.isnan(wm))
+        assert np.all(~np.isnan(wmi))
+        assert np.allclose(wm @ wmi, np.eye(wm.shape[0]))
+        return wm, wmi
+    return wrapped
+
+
 #------------------------------------------------------------------------------
 # Loading functions
 #------------------------------------------------------------------------------
@@ -321,6 +338,13 @@ def _load_spike_templates(spike_templates):
     """Corresponds to spike_templates.npy, spike_clusters.npy, spikes.templates.npy,
     spikes.clusters.npy"""
     return np.asarray(spike_templates, dtype=np.int64).ravel()
+
+
+# Spike reorder
+# -------------
+
+def _load_spike_reorder_ks2(spike_reorder, sample_rate):
+    return _load_spike_times_ks2(spike_reorder, sample_rate)
 
 
 # Channels
@@ -435,6 +459,21 @@ def _load_depths_alf(depths):
     return np.asarray(depths, dtype=np.float64).ravel()
 
 
+# Whitening matrix
+# ----------------
+
+@validate_whitening_matrix
+def _load_whitening_matrix(wm, inverse=None):
+    wm = np.asarray(wm, dtype=np.float64)
+    wm = np.atleast_2d(wm)
+    if inverse:
+        wmi = wm
+        wm = np.linalg.inv(wm)
+    else:
+        wmi = np.linalg.inv(wm)
+    return wm, wmi
+
+
 #------------------------------------------------------------------------------
 # Loading classes
 #------------------------------------------------------------------------------
@@ -449,8 +488,13 @@ class BaseTemplateLoader(object):
         self.data_dir = Path(data_dir).resolve()
         assert self.data_dir.exists()
         assert self.data_dir.is_dir()
-
         self.params = self.read_params()
+        # TODO
+        # self.check()
+
+    def check(self):
+        """Check consistency of all arrays and model variables."""
+        # TODO
 
     def ar(self, fn, mmap_mode=None):
         return read_array(self.data_dir / fn, mmap_mode=mmap_mode)

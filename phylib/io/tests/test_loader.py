@@ -15,7 +15,7 @@ import shutil
 import tempfile
 import unittest
 
-# import numpy as np
+import numpy as np
 import numpy.random as npr
 from numpy.testing import assert_allclose as ac
 from pytest import raises
@@ -35,6 +35,7 @@ logger = logging.getLogger(__name__)
 
 def test_load_spike_times_ks2():
     ac(l._load_spike_times_ks2([0, 10, 100], 10.), [0, 1, 10])
+    ac(l._load_spike_reorder_ks2([0, 10, 100], 10.), [0, 1, 10])
 
 
 def test_load_spike_times_alf():
@@ -149,6 +150,21 @@ def test_load_depths_alf():
     ac(l._load_depths_alf(depths), depths)
     with raises(Exception):
         l._load_depths_alf([-1])
+
+
+# Whitening matrix
+# ----------------
+
+def test_load_whitening_matrix():
+    wm0 = npr.randn(5, 5)
+
+    wm, wmi = l._load_whitening_matrix(wm0, inverse=False)
+    ac(wm, wm0)
+    ac(wm @ wmi, np.eye(5), atol=1e-10)
+
+    wm, wmi = l._load_whitening_matrix(wm0, inverse=True)
+    ac(wmi, wm0)
+    ac(wm @ wmi, np.eye(5), atol=1e-10)
 
 
 #------------------------------------------------------------------------------
