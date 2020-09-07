@@ -264,6 +264,20 @@ def validate_template_features(f):
     return wrapped
 
 
+def validate_amplitudes(f):
+    """Amplitudes must be in volts."""
+    @wraps(f)
+    def wrapped(*args, **kwargs):
+        out = f(*args, **kwargs)
+        assert isinstance(out, np.ndarray)
+        assert out.dtype == np.float64
+        assert out.ndim == 1
+        assert np.all(out >= 0)
+        assert np.all(out <= 1)  # in volts
+        return out
+    return wrapped
+
+
 #------------------------------------------------------------------------------
 # Loading functions
 #------------------------------------------------------------------------------
@@ -385,6 +399,15 @@ def _load_template_features(features, channels=None, spikes=None):
         spikes = np.asarray(spikes, dtype=np.int32)
 
     return Bunch(data=features, cols=channels, rows=spikes)
+
+
+# Amplitudes
+# ----------
+
+@validate_amplitudes
+def _load_spike_amplitudes_alf(amplitudes):
+    """Corresponds to spikes.amps.npy. Already in volts."""
+    return np.asarray(amplitudes, dtype=np.float64).ravel()
 
 
 #------------------------------------------------------------------------------
