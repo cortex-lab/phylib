@@ -167,6 +167,15 @@ def test_load_whitening_matrix():
     ac(wm @ wmi, np.eye(5), atol=1e-10)
 
 
+# Template similarity matrix
+# --------------------------
+
+def test_load_similarity_matrix():
+    mat0 = npr.randn(5, 5)
+    mat = l._load_similarity_matrix(mat0)
+    ac(mat, mat0)
+
+
 #------------------------------------------------------------------------------
 # Test loading functions
 #------------------------------------------------------------------------------

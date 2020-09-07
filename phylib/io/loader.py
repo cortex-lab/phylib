@@ -311,6 +311,19 @@ def validate_whitening_matrix(f):
     return wrapped
 
 
+def validate_similarity_matrix(f):
+    @wraps(f)
+    def wrapped(*args, **kwargs):
+        out = f(*args, **kwargs)
+        assert isinstance(out, np.ndarray)
+        assert out.ndim == 2
+        assert out.shape[0] == out.shape[1]
+        assert out.dtype == np.float64
+        assert np.all(~np.isnan(out))
+        return out
+    return wrapped
+
+
 #------------------------------------------------------------------------------
 # Loading functions
 #------------------------------------------------------------------------------
@@ -472,6 +485,16 @@ def _load_whitening_matrix(wm, inverse=None):
     else:
         wmi = np.linalg.inv(wm)
     return wm, wmi
+
+
+# Similarity matrix
+# -----------------
+
+@validate_similarity_matrix
+def _load_similarity_matrix(mat):
+    mat = np.asarray(mat, dtype=np.float64)
+    mat = np.atleast_2d(mat)
+    return mat
 
 
 #------------------------------------------------------------------------------
