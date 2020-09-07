@@ -134,9 +134,21 @@ def test_load_template_features():
 # Amplitudes
 # ----------
 
-def test_load_spike_amplitudes_alf():
+def test_load_amplitudes_alf():
     amp = npr.uniform(low=1e-4, high=1e-2, size=10)
-    ac(l._load_spike_amplitudes_alf(amp), amp)
+    ac(l._load_amplitudes_alf(amp), amp)
+    with raises(Exception):
+        l._load_amplitudes_alf([-1])
+
+
+# Depths
+# ------
+
+def test_load_depths_alf():
+    depths = npr.uniform(low=0, high=1e3, size=10)
+    ac(l._load_depths_alf(depths), depths)
+    with raises(Exception):
+        l._load_depths_alf([-1])
 
 
 #------------------------------------------------------------------------------

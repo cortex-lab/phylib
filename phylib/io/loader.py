@@ -273,7 +273,22 @@ def validate_amplitudes(f):
         assert out.dtype == np.float64
         assert out.ndim == 1
         assert np.all(out >= 0)
-        assert np.all(out <= 1)  # in volts
+        if np.any(out >= 1):
+            logger.warning("There are %d amplitudes >= 1 volt" % (out >= 1).sum())
+        return out
+    return wrapped
+
+
+def validate_depths(f):
+    """Depths must be in microns."""
+    @wraps(f)
+    def wrapped(*args, **kwargs):
+        out = f(*args, **kwargs)
+        assert isinstance(out, np.ndarray)
+        assert out.dtype == np.float64
+        assert out.ndim == 1
+        assert np.all(out >= 0)
+        assert np.all(out <= 1e5)  # in microns
         return out
     return wrapped
 
@@ -405,9 +420,18 @@ def _load_template_features(features, channels=None, spikes=None):
 # ----------
 
 @validate_amplitudes
-def _load_spike_amplitudes_alf(amplitudes):
-    """Corresponds to spikes.amps.npy. Already in volts."""
+def _load_amplitudes_alf(amplitudes):
+    """Corresponds to spikes.amps.npy, templates.amps.npy. Already in volts."""
     return np.asarray(amplitudes, dtype=np.float64).ravel()
+
+
+# Depths
+# ------
+
+@validate_depths
+def _load_depths_alf(depths):
+    """Corresponds to spikes.depths.npy, templates.depths.npy. In microns."""
+    return np.asarray(depths, dtype=np.float64).ravel()
 
 
 #------------------------------------------------------------------------------
