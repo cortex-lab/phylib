@@ -25,6 +25,7 @@ import numpy as np
 import scipy.io as sio
 
 from phylib.utils import Bunch
+from phylib.io.array import _index_of
 from phylib.utils._misc import read_python
 from phylib.utils.geometry import linear_positions
 
@@ -352,6 +353,128 @@ def _compute_spike_depths_from_features(features, spike_templates, channel_pos, 
             depths[spk] = d
 
     return depths
+
+
+def _unwhiten_template_waveform(waveform, channels, unw_mat=None, n_channels=None):
+    assert n_channels > 0
+    ns, nc = waveform.shape
+    assert channels.shape == (nc,)
+    assert n_channels <= nc
+
+    # Remove unused channels.
+    channels_k = channels[channels >= 0]
+    nck = len(channels_k)
+    assert (nck <= nc)
+    if nck == 0:  # pragma: no cover
+        return None
+    waveform_n = waveform[:, _index_of(channels_k, channels)]
+    channels = channels_k
+
+    # Unwhitening
+    mat = unw_mat[np.ix_(channels_k, channels_k)]
+    assert np.sum(np.isnan(mat.ravel())) == 0
+    assert waveform.shape[1] == mat.shape[0] == mat.shape[1]
+    waveform_n = waveform_n @ mat
+    assert waveform_n.shape[1] == mat.shape[0]
+
+    # Select the channels with signal.
+    # HACK: transpose is a work-around this NumPy issue
+    # https://stackoverflow.com/a/35020886/1595060
+    amplitude_threshold = .25  # TODO: param
+    amplitude = waveform_n.max(axis=0) - waveform_n.min(axis=0)
+    assert amplitude.shape == (nck,)
+    assert np.all(amplitude >= 0)
+    has_signal = amplitude > amplitude.max() * amplitude_threshold
+    if has_signal.sum() == 0:
+        return None
+
+    # Remove channels with no signal.
+    channels_k = channels_k[has_signal]
+    nck = len(channels_k)
+    amplitude = amplitude[has_signal]
+    assert amplitude.shape == (nck,)
+    if nck == 0:  # pragma: no cover
+        return None
+
+    # Reorder the channels by decreasing amplitude.
+    reorder = np.argsort(amplitude)[::-1]
+    assert reorder.shape == (nck,)
+    channels_k = channels_k[reorder]
+    assert channels_k.shape == (nck,)
+    waveform_n = waveform_n[:, _index_of(channels_k, channels)]
+    assert np.all(np.diff(waveform_n.max(axis=0) - waveform_n.min(axis=0)) <= 0)
+
+    # Keep the requested number of channels.
+    waveform_n = waveform_n[:, :n_channels]
+    assert waveform_n.shape == (ns, n_channels)
+    assert channels.shape == (n_channels,)
+
+    return waveform_n, channels
+
+
+@validate_waveforms
+def _normalize_templates_waveforms(
+        waveforms, channels, amplitudes=None, n_channels=None, spike_templates=None,
+        unw_mat=None, ampfactor=None):
+
+    # Input validation.
+    if not ampfactor:
+        logger.warning("No ampfactor provided, conversion to physical units impossible")
+        ampfactor = 1
+    assert n_channels > 0
+    if unw_mat is None:
+        logger.warning(
+            "No unwhitening matrix provided")
+        unw_mat = np.eye(channels.max() + 1)
+    assert amplitudes is not None
+    assert spike_templates is not None
+    waveforms = np.asarray(waveforms, dtype=np.float32)
+    nt, ns, nc = waveforms.shape
+    channels = np.asarray(channels, dtype=np.int32)
+    assert channels.shape == (nt, nc)
+    amplitudes = np.asarray(amplitudes, dtype=np.float64)
+    spike_templates = np.asarray(spike_templates, dtype=np.int32)
+    assert amplitudes.shape == spike_templates.shape
+
+    # Create the output arrays.
+    waveforms_n = np.zeros((nt, ns, n_channels), dtype=np.float32)
+    channels_n = np.zeros((nt, n_channels), dtype=np.int32)
+
+    # Unwhitening
+    # -----------
+    # Unwhiten all templates, select the channels with some signal, and reorder the channels
+    # by decreasing waveform amplitude.
+    for i in range(nt):
+        wc = _unwhiten_template_waveform(
+            waveforms[i], channels[i], n_channels=n_channels,
+            unw_mat=unw_mat)
+        if wc is not None:
+            waveforms_n[i, ...], channels_n[i] = wc
+
+    # Convert into physical units
+    # ---------------------------
+    # The amplitude on each channel is the positive peak minus the negative
+    # The template arbitrary unit amplitude is the amplitude of its largest channel
+
+    templates_amps = np.max(
+        np.max(waveforms_n, axis=1) - np.min(waveforms_n, axis=1), axis=1)
+    spike_amps = templates_amps[spike_templates] * amplitudes
+    with np.errstate(all='ignore'):
+        # take the average spike amplitude per template
+        templates_amps_v = (np.bincount(spike_templates, weights=spike_amps) /
+                            np.bincount(spike_templates))
+        # scale back the template according to the spikes units
+        waveforms_n *= ampfactor * (templates_amps_v / templates_amps)[:, None, None]
+    waveforms_n[np.isnan(waveforms_n)] = 0
+    assert np.isnan(waveforms_n).sum() == 0
+
+    out = Bunch(
+        data=waveforms_n,
+        cols=channels,
+        spike_amps=spike_amps * ampfactor,
+        template_amps=templates_amps_v * ampfactor,
+    )
+    return out
 
 
 #------------------------------------------------------------------------------

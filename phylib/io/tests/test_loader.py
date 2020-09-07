@@ -51,6 +51,25 @@ def test_compute_spike_depths_from_features():
             assert np.all((10 <= sd) & (sd <= 1000))
 
 
+def test_normalize_templates_waveforms():
+    nt, nw, nc = 3, 4, 2
+    w = npr.randn(nt, nw, nc)
+    ch = npr.permutation(nt * nc).reshape((nt, nc))
+    ns = 6
+    amp = [1, 1, 2, 2, 3, 5]
+    st = [0, 0, 1, 1, 2, 2]
+    tw = l._normalize_templates_waveforms(
+        w, ch, amplitudes=amp, n_channels=nc, spike_templates=st)
+
+    assert tw.data.shape == (nt, nw, nc)
+    assert tw.cols.shape == (nt, nc)
+    assert tw.spike_amps.shape == (ns,)
+    assert tw.template_amps.shape == (nt,)
+
+    assert np.all(tw.spike_amps > 0)
+    assert np.all(tw.template_amps > 0)
+
+
 #------------------------------------------------------------------------------
 # Test loading helpers
 #------------------------------------------------------------------------------
