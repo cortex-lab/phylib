@@ -100,7 +100,7 @@ DATASETS = {
     ],
 }
 
-DATASETS_PARAMS = ('dense', 'sparse', 'misc', 'alf')
+DATASETS_PARAMS = ('dense', 'sparse', 'misc', 'alf', 'ks2')
 
 
 def _remove(path):

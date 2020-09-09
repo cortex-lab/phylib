@@ -28,6 +28,25 @@ logger = logging.getLogger(__name__)
 
 
 #------------------------------------------------------------------------------
+# Test format utils
+#------------------------------------------------------------------------------
+
+def test_are_templates_dense(dset):
+    if dset.param == 'ks2':
+        assert l._are_templates_dense(dset.tempdir)
+
+
+def test_are_features_dense(dset):
+    if dset.param == 'ks2':
+        assert not l._are_features_dense(dset.tempdir)
+
+
+def test_are_template_features_dense(dset):
+    if dset.param == 'ks2':
+        assert not l._are_template_features_dense(dset.tempdir)
+
+
+#------------------------------------------------------------------------------
 # Test computations
 #------------------------------------------------------------------------------
 

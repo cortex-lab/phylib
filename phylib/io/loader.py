@@ -94,6 +94,49 @@ def _all_positions_distinct(positions):
 
 
 #------------------------------------------------------------------------------
+# File format detection
+#------------------------------------------------------------------------------
+
+def _which_format(dir_path):
+    st_path_ks2 = Path(dir_path) / 'spike_times.npy'
+    st_path_alf = Path(dir_path) / 'spikes.times.npy'
+    if st_path_ks2.exists():
+        return 'ks2'
+    elif st_path_alf.exists():
+        return 'alf'
+    raise IOError("Unknown file format")
+
+
+def _is_dense(arr_path, ind_path):
+    if not ind_path.exists():
+        return True
+    ind = read_array(ind_path, mmap_mode='r')
+    # HACK: even if template_ind.npy exists, it may be trivial (containing all channels)
+    # in which case the templates are to be considered dense and not sparse
+    if np.allclose(ind - np.arange(ind.shape[1])[np.newaxis, :], 0):
+        return True
+    return False
+
+
+def _are_templates_dense(dir_path):
+    # only for KS2 datasets
+    return _is_dense(
+        Path(dir_path) / 'templates.npy', Path(dir_path) / 'templates_ind.npy')
+
+
+def _are_features_dense(dir_path):
+    # only for KS2 datasets
+    return _is_dense(
+        Path(dir_path) / 'pc_features.npy', Path(dir_path) / 'pc_feature_ind.npy')
+
+
+def _are_template_features_dense(dir_path):
+    # only for KS2 datasets
+    return _is_dense(
+        Path(dir_path) / 'template_features.npy', Path(dir_path) / 'template_feature_ind.npy')
+
+
+#------------------------------------------------------------------------------
 # Validators
 #------------------------------------------------------------------------------
 
