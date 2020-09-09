@@ -355,7 +355,9 @@ def _compute_spike_depths_from_features(features, spike_templates, channel_pos, 
     return depths
 
 
-def _unwhiten_template_waveform(waveform, channels, unw_mat=None, n_channels=None):
+def _unwhiten_template_waveform(
+        waveform, channels, unw_mat=None, n_channels=None,
+        amplitude_threshold=None):
     assert n_channels > 0
     ns, nc = waveform.shape
     assert channels.shape == (nc,)
@@ -380,7 +382,7 @@ def _unwhiten_template_waveform(waveform, channels, unw_mat=None, n_channels=Non
     # Select the channels with signal.
     # HACK: transpose is a work-around this NumPy issue
     # https://stackoverflow.com/a/35020886/1595060
-    amplitude_threshold = .25  # TODO: param
+    amplitude_threshold = .25 if amplitude_threshold is None else amplitude_threshold
     amplitude = waveform_n.max(axis=0) - waveform_n.min(axis=0)
     assert amplitude.shape == (nck,)
     assert np.all(amplitude >= 0)
@@ -415,7 +417,7 @@ def _unwhiten_template_waveform(waveform, channels, unw_mat=None, n_channels=Non
 @validate_waveforms
 def _normalize_templates_waveforms(
         waveforms, channels, amplitudes=None, n_channels=None, spike_templates=None,
-        unw_mat=None, ampfactor=None):
+        unw_mat=None, ampfactor=None, amplitude_threshold=None):
 
     # Input validation.
     if not ampfactor:
@@ -447,7 +449,7 @@ def _normalize_templates_waveforms(
     for i in range(nt):
         wc = _unwhiten_template_waveform(
             waveforms[i], channels[i], n_channels=n_channels,
-            unw_mat=unw_mat)
+            unw_mat=unw_mat, amplitude_threshold=amplitude_threshold)
         if wc is not None:
             waveforms_n[i, ...], channels_n[i] = wc
 

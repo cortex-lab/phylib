@@ -913,8 +913,11 @@ class TemplateModel(object):
 
             with np.errstate(all='ignore'):
                 # take the average spike amplitude per template
-                templates_amps_v = (np.bincount(self.spike_templates, weights=spike_amps) /
-                                    np.bincount(self.spike_templates))
+                templates_amps_v = (
+                    np.bincount(self.spike_templates,
+                                weights=spike_amps, minlength=len(templates_amps_au)) /
+                    np.bincount(self.spike_templates, minlength=len(templates_amps_au)))
+                assert templates_amps_v.shape[0] == templates_amps_au.shape[0]
                 # scale back the template according to the spikes units
                 templates_physical_unit = templates_wfs * (templates_amps_v / templates_amps_au
                                                            )[:, np.newaxis, np.newaxis]

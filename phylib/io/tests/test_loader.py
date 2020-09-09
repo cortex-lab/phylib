@@ -59,7 +59,7 @@ def test_normalize_templates_waveforms():
     amp = [1, 1, 2, 2, 3, 5]
     st = [0, 0, 1, 1, 2, 2]
     tw = l._normalize_templates_waveforms(
-        w, ch, amplitudes=amp, n_channels=nc, spike_templates=st)
+        w, ch, amplitudes=amp, n_channels=nc, spike_templates=st, amplitude_threshold=0)
 
     assert tw.data.shape == (nt, nw, nc)
     assert tw.cols.shape == (nt, nc)
