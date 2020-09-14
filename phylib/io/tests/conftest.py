@@ -168,6 +168,9 @@ class Dataset(object):
     def path(self, name):
         return self.tempdir / name
 
+    def load(self, name):
+        return np.load(self.path(name))
+
     def copy(self):
         paths = list(map(download_test_file, self.files))
         # Copy the dataset to a temporary directory.

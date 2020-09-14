@@ -451,10 +451,20 @@ def _unwhiten_template_waveform(
 
     # Keep the requested number of channels.
     waveform_n = waveform_n[:, :n_channels]
+    channels_k = channels_k[:n_channels]
+    assert waveform_n.shape[0] == ns
+    assert waveform_n.shape[1] == channels_k.shape[0]
+    # Pad arrays with zeros if not enough channels.
+    if waveform_n.shape[1] < n_channels:
+        waveform_n = np.hstack((waveform_n, np.zeros(
+            (ns, n_channels - waveform_n.shape[1]), dtype=waveform_n.dtype)))
+    if channels_k.shape[0] < n_channels:
+        channels_k = np.hstack((channels_k, -np.ones(
+            (n_channels - channels_k.shape[0]), dtype=channels_k.dtype)))
     assert waveform_n.shape == (ns, n_channels)
-    assert channels.shape == (n_channels,)
+    assert channels_k.shape == (n_channels,)
 
-    return waveform_n, channels
+    return waveform_n, channels_k
 
 
 @validate_waveforms
@@ -494,7 +504,10 @@ def _normalize_templates_waveforms(
             waveforms[i], channels[i], n_channels=n_channels,
             unw_mat=unw_mat, amplitude_threshold=amplitude_threshold)
         if wc is not None:
-            waveforms_n[i, ...], channels_n[i] = wc
+            w, c = wc
+            assert w.shape == (ns, n_channels)
+            assert c.shape == (n_channels,)
+            waveforms_n[i, :, :], channels_n[i, :] = w, c
 
     # Convert into physical units
     # ---------------------------
@@ -506,16 +519,22 @@ def _normalize_templates_waveforms(
     spike_amps = templates_amps[spike_templates] * amplitudes
     with np.errstate(all='ignore'):
         # take the average spike amplitude per template
-        templates_amps_v = (np.bincount(spike_templates, weights=spike_amps) /
-                            np.bincount(spike_templates))
+        templates_amps_v = (
+            np.bincount(spike_templates, minlength=len(templates_amps), weights=spike_amps) /
+            np.bincount(spike_templates, minlength=len(templates_amps)))
+
         # scale back the template according to the spikes units
         waveforms_n *= ampfactor * (templates_amps_v / templates_amps)[:, None, None]
+
     waveforms_n[np.isnan(waveforms_n)] = 0
     assert np.isnan(waveforms_n).sum() == 0
 
+    spike_amps[np.isnan(spike_amps)] = 0
+    templates_amps_v[np.isnan(templates_amps_v)] = 0
+
     out = Bunch(
         data=waveforms_n,
-        cols=channels,
+        cols=channels_n,
         spike_amps=spike_amps * ampfactor,
         template_amps=templates_amps_v * ampfactor,
     )
