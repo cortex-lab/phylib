@@ -270,7 +270,6 @@ def validate_features(f):
             assert out.cols.dtype == np.int32
             assert out.cols.ndim == 2
             assert np.all(out.cols >= -1)
-            assert out.cols.shape[1] == n_channels_loc
 
         if out.get('rows', None) is not None:
             assert isinstance(out.rows, np.ndarray)
@@ -386,7 +385,7 @@ def ignore_empty_input(f):
 
 @validate_depths
 def _compute_spike_depths_from_features(features, spike_templates, channel_pos, batch=50_000):
-    ns, nch, nf = features.data.shape
+    ns, nf, nch = features.data.shape
     n_batches = int(np.ceil(ns / float(batch)))
     assert ns > 0
     assert n_batches > 0
@@ -396,7 +395,7 @@ def _compute_spike_depths_from_features(features, spike_templates, channel_pos, 
         spk = slice(b * batch, (b + 1) * batch)
         assert b * batch < ns
 
-        fet = np.maximum(features.data[spk, :, 0], 0) ** 2
+        fet = np.maximum(features.data[spk, 0, :], 0) ** 2
         ch = features.cols[spike_templates[spk]] if features.get('cols', None) is not None \
             else np.tile(np.arange(nch), (fet.shape[0], 1))
         ypos = channel_pos[ch, 1]
@@ -529,6 +528,7 @@ def _normalize_templates_waveforms(
     templates_amps = np.max(
         np.max(waveforms_n, axis=1) - np.min(waveforms_n, axis=1), axis=1)
     spike_amps = templates_amps[spike_templates] * amplitudes
+    spike_amps[np.isnan(spike_amps)] = 0
     with np.errstate(all='ignore'):
         # take the average spike amplitude per template
         templates_amps_v = (
@@ -540,8 +540,6 @@ def _normalize_templates_waveforms(
 
     waveforms_n[np.isnan(waveforms_n)] = 0
     assert np.isnan(waveforms_n).sum() == 0
-
-    spike_amps[np.isnan(spike_amps)] = 0
     templates_amps_v[np.isnan(templates_amps_v)] = 0
 
     out = Bunch(
@@ -787,7 +785,6 @@ class TemplateLoaderKS2(BaseTemplateLoader):
         # Spike times.
         self.spike_times = _load_spike_times_ks2(self.ar('spike_times.npy'), sr)
         assert self.spike_times.ndim == 1
-        ns = len(self.spike_times)
 
         self.spike_times_reorder = _load_spike_reorder_ks2(
             self.ar('spike_times_reordered.npy', mandatory=False), sr)
@@ -829,13 +826,29 @@ class TemplateLoaderKS2(BaseTemplateLoader):
         # PC features.
         self.features = _load_features(
             self.ar('pc_features.npy'),
-            self.ar('pc_feature_ind.npy', mandatory=False))
+            channels=self.ar('pc_feature_ind.npy', mandatory=False))
 
         # Template features.
-        self.features = _load_template_features(
+        self.template_features = _load_template_features(
             self.ar('template_features.npy'),
             self.ar('template_feature_ind.npy', mandatory=False))
 
         # Compute amplitudes and depths in physical units.
+        self.spike_depths = _compute_spike_depths_from_features(
+            self.features, self.spike_templates, self.channel_positions, batch=50_000)
+
+        # Template waveforms.
+        self.templates = _normalize_templates_waveforms(
+            self.templates.data, self.templates.cols,
+            amplitudes=self.ks2_amplitudes,
+            n_channels=self.templates.data.shape[2],
+            spike_templates=self.spike_templates,
+            unw_mat=self.wmi,
+            ampfactor=self.params.ampfactor,
+            amplitude_threshold=.25)
+
+        # Get the spike and template amplitudes.
+        self.spike_amps = self.templates.pop('spike_amps')
+        self.template_amps = self.templates.pop('template_amps')
 
         self.check()
