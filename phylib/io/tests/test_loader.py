@@ -312,5 +312,19 @@ class TemplateLoaderMiscTests(TemplateLoaderDenseTests):
     param = 'misc'
 
 
+class TemplateLoaderKS2Tests(TemplateLoaderDenseTests):
+    param = 'ks2'
+
+    @ classmethod
+    def setUpClass(cls):
+        TemplateLoaderDenseTests.setUpClass()
+        cls.ibl = cls.param in ('ks2', 'alf')
+        cls.tempdir = Path(tempfile.mkdtemp())
+        cls.dset = Dataset(cls.tempdir, cls.param)
+
+        cls.loader = l.TemplateLoaderKS2()
+        cls.loader.open(cls.tempdir)
+
+
 class TemplateLoaderALFTests(TemplateLoaderDenseTests):
     param = 'alf'

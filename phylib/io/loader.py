@@ -85,7 +85,7 @@ def read_params(params_path):
         params['dat_path'] = [params['dat_path']]
     params['dat_path'] = [_make_abs_path(_, params['dir_path']) for _ in params['dat_path']]
     params['ampfactor'] = params.get('ampfactor', 1)
-    return params
+    return Bunch(params)
 
 
 def _all_positions_distinct(positions):
@@ -368,6 +368,16 @@ def validate_similarity_matrix(f):
     return wrapped
 
 
+def ignore_empty_input(f):
+    @wraps(f)
+    def wrapped(x, *args, **kwargs):
+        if x is None:
+            logger.debug("Input for %s is None, skipping", f.__name__)
+            return None
+        return f(x, *args, **kwargs)
+    return wrapped
+
+
 #------------------------------------------------------------------------------
 # Computations
 #------------------------------------------------------------------------------
@@ -563,6 +573,7 @@ def _load_spike_times_alf(spike_times):
 # Spike templates
 #----------------
 
+@ignore_empty_input
 @validate_spike_templates
 def _load_spike_templates(spike_templates):
     """Corresponds to spike_templates.npy, spike_clusters.npy, spikes.templates.npy,
@@ -573,6 +584,7 @@ def _load_spike_templates(spike_templates):
 # Spike reorder
 # -------------
 
+@ignore_empty_input
 def _load_spike_reorder_ks2(spike_reorder, sample_rate):
     return _load_spike_times_ks2(spike_reorder, sample_rate)
 
@@ -592,6 +604,7 @@ def _load_channel_positions(channel_positions):
     return np.atleast_2d(np.asarray(channel_positions, dtype=np.float64))
 
 
+@ignore_empty_input
 @validate_channel_shanks
 def _load_channel_shanks(channel_shanks):
     """Corresponds to channel_shanks.npy
@@ -602,6 +615,7 @@ def _load_channel_shanks(channel_shanks):
     return np.asarray(channel_shanks, dtype=np.int32).ravel()
 
 
+@ignore_empty_input
 @validate_channel_probes
 def _load_channel_probes(channel_probes):
     """Corresponds to channel_probes.npy"""
@@ -680,6 +694,12 @@ def _load_amplitudes_alf(amplitudes):
     return np.asarray(amplitudes, dtype=np.float64).ravel()
 
 
+@validate_amplitudes
+def _load_amplitudes_ks2(amplitudes):
+    """Corresponds to amplitudes.npy."""
+    return np.asarray(amplitudes, dtype=np.float64).ravel()
+
+
 # Depths
 # ------
 
@@ -719,27 +739,73 @@ def _load_similarity_matrix(mat):
 #------------------------------------------------------------------------------
 
 class BaseTemplateLoader(object):
-    def read_params(self):
-        params_path = self.data_dir / 'params.py'
-        assert params_path.exists()
-        return read_params(params_path)
-
-    def open(self, data_dir):
+    def load_params(self, data_dir):
         self.data_dir = Path(data_dir).resolve()
         assert self.data_dir.exists()
         assert self.data_dir.is_dir()
-        self.params = self.read_params()
-        # TODO
-        # self.check()
+        params_path = self.data_dir / 'params.py'
+        assert params_path.exists()
+        self.params = read_params(params_path)
 
     def check(self):
         """Check consistency of all arrays and model variables."""
-        # TODO
+        # Check spike times
+        assert np.all(self.spike_times >= 0)
+        assert np.all(np.diff(self.spike_times) >= 0)
+        ns = len(self.spike_times)
 
-    def ar(self, fn, mmap_mode=None):
-        return read_array(self.data_dir / fn, mmap_mode=mmap_mode)
+    def ar(self, fn, mmap_mode=None, mandatory=True, default=None):
+        path = self.data_dir / fn
+        if path.exists():
+            return read_array(path, mmap_mode=mmap_mode)
+        else:
+            if mandatory:
+                raise IOError("File %s does not exist" % fn)
+            # File does not exist.
+            return default
 
 
-class TemplateLoaderKS2(object):
-    def _load_spike_times(self):
-        return _load_spike_times_ks2(self.ar('spike_times.npy'), self.params.sample_rate)
+class TemplateLoaderKS2(BaseTemplateLoader):
+    def open(self, data_dir):
+        self.load_params(data_dir)
+
+        sr = self.params.sample_rate
+
+        # Spike times.
+        self.spike_times = _load_spike_times_ks2(self.ar('spike_times.npy'), sr)
+        self.spike_times_reorder = _load_spike_reorder_ks2(
+            self.ar('spike_times_reordered.npy', mandatory=False), sr)
+
+        # Spike templates and clusters.
+        self.spike_templates = _load_spike_templates(self.ar('spike_templates.npy'))
+        self.spike_clusters = _load_spike_templates(
+            self.ar('spike_clusters.npy', mandatory=False, default=self.spike_templates))
+
+        # KS2 amplitudes.
+        self.ks2_amplitudes = _load_amplitudes_ks2(self.ar('amplitudes.npy'))
+
+        # Channel informations.
+        self.channel_map = _load_channel_map(self.ar('channel_map.npy'))
+        self.channel_positions = _load_channel_positions(self.ar('channel_positions.npy'))
+        self.channel_shanks = _load_channel_shanks(self.ar('channel_shanks.npy', mandatory=False))
+        self.channel_probes = _load_channel_probes(self.ar('channel_probes.npy', mandatory=False))
+
+        """
+        whitening
+        similar templates
+
+        templates
+        PC features
+        template features
+
+
+        spike amplitudes
+        spike depths
+        template amplitudes
+
+
+        traces
+        spike waveforms
+        """
+
+        self.check()
