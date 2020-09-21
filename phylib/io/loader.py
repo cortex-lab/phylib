@@ -237,13 +237,14 @@ def validate_waveforms(f):
         assert out.data.ndim == 3
         n_waveforms, n_samples, n_channels_loc = out.data.shape
 
-        assert isinstance(out.cols, np.ndarray)
-        assert out.cols.dtype == np.int32
-        assert out.cols.ndim == 2
-        assert np.all(out.cols >= -1)
-        assert out.cols.shape == (n_waveforms, n_channels_loc)
+        if out.get('cols', None) is not None:
+            assert isinstance(out.cols, np.ndarray)
+            assert out.cols.dtype == np.int32
+            assert out.cols.ndim == 2
+            assert np.all(out.cols >= -1)
+            assert out.cols.shape == (n_waveforms, n_channels_loc)
 
-        if 'rows' in out:
+        if out.get('rows', None) is not None:
             assert isinstance(out.rows, np.ndarray)
             assert out.rows.dtype == np.int32
             assert out.rows.ndim == 1
@@ -262,15 +263,16 @@ def validate_features(f):
         assert isinstance(out.data, np.ndarray)
         assert out.data.dtype in (np.float32, np.float64)
         assert out.data.ndim == 3
-        n_waveforms, n_channels_loc, n_pcs = out.data.shape
+        n_waveforms, n_pcs, n_channels_loc = out.data.shape
 
-        assert isinstance(out.cols, np.ndarray)
-        assert out.cols.dtype == np.int32
-        assert out.cols.ndim == 2
-        assert np.all(out.cols >= -1)
-        assert out.cols.shape == (n_waveforms, n_channels_loc)
+        if out.get('cols', None) is not None:
+            assert isinstance(out.cols, np.ndarray)
+            assert out.cols.dtype == np.int32
+            assert out.cols.ndim == 2
+            assert np.all(out.cols >= -1)
+            assert out.cols.shape[1] == n_channels_loc
 
-        if 'rows' in out:
+        if out.get('rows', None) is not None:
             assert isinstance(out.rows, np.ndarray)
             assert out.rows.dtype == np.int32
             assert out.rows.ndim == 1
@@ -298,7 +300,7 @@ def validate_template_features(f):
         # NOTE: the first axis has n_templates rows rather than n_spikes rows
         assert out.cols.shape[1] == n_channels_loc
 
-        if 'rows' in out:
+        if out.get('rows', None) is not None:
             assert isinstance(out.rows, np.ndarray)
             assert out.rows.dtype == np.int32
             assert out.rows.ndim == 1
@@ -626,14 +628,15 @@ def _load_channel_probes(channel_probes):
 #----------
 
 @validate_waveforms
-def _load_template_waveforms_alf(waveforms, channels):
+def _load_template_waveforms(waveforms, channels):
     waveforms = np.asarray(waveforms, dtype=np.float32)
     waveforms = np.atleast_3d(waveforms)
 
-    channels = np.asarray(channels, dtype=np.int32)
-    channels = np.atleast_2d(channels)
-    if channels.ndim != 2:  # pragma: no cover
-        channels = channels.T
+    if channels is not None:
+        channels = np.asarray(channels, dtype=np.int32)
+        channels = np.atleast_2d(channels)
+        if channels.ndim != 2:  # pragma: no cover
+            channels = channels.T
 
     return Bunch(data=waveforms, cols=channels)
 
@@ -754,15 +757,25 @@ class BaseTemplateLoader(object):
         assert np.all(np.diff(self.spike_times) >= 0)
         ns = len(self.spike_times)
 
+        if self.spike_times_reorder is not None:
+            assert len(self.spike_times_reorder) == ns
+        assert len(self.spike_templates) == ns
+
     def ar(self, fn, mmap_mode=None, mandatory=True, default=None):
+        if isinstance(fn, (tuple, list)):
+            # Handle list of files, take the first that exists.
+            for fn_ in fn:
+                out = self.ar(fn_, mmap_mode=mmap_mode, mandatory=False, default=None)
+                if out is not None:
+                    return out
+            fn = fn[0]
         path = self.data_dir / fn
         if path.exists():
             return read_array(path, mmap_mode=mmap_mode)
-        else:
-            if mandatory:
-                raise IOError("File %s does not exist" % fn)
-            # File does not exist.
-            return default
+        if mandatory:
+            raise IOError("File %s does not exist" % fn)
+        # File does not exist.
+        return default
 
 
 class TemplateLoaderKS2(BaseTemplateLoader):
@@ -773,6 +786,9 @@ class TemplateLoaderKS2(BaseTemplateLoader):
 
         # Spike times.
         self.spike_times = _load_spike_times_ks2(self.ar('spike_times.npy'), sr)
+        assert self.spike_times.ndim == 1
+        ns = len(self.spike_times)
+
         self.spike_times_reorder = _load_spike_reorder_ks2(
             self.ar('spike_times_reordered.npy', mandatory=False), sr)
 
@@ -786,26 +802,40 @@ class TemplateLoaderKS2(BaseTemplateLoader):
 
         # Channel informations.
         self.channel_map = _load_channel_map(self.ar('channel_map.npy'))
+        nc = self.channel_map.shape[0]
         self.channel_positions = _load_channel_positions(self.ar('channel_positions.npy'))
         self.channel_shanks = _load_channel_shanks(self.ar('channel_shanks.npy', mandatory=False))
         self.channel_probes = _load_channel_probes(self.ar('channel_probes.npy', mandatory=False))
 
-        """
-        whitening
-        similar templates
+        # Whitening matrix and its inverse.
+        self.wmi, self.wm = _load_whitening_matrix(
+            self.ar('whitening_mat_inv.npy', mandatory=False), inverse=True)
+        if self.wmi is None:
+            self.wm, self.wmi = _load_whitening_matrix(
+                self.ar('whitening_mat.npy', mandatory=False, default=np.eye(nc)))
+        assert self.wm is not None and self.wmi is not None
+        assert self.wm.shape == (nc, nc)
+        assert np.allclose(self.wm @ self.wmi, np.eye(nc))
+        assert self.wmi.shape == (nc, nc)
 
-        templates
-        PC features
-        template features
+        # Similar templates.
+        self.similar_templates = _load_similarity_matrix(self.ar('similar_templates.npy'))
 
+        # Templates.
+        self.templates = _load_template_waveforms(
+            self.ar('templates.npy'),
+            self.ar(('template_ind.npy', 'templates_ind.npy'), mandatory=False))
 
-        spike amplitudes
-        spike depths
-        template amplitudes
+        # PC features.
+        self.features = _load_features(
+            self.ar('pc_features.npy'),
+            self.ar('pc_feature_ind.npy', mandatory=False))
 
+        # Template features.
+        self.features = _load_template_features(
+            self.ar('template_features.npy'),
+            self.ar('template_feature_ind.npy', mandatory=False))
 
-        traces
-        spike waveforms
-        """
+        # Compute amplitudes and depths in physical units.
 
         self.check()

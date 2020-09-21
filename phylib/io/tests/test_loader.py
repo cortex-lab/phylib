@@ -193,11 +193,11 @@ def test_load_channel_probes():
 # Waveforms
 # ---------
 
-def test_load_template_waveforms_alf():
+def test_load_template_waveforms():
     ns, nw, nc = 3, 4, 2
     w = npr.randn(ns, nw, nc)
     ch = npr.permutation(ns * nc).reshape((ns, nc))
-    tw = l._load_template_waveforms_alf(w, ch)
+    tw = l._load_template_waveforms(w, ch)
     assert tw.data.shape == (ns, nw, nc)
     assert tw.cols.shape == (ns, nc)
 
