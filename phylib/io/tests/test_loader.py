@@ -322,8 +322,8 @@ class TemplateLoaderKS2Tests(TemplateLoaderDenseTests):
         cls.tempdir = Path(tempfile.mkdtemp())
         cls.dset = Dataset(cls.tempdir, cls.param)
 
-        cls.loader = l.TemplateLoaderKS2()
-        cls.loader.open(cls.tempdir)
+        ld = cls.loader = l.TemplateLoaderKS2()
+        ld.open(cls.tempdir)
 
 
 class TemplateLoaderALFTests(TemplateLoaderDenseTests):

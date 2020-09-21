@@ -14,7 +14,7 @@ Supported file formats:
 # Imports
 #------------------------------------------------------------------------------
 
-from functools import wraps
+from functools import wraps, partial
 import logging
 # import os
 import os.path as op
@@ -310,8 +310,11 @@ def validate_template_features(f):
     return wrapped
 
 
-def validate_amplitudes(f):
+def validate_amplitudes(f=None, in_volts=True):
     """Amplitudes must be in volts."""
+    if f is None:
+        return partial(validate_amplitudes, in_volts=in_volts)
+
     @wraps(f)
     def wrapped(*args, **kwargs):
         out = f(*args, **kwargs)
@@ -319,7 +322,7 @@ def validate_amplitudes(f):
         assert out.dtype == np.float64
         assert out.ndim == 1
         assert np.all(out >= 0)
-        if np.any(out >= 1):
+        if in_volts and np.any(out >= 1):
             logger.warning("There are %d amplitudes >= 1 volt" % (out >= 1).sum())
         return out
     return wrapped
@@ -689,13 +692,13 @@ def _load_template_features(features, channels=None, spikes=None):
 # Amplitudes
 # ----------
 
-@validate_amplitudes
+@validate_amplitudes(in_volts=True)
 def _load_amplitudes_alf(amplitudes):
     """Corresponds to spikes.amps.npy, templates.amps.npy. Already in volts."""
     return np.asarray(amplitudes, dtype=np.float64).ravel()
 
 
-@validate_amplitudes
+@validate_amplitudes(in_volts=False)
 def _load_amplitudes_ks2(amplitudes):
     """Corresponds to amplitudes.npy."""
     return np.asarray(amplitudes, dtype=np.float64).ravel()
