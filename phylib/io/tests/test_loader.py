@@ -329,3 +329,21 @@ class TemplateLoaderKS2Tests(TemplateLoaderDenseTests):
 class TemplateLoaderALFTests(TemplateLoaderKS2Tests):
     param = 'alf'
     _loader_cls = l.TemplateLoaderAlf
+
+
+class TemplateLoaderIBLTests(unittest.TestCase):
+    @ classmethod
+    def setUpClass(cls):
+        cls.tempdir = Path(tempfile.mkdtemp())
+
+        cls.dset_ks2 = Dataset(cls.tempdir / 'ks2', 'ks2')
+        cls.loader_ks2 = l.TemplateLoaderKS2()
+        cls.loader_ks2.open(cls.tempdir / 'ks2')
+
+        cls.dset_alf = Dataset(cls.tempdir / 'alf', 'alf')
+        cls.loader_alf = l.TemplateLoaderAlf()
+        cls.loader_alf.open(cls.tempdir / 'alf')
+
+    def test_ibl_1(self):
+        # TODO: compare both loaders
+        pass
