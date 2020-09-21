@@ -718,6 +718,8 @@ def _load_depths_alf(depths):
 
 @validate_whitening_matrix
 def _load_whitening_matrix(wm, inverse=None):
+    if wm is None:
+        return None, None
     wm = np.asarray(wm, dtype=np.float64)
     wm = np.atleast_2d(wm)
     if inverse:
@@ -758,7 +760,7 @@ class BaseTemplateLoader(object):
         assert np.all(np.diff(self.spike_times) >= 0)
         ns = len(self.spike_times)
 
-        if self.spike_times_reorder is not None:
+        if getattr(self, 'spike_times_reorder', None) is not None:
             assert len(self.spike_times_reorder) == ns
         assert len(self.spike_templates) == ns
 
@@ -780,6 +782,9 @@ class BaseTemplateLoader(object):
 
 
 class TemplateLoaderKS2(BaseTemplateLoader):
+    MAX_N_CHANNELS_TEMPLATES = 32
+    AMPLITUDE_THRESHOLD = .25
+
     def open(self, data_dir):
         self.load_params(data_dir)
 
@@ -821,11 +826,6 @@ class TemplateLoaderKS2(BaseTemplateLoader):
         # Similar templates.
         self.similar_templates = _load_similarity_matrix(self.ar('similar_templates.npy'))
 
-        # Templates.
-        self.templates = _load_template_waveforms(
-            self.ar('templates.npy'),
-            self.ar(('template_ind.npy', 'templates_ind.npy'), mandatory=False))
-
         # PC features.
         self.features = _load_features(
             self.ar('pc_features.npy'),
@@ -842,16 +842,78 @@ class TemplateLoaderKS2(BaseTemplateLoader):
 
         # Template waveforms.
         self.templates = _normalize_templates_waveforms(
-            self.templates.data, self.templates.cols,
+            self.ar('templates.npy'),
+            self.ar(('template_ind.npy', 'templates_ind.npy'), mandatory=False),
             amplitudes=self.ks2_amplitudes,
-            n_channels=self.templates.data.shape[2],
+            n_channels=self.MAX_N_CHANNELS_TEMPLATES,
             spike_templates=self.spike_templates,
             unw_mat=self.wmi,
             ampfactor=self.params.ampfactor,
-            amplitude_threshold=.25)
+            amplitude_threshold=self.AMPLITUDE_THRESHOLD)
 
         # Get the spike and template amplitudes.
         self.spike_amps = self.templates.pop('spike_amps')
         self.template_amps = self.templates.pop('template_amps')
+
+        self.check()
+
+
+class TemplateLoaderAlf(BaseTemplateLoader):
+    def open(self, data_dir):
+        self.load_params(data_dir)
+
+        # Spike times.
+        self.spike_times = _load_spike_times_alf(self.ar('spikes.times.npy'))
+        assert self.spike_times.ndim == 1
+
+        # Spike templates and clusters.
+        self.spike_templates = _load_spike_templates(self.ar('spikes.templates.npy'))
+        self.spike_clusters = _load_spike_templates(
+            self.ar('spikes.clusters.npy', mandatory=False, default=self.spike_templates))
+
+        # KS2 amplitudes.
+        self.spike_amps = _load_amplitudes_alf(self.ar('spikes.amps.npy'))
+        self.template_amps = _load_amplitudes_alf(self.ar('templates.amps.npy'))
+
+        # Channel informations.
+        self.channel_map = _load_channel_map(self.ar('channels.rawInd.npy'))
+        nc = self.channel_map.shape[0]
+        self.channel_positions = _load_channel_positions(self.ar('channels.localCoordinates.npy'))
+        self.channel_shanks = _load_channel_shanks(self.ar('channels.shanks.npy', mandatory=False))
+        self.channel_probes = _load_channel_probes(self.ar('channels.probes.npy', mandatory=False))
+
+        # Whitening matrix and its inverse.
+        I = np.eye(nc)
+        self.wmi, self.wm = _load_whitening_matrix(
+            self.ar('whitening_mat_inv.npy', mandatory=False, default=I), inverse=True)
+        if np.allclose(self.wmi, I):
+            self.wm, self.wmi = _load_whitening_matrix(
+                self.ar('whitening_mat.npy', mandatory=False, default=I))
+        assert self.wm is not None and self.wmi is not None
+        assert self.wm.shape == (nc, nc)
+        assert np.allclose(self.wm @ self.wmi, I)
+        assert self.wmi.shape == (nc, nc)
+
+        # Templates.
+        self.templates = _load_template_waveforms(
+            self.ar('templates.waveforms.npy'),
+            self.ar('templates.waveformsChannels.npy', mandatory=False))
+
+        # Compute amplitudes and depths in physical units.
+        self.spike_depths = _load_depths_alf(self.ar('spikes.depths.npy'))
+
+        # TODO
+        # Similar templates.
+        # self.similar_templates = _load_similarity_matrix(self.ar('similar_templates.npy'))
+
+        # # PC features.
+        # self.features = _load_features(
+        #     self.ar('pc_features.npy'),
+        #     channels=self.ar('pc_feature_ind.npy', mandatory=False))
+
+        # # Template features.
+        # self.template_features = _load_template_features(
+        #     self.ar('template_features.npy'),
+        #     self.ar('template_feature_ind.npy', mandatory=False))
 
         self.check()

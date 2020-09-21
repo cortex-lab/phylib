@@ -93,7 +93,7 @@ DATASETS = {
         'ibl/alf/spikes.samples.npy',
         'ibl/alf/spikes.templates.npy',
         'ibl/alf/spikes.times.npy',
-        # 'ibl/alf/templates.amps.npy',
+        'ibl/alf/templates.amps.npy',
         'ibl/alf/templates.waveformsChannels.npy',
         'ibl/alf/templates.waveforms.npy',
         # 'ibl/alf/whitening_mat_inv.npy',
