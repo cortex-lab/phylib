@@ -51,9 +51,9 @@ def test_are_template_features_dense(dset):
 #------------------------------------------------------------------------------
 
 def test_compute_spike_depths_from_features():
-    ns, nc, nf = 4, 3, 2
+    ns, nf, nc = 4, 2, 3
 
-    fet = 5 + npr.randn(ns, nc, nf)
+    fet = 5 + npr.randn(ns, nf, nc)
     ch = np.tile(np.arange(nc), (ns, 1))
     features = Bunch(data=fet, cols=ch)
 

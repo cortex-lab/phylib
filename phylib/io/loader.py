@@ -745,6 +745,25 @@ def _load_similarity_matrix(mat):
 #------------------------------------------------------------------------------
 
 class BaseTemplateLoader(object):
+    spike_times = None
+    spike_times_reorder = None
+    spike_templates = None
+    spike_clusters = None
+    spike_depths = None
+    spike_amps = None
+    ks2_amplitudes = None
+    templates = None
+    template_amps = None
+    similar_templates = None
+    channel_map = None
+    channel_positions = None
+    channel_shanks = None
+    channel_probes = None
+    wmi = None
+    wm = None
+    features = None
+    template_features = None
+
     def load_params(self, data_dir):
         self.data_dir = Path(data_dir).resolve()
         assert self.data_dir.exists()
@@ -760,9 +779,32 @@ class BaseTemplateLoader(object):
         assert np.all(np.diff(self.spike_times) >= 0)
         ns = len(self.spike_times)
 
-        if getattr(self, 'spike_times_reorder', None) is not None:
+        if self.spike_times_reorder is not None:
             assert len(self.spike_times_reorder) == ns
         assert len(self.spike_templates) == ns
+        assert len(self.spike_clusters) == ns
+
+        nc = len(self.channel_map)
+        assert self.channel_positions.shape == (nc, 2)
+        if self.channel_shanks is not None:
+            assert len(self.channel_shanks) == nc
+        if self.channel_probes is not None:
+            assert len(self.channel_probes) == nc
+
+        assert self.wm.shape == self.wmi.shape == (nc, nc)
+
+        nt = self.templates.data.shape[0]
+
+        if self.similar_templates is not None:
+            assert self.similar_templates.shape == (nt, nt)
+
+        if self.features is not None:
+            assert self.features.data.shape[0] == ns
+        if self.template_features is not None:
+            assert self.template_features.data.shape[0] == ns
+
+        assert self.spike_amps.shape == (ns,)
+        assert self.template_amps.shape == (nt,)
 
     def ar(self, fn, mmap_mode=None, mandatory=True, default=None):
         if isinstance(fn, (tuple, list)):
@@ -784,6 +826,11 @@ class BaseTemplateLoader(object):
 class TemplateLoaderKS2(BaseTemplateLoader):
     MAX_N_CHANNELS_TEMPLATES = 32
     AMPLITUDE_THRESHOLD = .25
+
+    def check(self):
+        super(TemplateLoaderKS2, self).check()
+        ns = len(self.spike_times)
+        assert len(self.ks2_amplitudes) == ns
 
     def open(self, data_dir):
         self.load_params(data_dir)
@@ -902,7 +949,6 @@ class TemplateLoaderAlf(BaseTemplateLoader):
         # Compute amplitudes and depths in physical units.
         self.spike_depths = _load_depths_alf(self.ar('spikes.depths.npy'))
 
-        # TODO
         # Similar templates.
         # self.similar_templates = _load_similarity_matrix(self.ar('similar_templates.npy'))
 
