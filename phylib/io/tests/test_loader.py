@@ -90,43 +90,45 @@ def test_normalize_templates_waveforms():
 
 
 def test_normalize_templates_waveforms_ks2(dset):
-    if dset.param == 'ks2':
-        params = l.read_params(dset.params_path)
-        w = dset.load('templates.npy')
-        nt, nsmp = w.shape[:2]
-        ch = dset.load('templates_ind.npy')
-        amp = dset.load('amplitudes.npy')
-        st = dset.load('spike_templates.npy')
-        nspk = st.shape[0]
-        unw_mat = dset.load('whitening_mat_inv.npy')
-        ampfactor = params['ampfactor']
-        nc = 16
-        at = .05
+    if dset.param != 'ks2':
+        return
+    params = l.read_params(dset.params_path)
+    w = dset.load('templates.npy')
+    nt, nsmp = w.shape[:2]
+    ch = dset.load('templates_ind.npy')
+    amp = dset.load('amplitudes.npy')
+    st = dset.load('spike_templates.npy')
+    nspk = st.shape[0]
+    unw_mat = dset.load('whitening_mat_inv.npy')
+    ampfactor = params['ampfactor']
 
-        tw = l._normalize_templates_waveforms(
-            w, ch, amplitudes=amp, n_channels=nc, spike_templates=st,
-            unw_mat=unw_mat, ampfactor=ampfactor,
-            amplitude_threshold=at)
-        templates = tw.data
-        channels = tw.cols
-        spike_amps = tw.spike_amps
-        template_amps = tw.template_amps
+    nc = 16
+    at = .25
 
-        assert templates.shape == (nt, nsmp, nc)
-        assert channels.shape == (nt, nc)
-        assert spike_amps.shape == (nspk,)
-        assert template_amps.shape == (nt,)
+    tw = l._normalize_templates_waveforms(
+        w, ch, amplitudes=amp, n_channels=nc, spike_templates=st,
+        unw_mat=unw_mat, ampfactor=ampfactor,
+        amplitude_threshold=at)
+    templates = tw.data
+    channels = tw.cols
+    spike_amps = tw.spike_amps
+    template_amps = tw.template_amps
 
-        assert np.all(-6e-4 <= templates)
-        assert np.all(templates <= 6e-4)
+    assert templates.shape == (nt, nsmp, nc)
+    assert channels.shape == (nt, nc)
+    assert spike_amps.shape == (nspk,)
+    assert template_amps.shape == (nt,)
 
-        assert np.all(channels >= -1)
-        assert np.all(channels <= params['n_channels_dat'])
+    assert np.all(-6e-4 <= templates)
+    assert np.all(templates <= 6e-4)
 
-        assert np.all(1e-6 <= spike_amps)
-        assert np.all(spike_amps <= 1e-3)
+    assert np.all(channels >= -1)
+    assert np.all(channels <= params['n_channels_dat'])
 
-        assert np.all(template_amps <= 1e-3)
+    assert np.all(1e-6 <= spike_amps)
+    assert np.all(spike_amps <= 1e-3)
+
+    assert np.all(template_amps <= 1e-3)
 
 
 #------------------------------------------------------------------------------
@@ -311,6 +313,10 @@ class TemplateLoaderSparseTests(TemplateLoaderDenseTests):
 class TemplateLoaderMiscTests(TemplateLoaderDenseTests):
     param = 'misc'
 
+
+#------------------------------------------------------------------------------
+# IBL datasets
+#------------------------------------------------------------------------------
 
 class TemplateLoaderKS2Tests(TemplateLoaderDenseTests):
     param = 'ks2'
