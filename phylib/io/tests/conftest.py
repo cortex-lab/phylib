@@ -96,7 +96,7 @@ DATASETS = {
         'ibl/alf/templates.amps.npy',
         'ibl/alf/templates.waveformsChannels.npy',
         'ibl/alf/templates.waveforms.npy',
-        # 'ibl/alf/whitening_mat_inv.npy',
+        'ibl/alf/_kilosort_whitening.matrix.npy',
     ],
 }
 

@@ -351,5 +351,25 @@ class TemplateLoaderIBLTests(unittest.TestCase):
         cls.loader_alf.open(cls.tempdir / 'alf')
 
     def test_ibl_1(self):
-        # TODO: compare both loaders
-        pass
+        la = self.loader_alf
+        lk = self.loader_ks2
+
+        dt = np.abs(la.spike_times - lk.spike_times)
+        self.assertLessEqual(dt.max(), 1e-3)
+
+        xs = (
+            'spike_templates',
+            'spike_clusters',
+            'channel_map',
+            'channel_positions',
+            'channel_shanks',
+            'channel_probes',
+            'spike_depths',
+            'wm',
+        )
+        for x in xs:
+            self.assertTrue(np.all(getattr(la, x) == getattr(lk, x)))
+
+        # TODO
+        # spike_amps
+        # template_amps

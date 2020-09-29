@@ -44,6 +44,7 @@ def read_array(path, mmap_mode=None):
     if ext == '.mat':  # pragma: no cover
         out = sio.loadmat(path)[arr_name]
     elif ext == '.npy':
+        logger.debug("Load %s", path)
         out = np.load(path, mmap_mode=mmap_mode)
     # Filter out nan and inf values.
     # NOTE: do not check for nan/inf values on mmap arrays.
@@ -860,11 +861,12 @@ class TemplateLoaderKS2(BaseTemplateLoader):
         self.channel_probes = _load_channel_probes(self.ar('channel_probes.npy', mandatory=False))
 
         # Whitening matrix and its inverse.
-        self.wmi, self.wm = _load_whitening_matrix(
-            self.ar('whitening_mat_inv.npy', mandatory=False), inverse=True)
-        if self.wmi is None:
-            self.wm, self.wmi = _load_whitening_matrix(
-                self.ar('whitening_mat.npy', mandatory=False, default=np.eye(nc)))
+        self.wm, self.wmi = _load_whitening_matrix(
+            self.ar('whitening_mat.npy', mandatory=False))
+        if self.wm is None:
+            self.wmi, self.wm = _load_whitening_matrix(
+                self.ar('whitening_mat_inv.npy', mandatory=False, default=np.eye(nc)),
+                inverse=True)
         assert self.wm is not None and self.wmi is not None
         assert self.wm.shape == (nc, nc)
         assert np.allclose(self.wm @ self.wmi, np.eye(nc))
@@ -931,11 +933,8 @@ class TemplateLoaderAlf(BaseTemplateLoader):
 
         # Whitening matrix and its inverse.
         I = np.eye(nc)
-        self.wmi, self.wm = _load_whitening_matrix(
-            self.ar('whitening_mat_inv.npy', mandatory=False, default=I), inverse=True)
-        if np.allclose(self.wmi, I):
-            self.wm, self.wmi = _load_whitening_matrix(
-                self.ar('whitening_mat.npy', mandatory=False, default=I))
+        self.wm, self.wmi = _load_whitening_matrix(
+            self.ar('_kilosort_whitening.matrix.npy', mandatory=False, default=I))
         assert self.wm is not None and self.wmi is not None
         assert self.wm.shape == (nc, nc)
         assert np.allclose(self.wm @ self.wmi, I)
