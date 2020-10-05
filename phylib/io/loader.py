@@ -94,6 +94,57 @@ def _all_positions_distinct(positions):
     return len(set(tuple(row) for row in positions)) == len(positions)
 
 
+def from_sparse(data, cols, channel_ids):
+    """Convert a sparse structure into a dense one.
+
+    Parameters
+    ----------
+
+    data : array-like
+        A (n_spikes, n_channels_loc, ...) array with the data.
+    cols : array-like
+        A (n_spikes, n_channels_loc) array with the channel indices of
+        every row in data.
+    channel_ids : array-like
+        List of requested channel ids (columns).
+
+    """
+    # The axis in the data that contains the channels.
+    if len(channel_ids) != len(np.unique(channel_ids)):
+        raise NotImplementedError("Multiple identical requested channels "
+                                  "in from_sparse().")
+    channel_axis = 1
+    shape = list(data.shape)
+    assert data.ndim >= 2
+    assert cols.ndim == 2
+    assert data.shape[:2] == cols.shape
+    n_spikes, n_channels_loc = shape[:2]
+    # NOTE: we ensure here that `col` contains integers.
+    c = cols.flatten().astype(np.int32)
+    # Remove columns that do not belong to the specified channels.
+    c[~np.in1d(c, channel_ids)] = -1
+    assert np.all(np.in1d(c, np.r_[channel_ids, -1]))
+    # Convert column indices to relative indices given the specified
+    # channel_ids.
+    cols_loc = _index_of(c, np.r_[channel_ids, -1]).reshape(cols.shape)
+    assert cols_loc.shape == (n_spikes, n_channels_loc)
+    n_channels = len(channel_ids)
+    # Shape of the output array.
+    out_shape = shape
+    # The channel dimension contains the number of requested channels.
+    # The last column contains irrelevant values.
+    out_shape[channel_axis] = n_channels + 1
+    out = np.zeros(out_shape, dtype=data.dtype)
+    x = np.tile(np.arange(n_spikes)[:, np.newaxis],
+                (1, n_channels_loc))
+    assert x.shape == cols_loc.shape == data.shape[:2]
+    out[x, cols_loc, ...] = data
+    # Remove the last column with values outside the specified
+    # channels.
+    out = out[:, :-1, ...]
+    return out
+
+
 #------------------------------------------------------------------------------
 # File format detection
 #------------------------------------------------------------------------------
@@ -843,6 +894,7 @@ class TemplateLoaderKS2(BaseTemplateLoader):
         # Spike times.
         self.spike_times = _load_spike_times_ks2(self.ar('spike_times.npy'), sr)
         assert self.spike_times.ndim == 1
+        self.n_spikes = len(self.spike_times)
 
         self.spike_times_reorder = _load_spike_reorder_ks2(
             self.ar('spike_times_reordered.npy', mandatory=False), sr)
@@ -858,6 +910,7 @@ class TemplateLoaderKS2(BaseTemplateLoader):
         # Channel informations.
         self.channel_map = _load_channel_map(self.ar('channel_map.npy'))
         nc = self.channel_map.shape[0]
+        self.n_channels = nc
         self.channel_positions = _load_channel_positions(self.ar('channel_positions.npy'))
         self.channel_shanks = _load_channel_shanks(self.ar('channel_shanks.npy', mandatory=False))
         self.channel_probes = _load_channel_probes(self.ar('channel_probes.npy', mandatory=False))
@@ -919,6 +972,7 @@ class TemplateLoaderAlf(BaseTemplateLoader):
         # Spike times.
         self.spike_times = _load_spike_times_alf(self.ar('spikes.times.npy'))
         assert self.spike_times.ndim == 1
+        self.n_spikes = len(self.spike_times)
 
         # Spike templates and clusters.
         self.spike_templates = _load_spike_templates(self.ar('spikes.templates.npy'))
@@ -932,6 +986,7 @@ class TemplateLoaderAlf(BaseTemplateLoader):
         # Channel informations.
         self.channel_map = _load_channel_map(self.ar('channels.rawInd.npy'))
         nc = self.channel_map.shape[0]
+        self.n_channels = nc
         self.channel_positions = _load_channel_positions(self.ar('channels.localCoordinates.npy'))
         self.channel_shanks = _load_channel_shanks(self.ar('channels.shanks.npy', mandatory=False))
         self.channel_probes = _load_channel_probes(self.ar('channels.probes.npy', mandatory=False))

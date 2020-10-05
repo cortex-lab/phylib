@@ -8,8 +8,6 @@
 #------------------------------------------------------------------------------
 
 import logging
-# import os
-# import os.path as op
 from pathlib import Path
 import shutil
 import tempfile
@@ -375,7 +373,19 @@ class TemplateLoaderIBLTests(unittest.TestCase):
         assert .5 <= la.template_amps.mean() / lk.template_amps.mean() <= 1.5
         assert .5 <= la.template_amps.std() / lk.template_amps.std() <= 1.5
 
+        ta = l.from_sparse(np.transpose(
+            la.templates.data[:1, ...], (0, 2, 1)),
+            la.templates.cols[:1, ...], np.arange(la.n_channels))
+        tk = l.from_sparse(np.transpose(
+            lk.templates.data[:1, ...], (0, 2, 1)),
+            lk.templates.cols[:1, ...], np.arange(lk.n_channels))
+
+        assert .5 <= ta.mean() / tk.mean() <= 1.5
+        assert .5 <= ta.std() / tk.std() <= 1.5
+
         # import matplotlib.pyplot as plt
-        # plt.plot(la.template_amps, 'o')
-        # plt.plot(lk.template_amps, 'o')
+        # plt.subplot(121)
+        # plt.plot(ta[0].T)
+        # plt.subplot(122)
+        # plt.plot(tk[0].T)
         # plt.show()
