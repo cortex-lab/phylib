@@ -440,7 +440,8 @@ def _unwhiten_template_waveform(
     # Select the channels with signal.
     # HACK: transpose is a work-around this NumPy issue
     # https://stackoverflow.com/a/35020886/1595060
-    amplitude_threshold = .25 if amplitude_threshold is None else amplitude_threshold
+    # amplitude_threshold = .25 if amplitude_threshold is None else amplitude_threshold
+    amplitude_threshold = 0  # DEBUG
     amplitude = waveform_n.max(axis=0) - waveform_n.min(axis=0)
     assert amplitude.shape == (nck,)
     assert np.all(amplitude >= 0)
@@ -728,6 +729,8 @@ def _load_whitening_matrix(wm, inverse=None):
         wm = np.linalg.inv(wm)
     else:
         wmi = np.linalg.inv(wm)
+    if np.all(wm == np.eye(wm.shape[0])) or np.all(wmi == np.eye(wmi.shape[0])):
+        logger.warning("the whitening matrix is the identity!")
     return wm, wmi
 
 
@@ -826,7 +829,6 @@ class BaseTemplateLoader(object):
 
 class TemplateLoaderKS2(BaseTemplateLoader):
     MAX_N_CHANNELS_TEMPLATES = 32
-    AMPLITUDE_THRESHOLD = .25
 
     def check(self):
         super(TemplateLoaderKS2, self).check()
@@ -898,7 +900,10 @@ class TemplateLoaderKS2(BaseTemplateLoader):
             spike_templates=self.spike_templates,
             unw_mat=self.wmi,
             ampfactor=self.params.ampfactor,
-            amplitude_threshold=self.AMPLITUDE_THRESHOLD)
+            # NOTE: need 0 here to avoid destroying data in temp waveforms and to ensure
+            # consistency with previously-saved ALF files
+            amplitude_threshold=0,
+        )
 
         # Get the spike and template amplitudes.
         self.spike_amps = self.templates.pop('spike_amps')

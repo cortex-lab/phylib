@@ -51,7 +51,11 @@ DATASETS = {
     ],
     'ks2': [
         'ibl/ks2/params.py',
+
         'ibl/ks2/_spikeglx_ephysData_g0_t0.imec0.ap.bin',
+        # 'ibl/ks2/_spikeglx_ephysData_g0_t0.imec0.ap.cbin',
+        # 'ibl/ks2/_spikeglx_ephysData_g0_t0.imec0.ap.ch',
+
         'ibl/ks2/amplitudes.npy',
         'ibl/ks2/channel_map.npy',
         'ibl/ks2/channel_positions.npy',
@@ -70,20 +74,16 @@ DATASETS = {
     ],
     'alf': [
         'ibl/alf/params.py',
+
         'ibl/alf/_spikeglx_ephysData_g0_t0.imec0.ap.bin',
         # 'ibl/alf/_spikeglx_ephysData_g0_t0.imec0.ap.cbin',
         # 'ibl/alf/_spikeglx_ephysData_g0_t0.imec0.ap.ch',
+
         'ibl/alf/channels.localCoordinates.npy',
         'ibl/alf/channels.rawInd.npy',
         'ibl/alf/clusters.amps.npy',
         'ibl/alf/clusters.channels.npy',
         'ibl/alf/clusters.depths.npy',
-        # 'ibl/alf/clusters.metrics.csv',
-        # 'ibl/alf/clusters.peakToTrough.npy',
-        # 'ibl/alf/clusters.uuids.csv',
-        # 'ibl/alf/clusters.waveformsChannels.npy',
-        # 'ibl/alf/clusters.waveforms.npy',
-        # 'ibl/alf/_kilosort_whitening.matrix.npy',
         'ibl/alf/_phy_spikes_subset.channels.npy',
         'ibl/alf/_phy_spikes_subset.spikes.npy',
         'ibl/alf/_phy_spikes_subset.waveforms.npy',

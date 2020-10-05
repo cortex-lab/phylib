@@ -365,11 +365,17 @@ class TemplateLoaderIBLTests(unittest.TestCase):
             'channel_shanks',
             'channel_probes',
             'spike_depths',
+            'spike_amps',
             'wm',
+            'wmi',
         )
         for x in xs:
             self.assertTrue(np.all(getattr(la, x) == getattr(lk, x)))
 
-        # TODO
-        # spike_amps
-        # template_amps
+        assert .5 <= la.template_amps.mean() / lk.template_amps.mean() <= 1.5
+        assert .5 <= la.template_amps.std() / lk.template_amps.std() <= 1.5
+
+        # import matplotlib.pyplot as plt
+        # plt.plot(la.template_amps, 'o')
+        # plt.plot(lk.template_amps, 'o')
+        # plt.show()
