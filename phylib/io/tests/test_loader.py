@@ -334,6 +334,11 @@ class TemplateLoaderALFTests(TemplateLoaderKS2Tests):
     param = 'alf'
     _loader_cls = l.TemplateLoaderAlf
 
+    def test_spike_waveforms(self):
+        nspk, nsmp, nch = self.loader.spike_waveforms.data.shape
+        assert self.loader.spike_waveforms.cols.shape == (nspk, nch)
+        assert self.loader.spike_waveforms.rows.shape == (nspk,)
+
 
 class TemplateLoaderIBLTests(unittest.TestCase):
     @ classmethod

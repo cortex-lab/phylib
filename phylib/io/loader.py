@@ -217,7 +217,7 @@ def validate_spike_templates(f):
         assert np.all(out >= -1)
         uc = np.unique(out)
         if np.max(uc) - np.min(uc) + 1 != uc.size:
-            logger.warning(
+            logger.debug(
                 "Unreferenced clusters found in templates (generally not a problem)")
         return out
     return wrapped
@@ -1007,6 +1007,13 @@ class TemplateLoaderAlf(BaseTemplateLoader):
 
         # Compute amplitudes and depths in physical units.
         self.spike_depths = _load_depths_alf(self.ar('spikes.depths.npy'))
+
+        # Spike waveforms subset.
+        self.spike_waveforms = _load_spike_waveforms(
+            self.ar('_phy_spikes_subset.waveforms.npy', mandatory=False),
+            self.ar('_phy_spikes_subset.channels.npy', mandatory=False),
+            self.ar('_phy_spikes_subset.spikes.npy', mandatory=False),
+        )
 
         # Similar templates.
         # self.similar_templates = _load_similarity_matrix(self.ar('similar_templates.npy'))
