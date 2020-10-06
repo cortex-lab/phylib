@@ -296,7 +296,7 @@ class TemplateLoaderDenseTests(unittest.TestCase):
     def tearDownClass(cls):
         shutil.rmtree(cls.tempdir)
 
-    def test_spike_times(self):
+    def test_1(self):
         pass
 
 
@@ -328,6 +328,9 @@ class TemplateLoaderKS2Tests(TemplateLoaderDenseTests):
 
         ld = cls.loader = cls._loader_cls()
         ld.open(cls.tempdir)
+
+    def test_traces(self):
+        assert self.loader.traces.shape[1] == 385
 
 
 class TemplateLoaderALFTests(TemplateLoaderKS2Tests):

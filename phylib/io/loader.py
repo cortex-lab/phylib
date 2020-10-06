@@ -16,16 +16,16 @@ Supported file formats:
 
 from functools import wraps, partial
 import logging
-# import os
+import os
 import os.path as op
 from pathlib import Path
-# import shutil
 
 import numpy as np
 import scipy.io as sio
 
-from phylib.utils import Bunch
 from phylib.io.array import _index_of
+from phylib.io.traces import get_ephys_reader, RandomEphysReader
+from phylib.utils import Bunch
 from phylib.utils._misc import read_python
 from phylib.utils.geometry import linear_positions
 
@@ -800,6 +800,13 @@ def _load_similarity_matrix(mat):
 #------------------------------------------------------------------------------
 
 class BaseTemplateLoader(object):
+    """The Loader provides the data as a set of in-memory arrays in the right physical units.
+
+    The model provides high-level data access methods that leverage these arrays in the loader.
+
+    There should be 1 loader per data format/variant.
+
+    """
     spike_times = None
     spike_times_reorder = None
     spike_templates = None
@@ -807,17 +814,23 @@ class BaseTemplateLoader(object):
     spike_depths = None
     spike_amps = None
     ks2_amplitudes = None
+
     templates = None
     template_amps = None
     similar_templates = None
+
     channel_map = None
     channel_positions = None
     channel_shanks = None
     channel_probes = None
+
     wmi = None
     wm = None
+
     features = None
     template_features = None
+
+    traces = None
 
     def load_params(self, data_dir):
         self.data_dir = Path(data_dir).resolve()
@@ -826,6 +839,22 @@ class BaseTemplateLoader(object):
         params_path = self.data_dir / 'params.py'
         assert params_path.exists()
         self.params = read_params(params_path)
+
+    def load_traces(self):
+        if not self.params.dat_path:
+            if os.environ.get('PHY_VIRTUAL_RAW_DATA', None):  # pragma: no cover
+                n_samples = int((self.spike_times[-1] + 1) * self.sample_rate)
+                return RandomEphysReader(
+                    n_samples, len(self.channel_map), sample_rate=self.sample_rate)
+            return
+        # self.dat_path could be any object accepted by get_ephys_reader().
+        traces = get_ephys_reader(
+            self.params.dat_path, n_channels_dat=self.params.n_channels_dat,
+            dtype=self.params.dtype, offset=self.params.offset,
+            sample_rate=self.params.sample_rate, ampfactor=self.params.ampfactor)
+        if traces is not None:
+            traces = traces[:, self.channel_map]  # lazy permutation on the channel axis
+        self.traces = traces
 
     def check(self):
         """Check consistency of all arrays and model variables."""
@@ -888,6 +917,7 @@ class TemplateLoaderKS2(BaseTemplateLoader):
 
     def open(self, data_dir):
         self.load_params(data_dir)
+        self.load_traces()
 
         sr = self.params.sample_rate
 
@@ -968,6 +998,7 @@ class TemplateLoaderKS2(BaseTemplateLoader):
 class TemplateLoaderAlf(BaseTemplateLoader):
     def open(self, data_dir):
         self.load_params(data_dir)
+        self.load_traces()
 
         # Spike times.
         self.spike_times = _load_spike_times_alf(self.ar('spikes.times.npy'))
@@ -1015,17 +1046,10 @@ class TemplateLoaderAlf(BaseTemplateLoader):
             self.ar('_phy_spikes_subset.spikes.npy', mandatory=False),
         )
 
-        # Similar templates.
-        # self.similar_templates = _load_similarity_matrix(self.ar('similar_templates.npy'))
-
-        # # PC features.
-        # self.features = _load_features(
-        #     self.ar('pc_features.npy'),
-        #     channels=self.ar('pc_feature_ind.npy', mandatory=False))
-
-        # # Template features.
-        # self.template_features = _load_template_features(
-        #     self.ar('template_features.npy'),
-        #     self.ar('template_feature_ind.npy', mandatory=False))
+        # The following objects are not extracted in ALF and may need to be computed on the fly
+        # in the model:
+        #   - Similar templates
+        #   - PC features
+        #   - Template features
 
         self.check()
