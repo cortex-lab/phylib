@@ -26,7 +26,7 @@ import scipy.io as sio
 from phylib.io.array import _index_of
 from phylib.io.traces import get_ephys_reader, RandomEphysReader
 from phylib.utils import Bunch
-from phylib.utils._misc import read_python
+from phylib.utils._misc import read_python, read_tsv
 from phylib.utils.geometry import linear_positions
 
 logger = logging.getLogger(__name__)
@@ -905,6 +905,10 @@ class BaseTemplateLoader(object):
             raise IOError("File %s does not exist" % fn)
         # File does not exist.
         return default
+
+    def read_tsv(self, fn):
+        path = self.data_dir / fn
+        return read_tsv(path)
 
 
 class TemplateLoaderKS2(BaseTemplateLoader):
