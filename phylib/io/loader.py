@@ -111,8 +111,8 @@ def from_sparse(data, cols, channel_ids):
     """
     # The axis in the data that contains the channels.
     if len(channel_ids) != len(np.unique(channel_ids)):
-        raise NotImplementedError("Multiple identical requested channels "
-                                  "in from_sparse().")
+        raise NotImplementedError(
+            "Multiple identical requested channels in from_sparse().")
     channel_axis = 1
     shape = list(data.shape)
     assert data.ndim >= 2
@@ -807,30 +807,30 @@ class BaseTemplateLoader(object):
     There should be 1 loader per data format/variant.
 
     """
-    spike_times = None
-    spike_times_reorder = None
-    spike_templates = None
-    spike_clusters = None
-    spike_depths = None
-    spike_amps = None
-    ks2_amplitudes = None
+    spike_times = None  # (n_spikes,)
+    spike_times_reorder = None  # (n_spikes,)
+    spike_templates = None  # (n_spikes,)
+    spike_clusters = None  # (n_spikes,)
+    spike_depths = None  # (n_spikes,)
+    spike_amps = None  # (n_spikes,)
+    ks2_amplitudes = None  # (n_spikes,)
 
-    templates = None
-    template_amps = None
-    similar_templates = None
+    templates = None  # (n_templates, n_samples, n_channels)
+    template_amps = None  # (n_templates,)
+    similar_templates = None  # (n_templates, n_templates)
 
-    channel_map = None
-    channel_positions = None
-    channel_shanks = None
-    channel_probes = None
+    channel_map = None  # (channels,)
+    channel_positions = None  # (channels, 2)
+    channel_shanks = None  # (channels,)
+    channel_probes = None  # (channels,)
 
-    wmi = None
-    wm = None
+    wmi = None  # (channels, channels)
+    wm = None  # (channels, channels)
 
-    features = None
-    template_features = None
+    features = None  # (n_spikes_subset, n_pcs, n_channels_loc)
+    template_features = None  # (n_spikes_subset, n_channels_loc)
 
-    traces = None
+    traces = None  # (n_samples, n_channels)
 
     def load_params(self, data_dir):
         self.data_dir = Path(data_dir).resolve()

@@ -15,7 +15,7 @@ import unittest
 
 import numpy as np
 import numpy.random as npr
-from numpy.testing import assert_allclose as ac
+from numpy.testing import assert_allclose as ac, assert_equal as ae
 from pytest import raises
 
 from .conftest import Dataset
@@ -28,6 +28,28 @@ logger = logging.getLogger(__name__)
 #------------------------------------------------------------------------------
 # Test format utils
 #------------------------------------------------------------------------------
+
+def test_from_sparse():
+    data = np.array([[0, 1, 2], [3, 4, 5]])
+    cols = np.array([[20, 23, 21], [21, 19, 22]])
+
+    def _test(channel_ids, expected):
+        expected = np.asarray(expected)
+        dense = l.from_sparse(data, cols, np.array(channel_ids))
+        assert dense.shape == expected.shape
+        ae(dense, expected)
+
+    _test([0], np.zeros((2, 1)))
+    _test([19], [[0], [4]])
+    _test([20], [[0], [0]])
+    _test([21], [[2], [3]])
+
+    _test([19, 21], [[0, 2], [4, 3]])
+    _test([21, 19], [[2, 0], [3, 4]])
+
+    with raises(NotImplementedError):
+        _test([19, 19], [[0, 0], [4, 4]])
+
 
 def test_are_templates_dense(dset):
     if dset.param == 'ks2':
