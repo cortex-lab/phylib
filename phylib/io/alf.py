@@ -169,7 +169,6 @@ class EphysAlfCreator(object):
 
     def make_cluster_objects(self):
         """Create clusters.channels, clusters.waveformsDuration and clusters.amps"""
-
         peak_channel_path = self.dir_path / 'clusters.channels.npy'
         if not peak_channel_path.exists():
             self._save_npy(peak_channel_path.name, self.model.templates_channels)
@@ -179,8 +178,8 @@ class EphysAlfCreator(object):
             self._save_npy(waveform_duration_path.name, self.model.templates_waveforms_durations)
 
         # group by average over cluster number
-        camps = np.zeros(np.max(self.cluster_ids) - np.min(self.cluster_ids) + 1,) * np.nan
-        camps[self.cluster_ids - np.min(self.cluster_ids)] = self.model.templates_amplitudes
+        camps = np.zeros(self.model.templates_channels.shape[0],) * np.nan
+        camps[self.cluster_ids] = self.model.templates_amplitudes
         amps_path = self.dir_path / 'clusters.amps.npy'
         self._save_npy(amps_path.name, camps * self.ampfactor)
 
