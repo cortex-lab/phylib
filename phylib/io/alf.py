@@ -31,7 +31,6 @@ NSAMPLE_WAVEFORMS = 500  # number of waveforrms sampled out of the raw data
 
 _FILE_RENAMES = [  # file_in, file_out, squeeze (bool to squeeze vector from matlab in npy)
     ('params.py', 'params.py', None),
-    ('cluster_metrics.csv', 'clusters.metrics.csv', None),
     ('spike_clusters.npy', 'spikes.clusters.npy', True),
     ('spike_templates.npy', 'spikes.templates.npy', True),
     ('channel_positions.npy', 'channels.localCoordinates.npy', False),
