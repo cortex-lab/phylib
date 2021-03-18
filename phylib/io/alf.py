@@ -192,7 +192,7 @@ class EphysAlfCreator(object):
     def make_channel_objects(self):
         """If there is no rawInd file, create it"""
         rawInd_path = self.dir_path / 'channels.rawInd.npy'
-        rawInd = np.zeros_like(self.model.channel_probes).astype(np.int)
+        rawInd = np.zeros_like(self.model.channel_probes).astype(int)
         channel_offset = 0
         for probe in np.unique(self.model.channel_probes):
             ind = self.model.channel_probes == probe

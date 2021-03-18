@@ -649,7 +649,7 @@ def export_waveforms(
     spike_channels = np.asarray(spike_channels, dtype=np.int32)
     n_channels_loc = spike_channels.shape[1]
     shape = (n_spikes, n_samples_waveforms, n_channels_loc)
-    dtype = traces.dtype if sample2unit is None else np.float
+    dtype = traces.dtype if sample2unit is None else float
     writer = NpyWriter(path, shape, dtype)
     size_written = 0
     for waveforms in iter_waveforms(

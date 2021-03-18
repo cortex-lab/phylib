@@ -115,7 +115,7 @@ def _index_of(arr, lookup):
     # values
     lookup = np.asarray(lookup, dtype=np.int32)
     m = (lookup.max() if len(lookup) else 0) + 1
-    tmp = np.zeros(m + 1, dtype=np.int)
+    tmp = np.zeros(m + 1, dtype=int)
     # Ensure that -1 values are kept.
     tmp[-1] = -1
     if len(lookup):
@@ -327,7 +327,7 @@ def get_excerpts(data, n_excerpts=None, excerpt_size=None):
 def _spikes_in_clusters(spike_clusters, clusters):
     """Return the ids of all spikes belonging to the specified clusters."""
     if len(spike_clusters) == 0 or len(clusters) == 0:
-        return np.array([], dtype=np.int)
+        return np.array([], dtype=int)
     return np.nonzero(np.in1d(spike_clusters, clusters))[0]
 
 

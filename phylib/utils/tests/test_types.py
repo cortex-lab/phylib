@@ -88,13 +88,13 @@ def test_array():
     _check(_as_array(3.))
     _check(_as_array([3]))
 
-    _check(_as_array(3, np.float))
-    _check(_as_array(3., np.float))
-    _check(_as_array([3], np.float))
+    _check(_as_array(3, float))
+    _check(_as_array(3., float))
+    _check(_as_array([3], float))
     _check(_as_array(np.array([3])))
     with raises(ValueError):
-        _check(_as_array(np.array([3]), dtype=np.object))
-    _check(_as_array(np.array([3]), np.float))
+        _check(_as_array(np.array([3]), dtype=object))
+    _check(_as_array(np.array([3]), float))
 
     assert _as_array(None) is None
     assert not _is_array_like(None)
