@@ -1035,44 +1035,70 @@ class TemplateModel(object):
     def get_depths(self):
         """Compute spike depths based on spike pc features and probe depths."""
         # compute the depth as the weighted sum of coordinates
-        batch_sz = 50000  # number of spikes per batch
+        # if PC features are provided, compute the depth as the weighted sum of coordinates
+        nbatch = 50000
         c = 0
-        spike_depths = np.zeros_like(self.spike_times)
-        nspi = spike_depths.shape[0]
+        spikes_depths = np.zeros_like(self.spike_times) * np.nan
+        nspi = spikes_depths.shape[0]
         if self.sparse_features is None or self.sparse_features.data.shape[0] != self.n_spikes:
             return None
         while True:
-            ispi = np.arange(c, min(c + batch_sz, nspi))
+            ispi = np.arange(c, min(c + nbatch, nspi))
             # take only first component
-            features = np.square(self.sparse_features.data[ispi, :, 0])
-            ichannels = self.sparse_features.cols[self.spike_clusters[ispi]].astype(np.int64)
+            features = self.sparse_features.data[ispi, :, 0]
+            features = np.maximum(features, 0) ** 2  # takes only positive values into account
+            ichannels = self.sparse_features.cols[self.spike_clusters[ispi]].astype(np.uint32)
             ypos = self.channel_positions[ichannels, 1]
-
-            spike_depths[ispi] = np.sum(np.transpose(ypos * features) /
-                                        np.sum(features, axis=1), axis=0)
-            c += batch_sz
+            with np.errstate(divide='ignore'):
+                spikes_depths[ispi] = (np.sum(np.transpose(ypos * features) /
+                                              np.sum(features, axis=1), axis=0))
+            c += nbatch
             if c >= nspi:
                 break
+        return spikes_depths
 
-        return spike_depths
-
-    def get_amplitudes_true(self):
+    def get_amplitudes_true(self, sample2unit=1.):
         """Convert spike amplitude values to input amplitudes units
-         via scaling by unwhitened template waveform."""
+         via scaling by unwhitened template waveform.
+         :param sample2unit float: factor to convert the raw data to a physical unit (defaults 1.)
+         :returns: spike_amplitudes_volts: np.array [nspikes] spike amplitudes in raw data units
+         :returns: templates_volts: np.array[ntemplates, nsamples, nchannels]: templates
+         in raw data units
+         :returns: template_amps_volts: np.array[ntemplates]: average templates amplitudes
+          in raw data units
+         To scale the template for template matching,
+         raw_data_volts = templates_volts * spike_amplitudes_volts / template_amps_volts
+         """
+        # spike_amp = ks2_spike_amps * maxmin(inv_whitening(ks2_template_amps))
+        # to rescale the template,
+
         # unwhiten template waveforms on their channels of max amplitude
-        templates_chs = self.templates_channels
-        templates_wfs = self.sparse_templates.data[np.arange(self.n_templates), :, templates_chs]
-        templates_wfs_unw = templates_wfs.T * self.wmi[templates_chs, templates_chs]
-        templates_amps = np.abs(
-            np.max(templates_wfs_unw, axis=0) - np.min(templates_wfs_unw, axis=0))
+        if self.sparse_templates.cols:
+            raise NotImplementedError
+        # apply the inverse whitening matrix to the template
+        templates_wfs = np.zeros_like(self.sparse_templates.data)  # nt, ns, nc
+        for n in np.arange(self.n_templates):
+            templates_wfs[n, :, :] = np.matmul(self.sparse_templates.data[n, :, :], self.wmi)
 
-        # scale the spike amplitude values by the template amplitude values
-        amplitudes_v = np.zeros_like(self.amplitudes)
-        for t in range(self.n_templates):
-            idxs = self.get_template_spikes(t)
-            amplitudes_v[idxs] = self.amplitudes[idxs] * templates_amps[t]
+        # The amplitude on each channel is the positive peak minus the negative
+        templates_ch_amps = np.max(templates_wfs, axis=1) - np.min(templates_wfs, axis=1)
 
-        return amplitudes_v
+        # The template arbitrary unit amplitude is the amplitude of its largest channel
+        # (but see below for true tempAmps)
+        templates_amps_au = np.max(templates_ch_amps, axis=1)
+        spike_amps = templates_amps_au[self.spike_templates] * self.amplitudes
+
+        with np.errstate(divide='ignore'):
+            # take the average spike amplitude per template
+            templates_amps_v = (np.bincount(self.spike_templates, weights=spike_amps) /
+                                np.bincount(self.spike_templates))
+            # scale back the template according to the spikes units
+            templates_physical_unit = templates_wfs * (templates_amps_v / templates_amps_au
+                                                       )[:, np.newaxis, np.newaxis]
+
+        return (spike_amps * sample2unit,
+                templates_physical_unit * sample2unit,
+                templates_amps_v * sample2unit)
 
     #--------------------------------------------------------------------------
     # Internal helper methods for public high-level methods
@@ -1232,7 +1258,8 @@ class TemplateModel(object):
         logger.debug("Save spike clusters to `%s`.", path)
         np.save(path, spike_clusters)
 
-    def save_spikes_subset_waveforms(self, max_n_spikes_per_template=None, max_n_channels=None):
+    def save_spikes_subset_waveforms(self, max_n_spikes_per_template=None, max_n_channels=None,
+                                     sample2unit=1.):
         if self.traces is None:
             logger.warning(
                 "Spike waveforms could not be extracted as the raw data file is not available.")
@@ -1240,7 +1267,9 @@ class TemplateModel(object):
 
         n_chunks_kept = 20  # TODO: better choice
         nst = max_n_spikes_per_template
-        nc = max_n_channels
+        nc = max_n_channels or self.n_closest_channels
+        nc = max(nc, self.n_closest_channels)
+
         assert nst > 0
         assert nc > 0
 
@@ -1275,7 +1304,7 @@ class TemplateModel(object):
         # Extract waveforms from the raw data on a chunk by chunk basis.
         export_waveforms(
             path, self.traces, self.spike_samples[spike_ids], spike_channels,
-            n_samples_waveforms=self.n_samples_waveforms)
+            n_samples_waveforms=self.n_samples_waveforms, sample2unit=sample2unit)
 
         # Reload spike waveforms.
         self.spike_waveforms = self._load_spike_waveforms()

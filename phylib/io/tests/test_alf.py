@@ -36,7 +36,7 @@ class Dataset(object):
         self.nt = 5
         self.ncd = 1000
         np.save(p / 'spike_times.npy', .01 * np.cumsum(nr.exponential(size=self.ns)))
-        np.save(p / 'spike_clusters.npy', nr.randint(low=0, high=self.nt, size=self.ns))
+        np.save(p / 'spike_clusters.npy', nr.randint(low=1, high=self.nt, size=self.ns))
         shutil.copy(p / 'spike_clusters.npy', p / 'spike_templates.npy')
         np.save(p / 'amplitudes.npy', nr.uniform(low=0.5, high=1.5, size=self.ns))
         np.save(p / 'channel_positions.npy', np.c_[np.arange(self.nc), np.zeros(self.nc)])
@@ -174,16 +174,22 @@ def test_creator(dataset):
             assert f.exists()
 
         # makes sure the output dimensions match (especially clusters which should be 4)
-        cl_shape = [np.load(f).shape[0] for f in new_files if f.name.startswith('clusters.') and
-                    f.name.endswith('.npy')]
+        cl_shape = []
+        for f in new_files:
+            if f.name.startswith('clusters.') and f.name.endswith('.npy'):
+                cl_shape.append(np.load(f).shape[0])
+            elif f.name.startswith('clusters.') and f.name.endswith('.csv'):
+                with open(f) as fid:
+                    cl_shape.append(len(fid.readlines()) - 1)
         sp_shape = [np.load(f).shape[0] for f in new_files if f.name.startswith('spikes.')]
         ch_shape = [np.load(f).shape[0] for f in new_files if f.name.startswith('channels.')]
+
         assert len(set(cl_shape)) == 1
         assert len(set(sp_shape)) == 1
         assert len(set(ch_shape)) == 1
 
         dur = np.load(next(out_path.glob('clusters.peakToTrough*.npy')))
-        assert np.all(dur == np.array([18., -1., 9.5, 2.5, -2.]))
+        assert np.all(dur == np.array([-9.5, 3., 13., -4.5, -2.5]))
 
     def read_after_write():
         model = TemplateModel(dir_path=out_path, dat_path=dataset.dat_path,

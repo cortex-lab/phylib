@@ -148,7 +148,7 @@ def correlograms(
 
     # At a given shift, the mask precises which spikes have matching spikes
     # within the correlogram time window.
-    mask = np.ones_like(spike_samples, dtype=np.bool)
+    mask = np.ones_like(spike_samples, dtype=bool)
 
     correlograms = _create_correlograms_array(n_clusters, winsize_bins)
 

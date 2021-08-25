@@ -27,11 +27,11 @@ logger = logging.getLogger(__name__)
 # File utils
 #------------------------------------------------------------------------------
 
-NCH_WAVEFORMS = 32  # number of channels to be saved in templates.waveforms and channels.waveforms
+NSAMPLE_WAVEFORMS = 500  # number of waveforrms sampled out of the raw data
 
 _FILE_RENAMES = [  # file_in, file_out, squeeze (bool to squeeze vector from matlab in npy)
     ('params.py', 'params.py', None),
-    ('cluster_metrics.csv', 'clusters.metrics.csv', None),
+    ('cluster_KSLabel.tsv', 'cluster_KSLabel.tsv', None),
     ('spike_clusters.npy', 'spikes.clusters.npy', True),
     ('spike_templates.npy', 'spikes.templates.npy', True),
     ('channel_positions.npy', 'channels.localCoordinates.npy', False),
@@ -42,6 +42,9 @@ _FILE_RENAMES = [  # file_in, file_out, squeeze (bool to squeeze vector from mat
     ('_phy_spikes_subset.channels.npy', '_phy_spikes_subset.channels.npy', False),
     ('_phy_spikes_subset.spikes.npy', '_phy_spikes_subset.spikes.npy', False),
     ('_phy_spikes_subset.waveforms.npy', '_phy_spikes_subset.waveforms.npy', False),
+    ('drift.depth_scale.npy', 'drift.depth_scale.npy', False),
+    ('drift.time_scale.npy', 'drift.time_scale.npy', False),
+    ('drift.um.npy', 'drift.um.npy', False),
     # ('cluster_group.tsv', 'ks2/clusters.phyAnnotation.tsv', False), # todo check indexing, add2QC
 ]
 
@@ -116,20 +119,22 @@ class EphysAlfCreator(object):
         if not self.out_path.exists():
             self.out_path.mkdir()
 
-        with tqdm(desc="Converting to ALF", total=95) as bar:
-            self.copy_files(force=force)
-            bar.update(10)
-            self.make_spike_times_amplitudes()
+        with tqdm(desc="Converting to ALF", total=125) as bar:
             bar.update(10)
             self.make_cluster_objects()
             bar.update(10)
             self.make_channel_objects()
             bar.update(5)
+            self.make_template_and_spikes_objects()
+            bar.update(30)
+            self.model.save_spikes_subset_waveforms(
+                NSAMPLE_WAVEFORMS, sample2unit=self.ampfactor)
+            bar.update(50)
             self.make_depths()
             bar.update(20)
-            self.make_template_object()
-            bar.update(30)
             self.rm_files()
+            bar.update(10)
+            self.copy_files(force=force)
             bar.update(10)
             self.rename_with_label()
 
@@ -165,16 +170,8 @@ class EphysAlfCreator(object):
         """Save an array into a .npy file."""
         np.save(self.out_path / filename, arr)
 
-    def make_spike_times_amplitudes(self):
-        """We cannot just rename/copy spike_times.npy because it is in unit of
-        *samples*, and not in seconds."""
-        self._save_npy('spikes.times.npy', self.model.spike_times)
-        self._save_npy('spikes.samples.npy', self.model.spike_samples)
-        self._save_npy('spikes.amps.npy', self.model.get_amplitudes_true() * self.ampfactor)
-
     def make_cluster_objects(self):
         """Create clusters.channels, clusters.waveformsDuration and clusters.amps"""
-
         peak_channel_path = self.dir_path / 'clusters.channels.npy'
         if not peak_channel_path.exists():
             self._save_npy(peak_channel_path.name, self.model.templates_channels)
@@ -184,8 +181,8 @@ class EphysAlfCreator(object):
             self._save_npy(waveform_duration_path.name, self.model.templates_waveforms_durations)
 
         # group by average over cluster number
-        camps = np.zeros(np.max(self.cluster_ids) - np.min(self.cluster_ids) + 1,) * np.nan
-        camps[self.cluster_ids - np.min(self.cluster_ids)] = self.model.templates_amplitudes
+        camps = np.zeros(self.model.templates_channels.shape[0],) * np.nan
+        camps[self.cluster_ids] = self.model.templates_amplitudes
         amps_path = self.dir_path / 'clusters.amps.npy'
         self._save_npy(amps_path.name, camps * self.ampfactor)
 
@@ -198,7 +195,7 @@ class EphysAlfCreator(object):
     def make_channel_objects(self):
         """If there is no rawInd file, create it"""
         rawInd_path = self.dir_path / 'channels.rawInd.npy'
-        rawInd = np.zeros_like(self.model.channel_probes).astype(np.int)
+        rawInd = np.zeros_like(self.model.channel_probes).astype(int)
         channel_offset = 0
         for probe in np.unique(self.model.channel_probes):
             ind = self.model.channel_probes == probe
@@ -225,20 +222,27 @@ class EphysAlfCreator(object):
             spikes_depths = clusters_depths[spike_clusters]
         else:
             spikes_depths = self.model.get_depths()
-            # if PC features are provided, compute the depth as the weighted sum of coordinates
-
         self._save_npy('spikes.depths.npy', spikes_depths)
         self._save_npy('clusters.depths.npy', clusters_depths)
 
-    def make_template_object(self):
+    def make_template_and_spikes_objects(self):
         """Creates the template waveforms sparse object
         Without manual curation, it also corresponds to clusters waveforms objects.
         """
+        # "We cannot just rename/copy spike_times.npy because it is in unit of samples,
+        # and not seconds
+        self._save_npy('spikes.times.npy', self.model.spike_times)
+        self._save_npy('spikes.samples.npy', self.model.spike_samples)
+        spike_amps, templates_v, template_amps = self.model.get_amplitudes_true(self.ampfactor)
+        self._save_npy('spikes.amps.npy', spike_amps)
+        self._save_npy('templates.amps.npy', template_amps)
+
         if self.model.sparse_templates.cols:
             raise(NotImplementedError("Sparse template export to ALF not implemented yet"))
         else:
-            n_templates, n_wavsamps, nchall = self.model.sparse_templates.data.shape
-            ncw = min(NCH_WAVEFORMS, nchall)  # for some datasets, 32 may be too much
+            n_templates, n_wavsamps, nchall = templates_v.shape
+            # for some datasets, 32 may be too much
+            ncw = min(self.model.n_closest_channels, nchall)
             assert(n_templates == self.model.n_templates)
             templates = np.zeros((n_templates, n_wavsamps, ncw), dtype=np.float32)
             templates_inds = np.zeros((n_templates, ncw), dtype=np.int32)
@@ -250,10 +254,10 @@ class EphysAlfCreator(object):
                     self.model.channel_positions[self.model.templates_channels[t]]), axis=1)
                 channel_distance[self.model.channel_probes != current_probe] += np.inf
                 templates_inds[t, :] = np.argsort(channel_distance)[:ncw]
-                templates[t, ...] = self.model.sparse_templates.data[t, :][:, templates_inds[t, :]]
-            np.save(self.out_path.joinpath('templates.waveforms'), templates * self.ampfactor)
+                templates[t, ...] = templates_v[t, :][:, templates_inds[t, :]]
+            np.save(self.out_path.joinpath('templates.waveforms'), templates)
             np.save(self.out_path.joinpath('templates.waveformsChannels'), templates_inds)
-            np.save(self.out_path.joinpath('clusters.waveforms'), templates * self.ampfactor)
+            np.save(self.out_path.joinpath('clusters.waveforms'), templates)
             np.save(self.out_path.joinpath('clusters.waveformsChannels'), templates_inds)
 
     def rename_with_label(self):
