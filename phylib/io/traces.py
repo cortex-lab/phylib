@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_CHUNK_DURATION = 600.0  # seconds
 
 
-EPHYS_RAW_EXTENSIONS = ('.dat', '.bin', '.raw')
+EPHYS_RAW_EXTENSIONS = ('.dat', '.bin', '.raw', '.mda')
 
 
 #------------------------------------------------------------------------------
