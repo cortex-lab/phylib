@@ -42,8 +42,8 @@ _FILE_RENAMES = [  # file_in, file_out, squeeze (bool to squeeze vector from mat
     ('_phy_spikes_subset.channels.npy', '_phy_spikes_subset.channels.npy', False),
     ('_phy_spikes_subset.spikes.npy', '_phy_spikes_subset.spikes.npy', False),
     ('_phy_spikes_subset.waveforms.npy', '_phy_spikes_subset.waveforms.npy', False),
-    ('drift.depth_scale.npy', 'drift.depth_scale.npy', False),
-    ('drift.time_scale.npy', 'drift.time_scale.npy', False),
+    ('drift_depths.um.npy', 'drift_depths.um.npy', False),
+    ('drift.times.npy', 'drift.times.npy', False),
     ('drift.um.npy', 'drift.um.npy', False),
     # ('cluster_group.tsv', 'ks2/clusters.phyAnnotation.tsv', False), # todo check indexing, add2QC
 ]
