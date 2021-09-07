@@ -9,7 +9,7 @@
 import numpy as np
 from numpy.testing import assert_array_equal as ae
 from numpy.testing import assert_allclose as ac
-from pytest import yield_fixture
+from pytest import fixture
 
 from ..clusters import (mean,
                         get_unmasked_channels,
@@ -26,42 +26,42 @@ from phylib.io.mock import artificial_features, artificial_masks, artificial_wav
 # Fixtures
 #------------------------------------------------------------------------------
 
-@yield_fixture
+@fixture
 def n_channels():
     yield 28
 
 
-@yield_fixture
+@fixture
 def n_spikes():
     yield 50
 
 
-@yield_fixture
+@fixture
 def n_samples():
     yield 40
 
 
-@yield_fixture
+@fixture
 def n_features_per_channel():
     yield 4
 
 
-@yield_fixture
+@fixture
 def features(n_spikes, n_channels, n_features_per_channel):
     yield artificial_features(n_spikes, n_channels, n_features_per_channel)
 
 
-@yield_fixture
+@fixture
 def masks(n_spikes, n_channels):
     yield artificial_masks(n_spikes, n_channels)
 
 
-@yield_fixture
+@fixture
 def waveforms(n_spikes, n_samples, n_channels):
     yield artificial_waveforms(n_spikes, n_samples, n_channels)
 
 
-@yield_fixture
+@fixture
 def site_positions(n_channels):
     yield staggered_positions(n_channels)
 

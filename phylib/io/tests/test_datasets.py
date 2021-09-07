@@ -13,7 +13,7 @@ from itertools import product
 import numpy as np
 from numpy.testing import assert_array_equal as ae
 import responses
-from pytest import raises, yield_fixture
+from pytest import raises, fixture
 
 from ..datasets import (download_file,
                         download_test_file,
@@ -44,7 +44,7 @@ def _add_mock_response(url, body, file_type='binary'):
                   )
 
 
-@yield_fixture
+@fixture
 def mock_url():
     _add_mock_response(_URL, _DATA.tobytes())
     _add_mock_response(_URL + '.md5', _CHECKSUM + '  ' + Path(_URL).name)
@@ -52,7 +52,7 @@ def mock_url():
     responses.reset()
 
 
-@yield_fixture(params=product((True, False), repeat=4))
+@fixture(params=product((True, False), repeat=4))
 def mock_urls(request):
     data = _DATA.tobytes()
     checksum = _CHECKSUM
