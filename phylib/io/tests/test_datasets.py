@@ -46,7 +46,7 @@ def _add_mock_response(url, body, file_type='binary'):
 
 @yield_fixture
 def mock_url():
-    _add_mock_response(_URL, _DATA.tostring())
+    _add_mock_response(_URL, _DATA.tobytes())
     _add_mock_response(_URL + '.md5', _CHECKSUM + '  ' + Path(_URL).name)
     yield _URL
     responses.reset()
@@ -54,7 +54,7 @@ def mock_url():
 
 @yield_fixture(params=product((True, False), repeat=4))
 def mock_urls(request):
-    data = _DATA.tostring()
+    data = _DATA.tobytes()
     checksum = _CHECKSUM
     url_data = _URL
     url_checksum = _URL + '.md5'
@@ -128,7 +128,7 @@ def test_download_already_exists_valid(tempdir, mock_url):
         path = Path(tempdir) / 'test'
         # Create valid file.
         with open(path, 'ab') as f:
-            f.write(_DATA.tostring())
+            f.write(_DATA.tobytes())
         _check(_dl(path))
     assert 'skip' in buf.getvalue()
 
@@ -144,7 +144,7 @@ def test_download_file(tempdir, mock_urls):
                         (not(checksum_here) and checksum_valid)))
 
     download_succeeds = (assert_succeeds or (data_here and
-                         (not(data_valid) and not(checksum_here))))
+                                             (not(data_valid) and not(checksum_here))))
 
     if download_succeeds:
         data = _dl(path)
