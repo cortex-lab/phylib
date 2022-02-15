@@ -152,7 +152,7 @@ def _apply_op(op, arg, arr):
     return f(arg) if arg is not None else f()
 
 
-def _memmap_flat(path, dtype=None, n_channels=None, offset=0):
+def _memmap_flat(path, dtype=None, n_channels=None, offset=0, mode='r+'):
     path = Path(path)
     # Find the number of samples.
     assert n_channels > 0
@@ -160,7 +160,7 @@ def _memmap_flat(path, dtype=None, n_channels=None, offset=0):
     item_size = np.dtype(dtype).itemsize
     n_samples = (fsize - offset) // (item_size * n_channels)
     shape = (n_samples, n_channels)
-    return np.memmap(path, dtype=dtype, offset=offset, shape=shape)
+    return np.memmap(path, dtype=dtype, offset=offset, shape=shape, mode=mode)
 
 
 #------------------------------------------------------------------------------
@@ -303,7 +303,8 @@ class BaseEphysReader(object):
 
 
 class FlatEphysReader(BaseEphysReader):
-    def __init__(self, paths, sample_rate=None, dtype=None, offset=0, n_channels=None, **kwargs):
+    def __init__(self, paths, sample_rate=None, dtype=None, offset=0, n_channels=None, mode='r+',
+                 **kwargs):
         super(FlatEphysReader, self).__init__()
         if isinstance(paths, (str, Path)):
             paths = [paths]
@@ -312,7 +313,7 @@ class FlatEphysReader(BaseEphysReader):
         self.name = paths[0].stem
         self.dir_path = paths[0].parent
         self._mmaps = [
-            _memmap_flat(path, dtype=dtype, n_channels=n_channels, offset=offset)
+            _memmap_flat(path, dtype=dtype, n_channels=n_channels, offset=offset, mode=mode)
             for path in paths]
 
         self.sample_rate = sample_rate
