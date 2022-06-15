@@ -13,10 +13,22 @@ import numpy as np
 
 from ..testing import captured_output, captured_logging, _assert_equal
 
+logger = logging.getLogger('phylib')
+
 
 #------------------------------------------------------------------------------
 # Tests
 #------------------------------------------------------------------------------
+
+def test_logging_1():
+    print()
+    logger.setLevel(5)
+    logger.log(5, "level 5")
+    logger.log(10, "debug")
+    logger.log(20, "info")
+    logger.log(30, "warning")
+    logger.log(40, "error")
+
 
 def test_captured_output():
     with captured_output() as (out, err):
@@ -25,7 +37,6 @@ def test_captured_output():
 
 
 def test_captured_logging():
-    logger = logging.getLogger('phylib')
     handlers = logger.handlers
     with captured_logging() as buf:
         logger.debug('Hello world!')
