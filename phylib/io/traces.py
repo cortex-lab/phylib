@@ -303,7 +303,7 @@ class BaseEphysReader(object):
 
 
 class FlatEphysReader(BaseEphysReader):
-    def __init__(self, paths, sample_rate=None, dtype=None, offset=0, n_channels=None, mode='r+',
+    def __init__(self, paths, sample_rate=None, dtype=None, offset=0, n_channels=None, mode='r',
                  **kwargs):
         super(FlatEphysReader, self).__init__()
         if isinstance(paths, (str, Path)):
