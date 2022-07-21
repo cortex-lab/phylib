@@ -174,16 +174,19 @@ class EphysAlfCreator(object):
         """Create clusters.channels, clusters.waveformsDuration and clusters.amps"""
         peak_channel_path = self.dir_path / 'clusters.channels.npy'
         if not peak_channel_path.exists():
-            self._save_npy(peak_channel_path.name, self.model.templates_channels)
+            # self._save_npy(peak_channel_path.name, self.model.templates_channels)
+            self._save_npy(peak_channel_path.name, self.model.clusters_channels)
 
         waveform_duration_path = self.dir_path / 'clusters.peakToTrough.npy'
         if not waveform_duration_path.exists():
-            self._save_npy(waveform_duration_path.name, self.model.templates_waveforms_durations)
+            # self._save_npy(waveform_duration_path.name, self.model.templates_waveforms_durations)
+            self._save_npy(waveform_duration_path.name, self.model.clusters_waveforms_durations)
 
         # group by average over cluster number
-        camps = np.zeros(self.model.templates_channels.shape[0],) * np.nan
-        camps[self.cluster_ids] = self.model.templates_amplitudes
-        amps_path = self.dir_path / 'clusters.amps.npy'
+        # camps = np.zeros(self.model.templates_channels.shape[0],) * np.nan
+        camps = np.zeros(self.model.clusters_channels.shape[0], ) * np.nan
+        camps[self.cluster_ids] = self.model.clusters_amplitudes
+        amps_path = self.dir_path / 'clusters.amps.npy' # TODO these amplitudes are not on the same scale as the spike amps problem?
         self._save_npy(amps_path.name, camps * self.ampfactor)
 
         # clusters uuids
@@ -233,7 +236,7 @@ class EphysAlfCreator(object):
         # and not seconds
         self._save_npy('spikes.times.npy', self.model.spike_times)
         self._save_npy('spikes.samples.npy', self.model.spike_samples)
-        spike_amps, templates_v, template_amps = self.model.get_amplitudes_true(self.ampfactor)
+        spike_amps, templates_v, template_amps = self.model.get_amplitudes_true(self.ampfactor, use='templates')
         self._save_npy('spikes.amps.npy', spike_amps)
         self._save_npy('templates.amps.npy', template_amps)
 
@@ -257,8 +260,34 @@ class EphysAlfCreator(object):
                 templates[t, ...] = templates_v[t, :][:, templates_inds[t, :]]
             np.save(self.out_path.joinpath('templates.waveforms'), templates)
             np.save(self.out_path.joinpath('templates.waveformsChannels'), templates_inds)
+
+            _, clusters_v, cluster_amps = self.model.get_amplitudes_true(self.ampfactor, use='clusters')
+            n_clusters, n_wavsamps, nchall = clusters_v.shape
+            # for some datasets, 32 may be too much
+            ncw = min(self.model.n_closest_channels, nchall)
+            assert(n_clusters == self.model.n_clusters)
+            templates = np.zeros((n_clusters, n_wavsamps, ncw), dtype=np.float32)
+            templates_inds = np.zeros((n_clusters, ncw), dtype=np.int32)
+            # for each template, find the nearest channels to keep (one the same probe...)
+            for t in np.arange(n_clusters):
+                # here we need to fill with nans if it doesn't exists, but then can no longet be int (sorry) # or have it all 0
+                channels = self.model.clusters_channels
+
+                current_probe = self.model.channel_probes[channels[t]]
+                channel_distance = np.sum(np.abs(
+                    self.model.channel_positions -
+                    self.model.channel_positions[channels[t]]), axis=1)
+                channel_distance[self.model.channel_probes != current_probe] += np.inf
+                templates_inds[t, :] = np.argsort(channel_distance)[:ncw]
+                templates[t, ...] = clusters_v[t, :][:, templates_inds[t, :]]
             np.save(self.out_path.joinpath('clusters.waveforms'), templates)
             np.save(self.out_path.joinpath('clusters.waveformsChannels'), templates_inds)
+
+            # This should really be here
+            np.save(self.out_path.joinpath('clusters.amps'), cluster_amps)
+
+            # np.save(self.out_path.joinpath('clusters.waveforms'), templates)
+            # np.save(self.out_path.joinpath('clusters.waveformsChannels'), templates_inds)
 
     def rename_with_label(self):
         """add the label as an ALF part name before the extension if any label provided"""

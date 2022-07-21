@@ -412,6 +412,18 @@ class TemplateModel(object):
             self.n_samples_waveforms = 0
             self.n_channels_loc = 0
 
+        # Clusters waveforms
+        if np.all(self.spike_clusters == self.spike_templates):
+            self.merge_map = {}
+            self.nan_clusters = []
+            self.sparse_clusters = self.sparse_templates
+            self.n_clusters = self.spike_templates.max() + 1
+        else:
+            if self.sparse_templates.cols is None:
+                self.merge_map, self.nan_clusters = self.get_merge_map()
+                self.sparse_clusters = self.cluster_waveforms()
+                self.n_clusters = self.spike_clusters.max() + 1
+
         # Spike waveforms (optional, otherwise fetched from raw data as needed).
         self.spike_waveforms = self._load_spike_waveforms()
 
@@ -861,12 +873,12 @@ class TemplateModel(object):
             channel_ids += [-1] * (n_channels - len(channel_ids))
         return channel_ids
 
-    def _get_template_dense(self, template_id, channel_ids=None, amplitude_threshold=None):
+    def _get_template_dense(self, template_id, channel_ids=None, amplitude_threshold=None, unwhiten=True):
         """Return data for one template."""
         if not self.sparse_templates:
             return
         template_w = self.sparse_templates.data[template_id, ...]
-        template = self._unwhiten(template_w).astype(np.float32)
+        template = self._unwhiten(template_w).astype(np.float32) if unwhiten else template_w
         assert template.ndim == 2
         channel_ids_, amplitude, best_channel = self._find_best_channels(
             template, amplitude_threshold=amplitude_threshold)
@@ -881,7 +893,7 @@ class TemplateModel(object):
             channel_ids=channel_ids,
         )
 
-    def _get_template_sparse(self, template_id):
+    def _get_template_sparse(self, template_id, unwhiten=True):
         data, cols = self.sparse_templates.data, self.sparse_templates.cols
         assert cols is not None
         template_w, channel_ids = data[template_id], cols[template_id]
@@ -902,7 +914,7 @@ class TemplateModel(object):
         channel_ids = channel_ids.astype(np.uint32)
 
         # Unwhiten.
-        template = self._unwhiten(template_w, channel_ids=channel_ids)
+        template = self._unwhiten(template_w, channel_ids=channel_ids) if unwhiten else template_w
         template = template.astype(np.float32)
         assert template.ndim == 2
         assert template.shape[1] == len(channel_ids)
@@ -920,17 +932,31 @@ class TemplateModel(object):
         )
         return out
 
+    def get_merge_map(self):
+        """"Gets the merge mapping for between spikes.clusters and spikes.templates"""
+        inverse_mapping_dict = {key: [] for key in range(np.max(self.spike_clusters) + 1)}
+        for temp in np.unique(self.spike_templates):
+            idx = np.where(self.spike_templates == temp)[0]
+            new_idx = self.spike_clusters[idx]
+            mapping = np.unique(new_idx)
+            for n in mapping:
+                inverse_mapping_dict[n].append(temp)
+
+        nan_idx = np.array([idx for idx, val in inverse_mapping_dict.items() if len(val) == 0])
+
+        return inverse_mapping_dict, nan_idx
+
     #--------------------------------------------------------------------------
     # Data access methods
     #--------------------------------------------------------------------------
 
-    def get_template(self, template_id, channel_ids=None, amplitude_threshold=None):
+    def get_template(self, template_id, channel_ids=None, amplitude_threshold=None, unwhiten=True):
         """Get data about a template."""
         if self.sparse_templates and self.sparse_templates.cols is not None:
-            return self._get_template_sparse(template_id)
+            return self._get_template_sparse(template_id, unwhiten=unwhiten)
         else:
             return self._get_template_dense(
-                template_id, channel_ids=channel_ids, amplitude_threshold=amplitude_threshold)
+                template_id, channel_ids=channel_ids, amplitude_threshold=amplitude_threshold, unwhiten=unwhiten)
 
     def get_waveforms(self, spike_ids, channel_ids=None):
         """Return spike waveforms on specified channels."""
@@ -1047,7 +1073,7 @@ class TemplateModel(object):
             # take only first component
             features = self.sparse_features.data[ispi, :, 0]
             features = np.maximum(features, 0) ** 2  # takes only positive values into account
-            ichannels = self.sparse_features.cols[self.spike_clusters[ispi]].astype(np.uint32)
+            ichannels = self.sparse_features.cols[self.spike_templates[ispi]].astype(np.uint32) ## TODO this should be templates, otherwise won't work
             # features = np.square(self.sparse_features.data[ispi, :, 0])
             # ichannels = self.sparse_features.cols[self.spike_templates[ispi]].astype(np.int64)
             ypos = self.channel_positions[ichannels, 1]
@@ -1059,7 +1085,7 @@ class TemplateModel(object):
                 break
         return spikes_depths
 
-    def get_amplitudes_true(self, sample2unit=1.):
+    def get_amplitudes_true(self, sample2unit=1., use='templates'):
         """Convert spike amplitude values to input amplitudes units
          via scaling by unwhitened template waveform.
          :param sample2unit float: factor to convert the raw data to a physical unit (defaults 1.)
@@ -1074,13 +1100,22 @@ class TemplateModel(object):
         # spike_amp = ks2_spike_amps * maxmin(inv_whitening(ks2_template_amps))
         # to rescale the template,
 
+        if use == 'clusters':
+            sparse = self.sparse_clusters
+            spikes = self.spike_clusters
+            n_wav = self.n_clusters
+        else:
+            sparse = self.sparse_templates
+            spikes = self.spike_templates
+            n_wav = self.n_templates
+
         # unwhiten template waveforms on their channels of max amplitude
-        if self.sparse_templates.cols:
+        if sparse.cols:
             raise NotImplementedError
         # apply the inverse whitening matrix to the template
-        templates_wfs = np.zeros_like(self.sparse_templates.data)  # nt, ns, nc
-        for n in np.arange(self.n_templates):
-            templates_wfs[n, :, :] = np.matmul(self.sparse_templates.data[n, :, :], self.wmi)
+        templates_wfs = np.zeros_like(sparse.data)  # nt, ns, nc
+        for n in np.arange(n_wav):
+            templates_wfs[n, :, :] = np.matmul(sparse.data[n, :, :], self.wmi)
 
         # The amplitude on each channel is the positive peak minus the negative
         templates_ch_amps = np.max(templates_wfs, axis=1) - np.min(templates_wfs, axis=1)
@@ -1088,12 +1123,12 @@ class TemplateModel(object):
         # The template arbitrary unit amplitude is the amplitude of its largest channel
         # (but see below for true tempAmps)
         templates_amps_au = np.max(templates_ch_amps, axis=1)
-        spike_amps = templates_amps_au[self.spike_templates] * self.amplitudes
+        spike_amps = templates_amps_au[spikes] * self.amplitudes
 
         with np.errstate(divide='ignore', invalid='ignore'):
             # take the average spike amplitude per template
-            templates_amps_v = (np.bincount(self.spike_templates, weights=spike_amps) /
-                                np.bincount(self.spike_templates))
+            templates_amps_v = (np.bincount(spikes, weights=spike_amps) /
+                                np.bincount(spikes))
             # scale back the template according to the spikes units
             templates_physical_unit = templates_wfs * (templates_amps_v / templates_amps_au
                                                        )[:, np.newaxis, np.newaxis]
@@ -1167,7 +1202,7 @@ class TemplateModel(object):
         template = self.get_template(template_id)
         return template.template if template else None
 
-    def get_cluster_mean_waveforms(self, cluster_id):
+    def get_cluster_mean_waveforms(self, cluster_id, unwhiten=True):
         """Return the mean template waveforms of a cluster, as a weighted average of the
         template waveforms from which the cluster originates from."""
         count = self.get_template_counts(cluster_id)
@@ -1175,10 +1210,10 @@ class TemplateModel(object):
         template_ids = np.nonzero(count)[0]
         count = count[template_ids]
         # Get local channels of the best template for the given cluster.
-        template = self.get_template(best_template)
+        template = self.get_template(best_template, unwhiten=unwhiten)
         channel_ids = template.channel_ids
         # Get all templates from which this cluster stems from.
-        templates = [self.get_template(template_id) for template_id in template_ids]
+        templates = [self.get_template(template_id, unwhiten=unwhiten) for template_id in template_ids]
         # Construct the waveforms array.
         ns = self.n_samples_waveforms
         data = np.zeros((len(template_ids), ns, self.n_channels))
@@ -1205,15 +1240,26 @@ class TemplateModel(object):
     @property
     def templates_channels(self):
         """Returns a vector of peak channels for all templates"""
-        tmp = self.sparse_templates.data
+        return self._channels(self.sparse_templates)
+
+    @property
+    def clusters_channels(self):
+        """Returns a vector of peak channels for all templates"""
+        channels = self._channels(self.sparse_clusters)
+        return channels
+
+    def _channels(self, sparse):
+        # TODO document and better name
+        tmp = sparse.data
         n_templates, n_samples, n_channels = tmp.shape
-        if self.sparse_templates.cols is None:
+        if sparse.cols is None:
             template_peak_channels = np.argmax(tmp.max(axis=1) - tmp.min(axis=1), axis=1)
         else:
             # when the templates are sparse, the first channel is the highest amplitude channel
-            template_peak_channels = self.sparse_templates.cols[:, 0]
+            template_peak_channels = sparse.cols[:, 0]
         assert template_peak_channels.shape == (n_templates,)
         return template_peak_channels
+
 
     @property
     def templates_probes(self):
@@ -1223,16 +1269,32 @@ class TemplateModel(object):
     @property
     def templates_amplitudes(self):
         """Returns the average amplitude per cluster"""
-        tid = np.unique(self.spike_templates)
-        n = np.bincount(self.spike_templates)[tid]
-        a = np.bincount(self.spike_templates, weights=self.amplitudes)[tid]
+        return self._amplitudes(self.spike_templates)
+
+    @property
+    def clusters_amplitudes(self):
+        """Returns the average amplitude per cluster"""
+        return self._amplitudes(self.spike_clusters)
+
+    def _amplitudes(self, tmp):
+        tid = np.unique(tmp)
+        n = np.bincount(tmp)[tid]
+        a = np.bincount(tmp, weights=self.amplitudes)[tid]
         n[np.isnan(n)] = 1
         return a / n
 
     @property
     def templates_waveforms_durations(self):
         """Returns a vector of waveform durations (ms) for all templates"""
-        tmp = self.sparse_templates.data
+        return self._waveform_durations(self.sparse_templates.data)
+
+    @property
+    def clusters_waveforms_durations(self):
+        """Returns a vector of waveform durations (ms) for all templates"""
+        waveform_duration = self._waveform_durations(self.sparse_clusters.data)
+        return waveform_duration
+
+    def _waveform_durations(self, tmp):
         n_templates, n_samples, n_channels = tmp.shape
         # Compute the peak channels for each template.
         template_peak_channels = np.argmax(tmp.max(axis=1) - tmp.min(axis=1), axis=1)
@@ -1240,6 +1302,23 @@ class TemplateModel(object):
         ind = np.ravel_multi_index((np.arange(0, n_templates), template_peak_channels),
                                    (n_templates, n_channels), mode='raise', order='C')
         return durations.flatten()[ind].astype(np.float64) / self.sample_rate * 1e3
+
+    def cluster_waveforms(self):
+        """
+        Computes the cluster waveforms for split and merged clusters
+        :return:
+        """
+        # Only non sparse implementation
+        ns = self.n_samples_waveforms # TODO put not implemented warning
+        data = np.zeros((np.max(self.cluster_ids) + 1, ns, self.n_channels)) #  TODO can be self.n_clusters
+        for clust, val in self.merge_map.items():
+            if len(val) > 1:
+                mean_waveform = self.get_cluster_mean_waveforms(clust, unwhiten=False)
+                data[clust, :, mean_waveform.channel_ids] = np.swapaxes(mean_waveform.mean_waveforms, 0, 1)
+            elif len(val) == 1:
+                data[clust, :, :] = self.sparse_templates.data[val[0], :, :]
+
+        return Bunch(data=data, cols=None)
 
     #--------------------------------------------------------------------------
     # Saving methods
