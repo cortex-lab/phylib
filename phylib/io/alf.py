@@ -180,13 +180,15 @@ class EphysAlfCreator(object):
         waveform_duration_path = self.dir_path / 'clusters.peakToTrough.npy'
         if not waveform_duration_path.exists():
             # self._save_npy(waveform_duration_path.name, self.model.templates_waveforms_durations)
-            self._save_npy(waveform_duration_path.name, self.model.clusters_waveforms_durations)
+            waveform_duration = self.model.clusters_waveforms_durations
+            waveform_duration[self.model.nan_idx] = np.nan
+            self._save_npy(waveform_duration_path.name, waveform_duration)
 
         # group by average over cluster number
         # camps = np.zeros(self.model.templates_channels.shape[0],) * np.nan
         camps = np.zeros(self.model.clusters_channels.shape[0], ) * np.nan
         camps[self.cluster_ids] = self.model.clusters_amplitudes
-        amps_path = self.dir_path / 'clusters.amps.npy' # TODO these amplitudes are not on the same scale as the spike amps problem?
+        amps_path = self.dir_path / 'clusters.amps.npy'
         self._save_npy(amps_path.name, camps * self.ampfactor)
 
         # clusters uuids
@@ -219,6 +221,7 @@ class EphysAlfCreator(object):
         n_clusters = cluster_channels.shape[0]
 
         clusters_depths = channel_positions[cluster_channels, 1]
+        clusters_depths[self.model.nan_idx] = np.nan
         assert clusters_depths.shape == (n_clusters,)
 
         if self.model.sparse_features is None:
@@ -282,11 +285,9 @@ class EphysAlfCreator(object):
             np.save(self.out_path.joinpath('clusters.waveforms'), templates)
             np.save(self.out_path.joinpath('clusters.waveformsChannels'), templates_inds)
 
-            # This should really be here
+            # TODO check if we should save this here, will be inconsistent with what we have at the moment
             np.save(self.out_path.joinpath('clusters.amps'), cluster_amps)
 
-            # np.save(self.out_path.joinpath('clusters.waveforms'), templates)
-            # np.save(self.out_path.joinpath('clusters.waveformsChannels'), templates_inds)
 
     def rename_with_label(self):
         """add the label as an ALF part name before the extension if any label provided"""

@@ -414,11 +414,12 @@ class TemplateModel(object):
 
         # Clusters waveforms
         if not np.all(self.spike_clusters == self.spike_templates) and self.sparse_templates.cols is None:
-            self.merge_map, _ = self.get_merge_map()
+            self.merge_map, self.nan_idx = self.get_merge_map()
             self.sparse_clusters = self.cluster_waveforms()
             self.n_clusters = self.spike_clusters.max() + 1
         else:
             self.merge_map = {}
+            self.nan_idx = []
             self.sparse_clusters = self.sparse_templates
             self.n_clusters = self.spike_templates.max() + 1
 
@@ -931,7 +932,7 @@ class TemplateModel(object):
         return out
 
     def get_merge_map(self):
-        """"Gets the merge mapping for between spikes.clusters and spikes.templates"""
+        """"Gets the maps of merges and splits between spikes.clusters and spikes.templates"""
         inverse_mapping_dict = {key: [] for key in range(np.max(self.spike_clusters) + 1)}
         for temp in np.unique(self.spike_templates):
             idx = np.where(self.spike_templates == temp)[0]
@@ -1071,7 +1072,7 @@ class TemplateModel(object):
             # take only first component
             features = self.sparse_features.data[ispi, :, 0]
             features = np.maximum(features, 0) ** 2  # takes only positive values into account
-            ichannels = self.sparse_features.cols[self.spike_templates[ispi]].astype(np.uint32) ## TODO this should be templates, otherwise won't work
+            ichannels = self.sparse_features.cols[self.spike_templates[ispi]].astype(np.uint32)
             # features = np.square(self.sparse_features.data[ispi, :, 0])
             # ichannels = self.sparse_features.cols[self.spike_templates[ispi]].astype(np.int64)
             ypos = self.channel_positions[ichannels, 1]
@@ -1237,17 +1238,17 @@ class TemplateModel(object):
 
     @property
     def templates_channels(self):
-        """Returns a vector of peak channels for all templates"""
+        """Returns a vector of peak channels for all templates waveforms"""
         return self._channels(self.sparse_templates)
 
     @property
     def clusters_channels(self):
-        """Returns a vector of peak channels for all templates"""
+        """Returns a vector of peak channels for all clusters waveforms"""
         channels = self._channels(self.sparse_clusters)
         return channels
 
     def _channels(self, sparse):
-        # TODO document and better name
+        """ Gets peak channels for each waveform"""
         tmp = sparse.data
         n_templates, n_samples, n_channels = tmp.shape
         if sparse.cols is None:
@@ -1257,7 +1258,6 @@ class TemplateModel(object):
             template_peak_channels = sparse.cols[:, 0]
         assert template_peak_channels.shape == (n_templates,)
         return template_peak_channels
-
 
     @property
     def templates_probes(self):
@@ -1275,6 +1275,7 @@ class TemplateModel(object):
         return self._amplitudes(self.spike_clusters)
 
     def _amplitudes(self, tmp):
+        """ Compute average amplitude for spikes"""
         tid = np.unique(tmp)
         n = np.bincount(tmp)[tid]
         a = np.bincount(tmp, weights=self.amplitudes)[tid]
@@ -1288,7 +1289,7 @@ class TemplateModel(object):
 
     @property
     def clusters_waveforms_durations(self):
-        """Returns a vector of waveform durations (ms) for all templates"""
+        """Returns a vector of waveform durations (ms) for all clusters"""
         waveform_duration = self._waveform_durations(self.sparse_clusters.data)
         return waveform_duration
 
@@ -1307,8 +1308,8 @@ class TemplateModel(object):
         :return:
         """
         # Only non sparse implementation
-        ns = self.n_samples_waveforms # TODO put not implemented warning
-        data = np.zeros((np.max(self.cluster_ids) + 1, ns, self.n_channels)) #  TODO can be self.n_clusters
+        ns = self.n_samples_waveforms
+        data = np.zeros((np.max(self.cluster_ids) + 1, ns, self.n_channels))
         for clust, val in self.merge_map.items():
             if len(val) > 1:
                 mean_waveform = self.get_cluster_mean_waveforms(clust, unwhiten=False)
