@@ -210,3 +210,72 @@ def test_creator(dataset):
     c.convert(out_path, label='probe00')
     check_conversion_output()
     read_after_write()
+
+
+def test_merger(dataset):
+
+    path = Path(dataset.tmp_dir)
+    out_path = path / 'alf'
+
+    model = TemplateModel(
+        dir_path=path, dat_path=dataset.dat_path, sample_rate=2000, n_channels_dat=dataset.nc)
+
+    c = EphysAlfCreator(model)
+    c.convert(out_path)
+
+    model.close()
+
+    # path.joinpath('_phy_spikes_subset.channels.npy').unlink()
+    # path.joinpath('_phy_spikes_subset.waveforms.npy').unlink()
+    # path.joinpath('_phy_spikes_subset.spikes.npy').unlink()
+
+    out_path_merge = path / 'alf_merge'
+    spike_clusters = dataset._load('spike_clusters.npy')
+    clu, n_clu = np.unique(spike_clusters, return_counts=True)
+
+    # merge the first two clusters
+    merge_clu = clu[0:2]
+    spike_clusters[np.bitwise_or(spike_clusters == clu[0], spike_clusters == clu[1])] = np.max(clu) + 1
+    # split the cluster with the most spikes
+    split_clu = clu[-1]
+    idx = np.where(spike_clusters == split_clu)[0]
+    spike_clusters[idx[0:int(n_clu[-1] / 2)]] = np.max(clu) + 2
+    spike_clusters[idx[int(n_clu[-1] / 2):]] = np.max(clu) + 3
+
+    np.save(path / 'spike_clusters.npy', spike_clusters)
+
+    model = TemplateModel(
+        dir_path=path, dat_path=dataset.dat_path, sample_rate=2000, n_channels_dat=dataset.nc)
+    print(model.merge_map)
+    c = EphysAlfCreator(model)
+    c.convert(out_path_merge)
+
+    # Test that the split are the same for the expected datasets
+    clu_old = np.load(next(out_path.glob('clusters.peakToTrough.npy')))
+    clu_new = np.load(next(out_path_merge.glob('clusters.peakToTrough.npy')))
+    assert clu_old[split_clu] == clu_new[np.max(clu) + 2]
+    assert clu_old[split_clu] == clu_new[np.max(clu) + 3]
+    assert clu_new[split_clu] == 0
+    assert clu_new[merge_clu[0]] == 0
+    assert clu_new[merge_clu[1]] == 0
+
+    clu_old = np.load(next(out_path.glob('clusters.channels.npy')))
+    clu_new = np.load(next(out_path_merge.glob('clusters.channels.npy')))
+    assert clu_old[split_clu] == clu_new[np.max(clu) + 2]
+    assert clu_old[split_clu] == clu_new[np.max(clu) + 3]
+    assert clu_new[split_clu] == 0
+    assert clu_new[merge_clu[0]] == 0
+    assert clu_new[merge_clu[1]] == 0
+
+    clu_old = np.load(next(out_path.glob('clusters.depths.npy')))
+    clu_new = np.load(next(out_path_merge.glob('clusters.depths.npy')))
+    assert clu_old[split_clu] == clu_new[np.max(clu) + 2]
+    assert clu_old[split_clu] == clu_new[np.max(clu) + 3]
+    assert clu_new[split_clu] == 0
+    assert clu_new[merge_clu[0]] == 0
+    assert clu_new[merge_clu[1]] == 0
+
+    clu_old = np.load(next(out_path.glob('clusters.waveformsChannels.npy')))
+    clu_new = np.load(next(out_path_merge.glob('clusters.waveformsChannels.npy')))
+    assert np.array_equal(clu_old[split_clu], clu_new[np.max(clu) + 2])
+    assert np.array_equal(clu_old[split_clu], clu_new[np.max(clu) + 3])

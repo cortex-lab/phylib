@@ -270,7 +270,6 @@ class EphysAlfCreator(object):
             templates_inds = np.zeros((n_clusters, ncw), dtype=np.int32)
             # for each template, find the nearest channels to keep (one the same probe...)
             for t in np.arange(n_clusters):
-                # here we need to fill with nans if it doesn't exists, but then can no longet be int (sorry) # or have it all 0
                 channels = self.model.clusters_channels
 
                 current_probe = self.model.channel_probes[channels[t]]

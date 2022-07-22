@@ -14,7 +14,8 @@ from pytest import raises
 
 # from phylib.utils import Bunch
 from phylib.utils.testing import captured_output
-from ..model import from_sparse, load_model
+# from ..model import from_sparse, load_model
+from phylib.io.model import from_sparse, load_model
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +112,22 @@ def test_model_4(template_model_full):
 def test_model_depth(template_model):
     depths = template_model.get_depths()
     assert depths.shape == (template_model.n_spikes,)
+
+
+def test_model_merge(template_model_full):
+    m = template_model_full
+
+    # This is the case where we can do the merging
+    if not np.all(m.spike_templates == m.spike_clusters) and m.sparse_clusters.cols is None:
+        assert len(m.merge_map) > 0
+        assert not np.array_equal(m.sparse_clusters.data, m.sparse_templates.data)
+        assert m.sparse_clusters.data.shape[0] == m.n_clusters
+        assert m.sparse_templates.data.shape[0] == m.n_templates
+
+    else:
+        assert len(m.merge_map) == 0
+        assert np.array_equal(m.sparse_clusters.data, m.sparse_templates.data)
+        assert np.array_equal(m.n_templates, m.n_clusters)
 
 
 def test_model_save(template_model_full):
