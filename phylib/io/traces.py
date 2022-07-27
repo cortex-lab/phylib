@@ -158,6 +158,8 @@ def _memmap_flat(path, dtype=None, n_channels=None, offset=0, mode='r+'):
     assert n_channels > 0
     fsize = path.stat().st_size
     item_size = np.dtype(dtype).itemsize
+    assert (fsize - offset) % (item_size * n_channels) == 0,\
+        f'Data at {path} does not have {n_channels} channels'
     n_samples = (fsize - offset) // (item_size * n_channels)
     shape = (n_samples, n_channels)
     return np.memmap(path, dtype=dtype, offset=offset, shape=shape, mode=mode)
