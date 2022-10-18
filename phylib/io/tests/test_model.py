@@ -14,8 +14,7 @@ from pytest import raises
 
 # from phylib.utils import Bunch
 from phylib.utils.testing import captured_output
-# from ..model import from_sparse, load_model
-from phylib.io.model import from_sparse, load_model
+from ..model import from_sparse, load_model
 
 logger = logging.getLogger(__name__)
 

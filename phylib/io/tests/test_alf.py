@@ -20,6 +20,7 @@ from ..alf import _FILE_RENAMES, _load, EphysAlfCreator
 from ..model import TemplateModel
 
 
+
 #------------------------------------------------------------------------------
 # Fixture
 #------------------------------------------------------------------------------
@@ -246,7 +247,7 @@ def test_merger(dataset):
 
     model = TemplateModel(
         dir_path=path, dat_path=dataset.dat_path, sample_rate=2000, n_channels_dat=dataset.nc)
-    print(model.merge_map)
+
     c = EphysAlfCreator(model)
     c.convert(out_path_merge)
 
@@ -255,9 +256,10 @@ def test_merger(dataset):
     clu_new = np.load(next(out_path_merge.glob('clusters.peakToTrough.npy')))
     assert clu_old[split_clu] == clu_new[np.max(clu) + 2]
     assert clu_old[split_clu] == clu_new[np.max(clu) + 3]
-    assert clu_new[split_clu] == 0
-    assert clu_new[merge_clu[0]] == 0
-    assert clu_new[merge_clu[1]] == 0
+
+    assert np.isnan([clu_new[split_clu]])[0]
+    assert np.isnan([clu_new[merge_clu[0]]])[0]
+    assert np.isnan([clu_new[merge_clu[1]]])[0]
 
     clu_old = np.load(next(out_path.glob('clusters.channels.npy')))
     clu_new = np.load(next(out_path_merge.glob('clusters.channels.npy')))
@@ -271,9 +273,9 @@ def test_merger(dataset):
     clu_new = np.load(next(out_path_merge.glob('clusters.depths.npy')))
     assert clu_old[split_clu] == clu_new[np.max(clu) + 2]
     assert clu_old[split_clu] == clu_new[np.max(clu) + 3]
-    assert clu_new[split_clu] == 0
-    assert clu_new[merge_clu[0]] == 0
-    assert clu_new[merge_clu[1]] == 0
+    assert np.isnan([clu_new[split_clu]])[0]
+    assert np.isnan([clu_new[merge_clu[0]]])[0]
+    assert np.isnan([clu_new[merge_clu[1]]])[0]
 
     clu_old = np.load(next(out_path.glob('clusters.waveformsChannels.npy')))
     clu_new = np.load(next(out_path_merge.glob('clusters.waveformsChannels.npy')))
