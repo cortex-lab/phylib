@@ -44,6 +44,7 @@ class Dataset(object):
         np.save(p / 'similar_templates.npy', np.tile(np.arange(self.nt), (self.nt, 1)))
         np.save(p / 'channel_map.npy', np.c_[np.arange(self.nc)])
         np.save(p / 'channel_probe.npy', np.zeros(self.nc))
+        np.save(p / 'channel_labels.npy', np.zeros(self.nc))
         np.save(p / 'whitening_mat.npy', np.eye(self.nc, self.nc))
         np.save(p / '_phy_spikes_subset.channels.npy', np.zeros([self.ns, self.ncmax]))
         np.save(p / '_phy_spikes_subset.spikes.npy', np.zeros([self.ns]))
@@ -86,6 +87,7 @@ def test_ephys_1(dataset):
     assert dataset._load('templates.npy').shape == (dataset.nt, 50, dataset.nc)
     assert dataset._load('channel_map.npy').shape == (dataset.nc, 1)
     assert dataset._load('channel_probe.npy').shape == (dataset.nc,)
+    assert dataset._load('channel_labels.npy').shape == (dataset.nc,)
     assert len(dataset._load('cluster_group.tsv')) == 3
     assert dataset._load('rawdata.npy').shape == (1000, dataset.nc)
     assert dataset._load('mydata.lf.bin').shape == (1000 * dataset.nc,)
