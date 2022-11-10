@@ -98,6 +98,19 @@ def _make_dataset(tempdir, param='dense', has_spike_attributes=True):
         _remove(tempdir / 'whitening_mat_inv.npy')
         _remove(tempdir / 'sim_binary.dat')
 
+    if param == 'merged':
+        # remove this file to make templates dense
+        _remove(tempdir / 'template_ind.npy')
+        clus = np.load(tempdir / 'spike_clusters.npy')
+        max_clus = np.max(clus)
+        # merge cluster 0 and 1
+        clus[np.bitwise_or(clus == 0, clus == 1)] = max_clus + 1
+        # split cluster 9 into two clusters
+        idx = np.where(clus == 9)[0]
+        clus[idx[0:3]] = max_clus + 2
+        clus[idx[3:]] = max_clus + 3
+        np.save(tempdir / 'spike_clusters.npy', clus)
+
     # Spike attributes.
     if has_spike_attributes:
         write_array(tempdir / 'spike_fail.npy', np.full(10, np.nan))  # wrong number of spikes
@@ -120,7 +133,7 @@ def _make_dataset(tempdir, param='dense', has_spike_attributes=True):
     return template_path
 
 
-@fixture(scope='function', params=('dense', 'sparse', 'misc'))
+@fixture(scope='function', params=('dense', 'sparse', 'misc', 'merged'))
 def template_path_full(tempdir, request):
     return _make_dataset(tempdir, request.param)
 
