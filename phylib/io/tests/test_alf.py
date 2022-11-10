@@ -20,7 +20,6 @@ from ..alf import _FILE_RENAMES, _load, EphysAlfCreator
 from ..model import TemplateModel
 
 
-
 #------------------------------------------------------------------------------
 # Fixture
 #------------------------------------------------------------------------------
@@ -236,7 +235,8 @@ def test_merger(dataset):
 
     # merge the first two clusters
     merge_clu = clu[0:2]
-    spike_clusters[np.bitwise_or(spike_clusters == clu[0], spike_clusters == clu[1])] = np.max(clu) + 1
+    spike_clusters[np.bitwise_or(spike_clusters == clu[0],
+                                 spike_clusters == clu[1])] = np.max(clu) + 1
     # split the cluster with the most spikes
     split_clu = clu[-1]
     idx = np.where(spike_clusters == split_clu)[0]

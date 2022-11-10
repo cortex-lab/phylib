@@ -413,7 +413,8 @@ class TemplateModel(object):
             self.n_channels_loc = 0
 
         # Clusters waveforms
-        if not np.all(self.spike_clusters == self.spike_templates) and self.sparse_templates.cols is None:
+        if not np.all(self.spike_clusters == self.spike_templates) and \
+                self.sparse_templates.cols is None:
             self.merge_map, self.nan_idx = self.get_merge_map()
             self.sparse_clusters = self.cluster_waveforms()
             self.n_clusters = self.spike_clusters.max() + 1
@@ -872,7 +873,8 @@ class TemplateModel(object):
             channel_ids += [-1] * (n_channels - len(channel_ids))
         return channel_ids
 
-    def _get_template_dense(self, template_id, channel_ids=None, amplitude_threshold=None, unwhiten=True):
+    def _get_template_dense(self, template_id, channel_ids=None, amplitude_threshold=None,
+                            unwhiten=True):
         """Return data for one template."""
         if not self.sparse_templates:
             return
@@ -955,7 +957,8 @@ class TemplateModel(object):
             return self._get_template_sparse(template_id, unwhiten=unwhiten)
         else:
             return self._get_template_dense(
-                template_id, channel_ids=channel_ids, amplitude_threshold=amplitude_threshold, unwhiten=unwhiten)
+                template_id, channel_ids=channel_ids, amplitude_threshold=amplitude_threshold,
+                unwhiten=unwhiten)
 
     def get_waveforms(self, spike_ids, channel_ids=None):
         """Return spike waveforms on specified channels."""
@@ -1212,7 +1215,8 @@ class TemplateModel(object):
         template = self.get_template(best_template, unwhiten=unwhiten)
         channel_ids = template.channel_ids
         # Get all templates from which this cluster stems from.
-        templates = [self.get_template(template_id, unwhiten=unwhiten) for template_id in template_ids]
+        templates = [self.get_template(template_id, unwhiten=unwhiten)
+                     for template_id in template_ids]
         # Construct the waveforms array.
         ns = self.n_samples_waveforms
         data = np.zeros((len(template_ids), ns, self.n_channels))
@@ -1313,7 +1317,8 @@ class TemplateModel(object):
         for clust, val in self.merge_map.items():
             if len(val) > 1:
                 mean_waveform = self.get_cluster_mean_waveforms(clust, unwhiten=False)
-                data[clust, :, mean_waveform.channel_ids] = np.swapaxes(mean_waveform.mean_waveforms, 0, 1)
+                data[clust, :, mean_waveform.channel_ids] = \
+                    np.swapaxes(mean_waveform.mean_waveforms, 0, 1)
             elif len(val) == 1:
                 data[clust, :, :] = self.sparse_templates.data[val[0], :, :]
 

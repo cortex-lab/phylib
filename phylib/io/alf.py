@@ -239,7 +239,8 @@ class EphysAlfCreator(object):
         # and not seconds
         self._save_npy('spikes.times.npy', self.model.spike_times)
         self._save_npy('spikes.samples.npy', self.model.spike_samples)
-        spike_amps, templates_v, template_amps = self.model.get_amplitudes_true(self.ampfactor, use='templates')
+        spike_amps, templates_v, template_amps = self.model.get_amplitudes_true(self.ampfactor,
+                                                                                use='templates')
         self._save_npy('spikes.amps.npy', spike_amps)
         self._save_npy('templates.amps.npy', template_amps)
 
@@ -264,7 +265,8 @@ class EphysAlfCreator(object):
             np.save(self.out_path.joinpath('templates.waveforms'), templates)
             np.save(self.out_path.joinpath('templates.waveformsChannels'), templates_inds)
 
-            _, clusters_v, cluster_amps = self.model.get_amplitudes_true(self.ampfactor, use='clusters')
+            _, clusters_v, cluster_amps = self.model.get_amplitudes_true(self.ampfactor,
+                                                                         use='clusters')
             n_clusters, n_wavsamps, nchall = clusters_v.shape
             # for some datasets, 32 may be too much
             ncw = min(self.model.n_closest_channels, nchall)
@@ -284,10 +286,7 @@ class EphysAlfCreator(object):
                 templates[t, ...] = clusters_v[t, :][:, templates_inds[t, :]]
             np.save(self.out_path.joinpath('clusters.waveforms'), templates)
             np.save(self.out_path.joinpath('clusters.waveformsChannels'), templates_inds)
-
-            # TODO check if we should save this here, will be inconsistent with what we have at the moment
             np.save(self.out_path.joinpath('clusters.amps'), cluster_amps)
-
 
     def rename_with_label(self):
         """add the label as an ALF part name before the extension if any label provided"""
