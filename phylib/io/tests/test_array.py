@@ -288,7 +288,7 @@ def test_spikes_in_clusters():
         assert np.all(spike_clusters[_spikes_in_clusters(spike_clusters, [i])] == i)
 
     clusters = [1, 2, 3]
-    assert np.all(np.in1d(
+    assert np.all(np.isin(
         spike_clusters[_spikes_in_clusters(spike_clusters, clusters)], clusters))
 
 

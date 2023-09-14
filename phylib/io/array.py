@@ -328,7 +328,7 @@ def _spikes_in_clusters(spike_clusters, clusters):
     """Return the ids of all spikes belonging to the specified clusters."""
     if len(spike_clusters) == 0 or len(clusters) == 0:
         return np.array([], dtype=int)
-    return np.nonzero(np.in1d(spike_clusters, clusters))[0]
+    return np.nonzero(np.isin(spike_clusters, clusters))[0]
 
 
 def _spikes_per_cluster(spike_clusters, spike_ids=None):
