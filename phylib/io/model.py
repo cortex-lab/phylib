@@ -90,8 +90,8 @@ def from_sparse(data, cols, channel_ids):
     # NOTE: we ensure here that `col` contains integers.
     c = cols.flatten().astype(np.int32)
     # Remove columns that do not belong to the specified channels.
-    c[~np.in1d(c, channel_ids)] = -1
-    assert np.all(np.in1d(c, np.r_[channel_ids, -1]))
+    c[~np.isin(c, channel_ids)] = -1
+    assert np.all(np.isin(c, np.r_[channel_ids, -1]))
     # Convert column indices to relative indices given the specified
     # channel_ids.
     cols_loc = _index_of(c, np.r_[channel_ids, -1]).reshape(cols.shape)

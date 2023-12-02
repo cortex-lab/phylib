@@ -103,7 +103,7 @@ def test_sorted_main_channels(masks):
     mean_masks = mean(masks)
     channels = get_sorted_main_channels(mean_masks,
                                         get_unmasked_channels(mean_masks))
-    assert np.all(np.in1d(channels, [5, 7]))
+    assert np.all(np.isin(channels, [5, 7]))
 
 
 def test_waveform_amplitude(masks, waveforms):
