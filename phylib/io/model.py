@@ -327,7 +327,6 @@ class TemplateModel(object):
         elif not isinstance(self.dat_path, (list, tuple)):
             self.dat_path = [self.dat_path]
         assert isinstance(self.dat_path, (list, tuple))
-        print(self.dat_path)
         self.dat_path = [Path(p).resolve() if not Path(p).is_symlink() else p for p in self.dat_path]
 
         self.dtype = getattr(self, 'dtype', np.int16)
