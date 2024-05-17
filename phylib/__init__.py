@@ -9,10 +9,8 @@
 #------------------------------------------------------------------------------
 
 import atexit
-from io import StringIO
 import logging
 import os.path as op
-import sys
 
 from .utils._misc import _git_version
 from .utils.event import connect, unconnect, emit
@@ -24,7 +22,7 @@ from .utils.event import connect, unconnect, emit
 
 __author__ = 'Cyrille Rossant'
 __email__ = 'cyrille.rossant at gmail.com'
-__version__ = '2.4.3'
+__version__ = '2.5.0'
 __version_git__ = __version__ + _git_version()
 
 
