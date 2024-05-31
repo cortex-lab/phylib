@@ -413,10 +413,12 @@ class TemplateModel(object):
             self.n_channels_loc = 0
 
         # Clusters waveforms
-        if not np.all(self.spike_clusters == self.spike_templates) and \
-                self.sparse_templates.cols is None:
+        if not np.all(self.spike_clusters == self.spike_templates):
             self.merge_map, self.nan_idx = self.get_merge_map()
-            self.sparse_clusters = self.cluster_waveforms()
+            if self.sparse_templates.cols is None:
+                self.sparse_clusters = self.cluster_waveforms_dense()
+            else:
+                self.sparse_clusters = self.cluster_waveforms_sparse()
             self.n_clusters = self.spike_clusters.max() + 1
         else:
             self.merge_map = {}
@@ -1306,7 +1308,7 @@ class TemplateModel(object):
                                    (n_templates, n_channels), mode='raise', order='C')
         return durations.flatten()[ind].astype(np.float64) / self.sample_rate * 1e3
 
-    def cluster_waveforms(self):
+    def cluster_waveforms_dense(self):
         """
         Computes the cluster waveforms for split and merged clusters
         :return:
@@ -1323,6 +1325,26 @@ class TemplateModel(object):
                 data[clust, :, :] = self.sparse_templates.data[val[0], :, :]
 
         return Bunch(data=data, cols=None)
+
+    def cluster_waveforms_sparse(self):
+        """
+        Computes the cluster waveforms for split and merged clusters
+        :return:
+        """
+        # Only non sparse implementation
+        ns = self.n_samples_waveforms
+        data = np.zeros((np.max(self.cluster_ids) + 1, ns, self.n_channels_loc))
+        cols = np.zeros((np.max(self.cluster_ids) + 1, self.n_channels_loc), dtype=np.int32)
+        for clust, val in self.merge_map.items():
+            if len(val) > 1:
+                mean_waveform = self.get_cluster_mean_waveforms(clust, unwhiten=False)
+                data[clust, :, :] = mean_waveform.mean_waveforms
+                cols[clust] = mean_waveform.channel_ids
+            elif len(val) == 1:
+                data[clust, :, :] = self.sparse_templates.data[val[0], :, :]
+                cols[clust] = self.sparse_templates.cols[val[0]]
+
+        return Bunch(data=data, cols=cols)
 
     #--------------------------------------------------------------------------
     # Saving methods

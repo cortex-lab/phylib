@@ -210,11 +210,22 @@ class EphysAlfCreator(object):
 
     def make_depths(self):
         """Make spikes.depths.npy, clusters.depths.npy."""
-        channel_positions = self.model.channel_positions
-        assert channel_positions.ndim == 2
+
+        clusters_depths = self.make_cluster_depths()
 
         spike_clusters = self.model.spike_clusters
         assert spike_clusters.ndim == 1
+
+        if self.model.sparse_features is None:
+            spikes_depths = clusters_depths[spike_clusters]
+        else:
+            spikes_depths = self.model.get_depths()
+        self._save_npy('spikes.depths.npy', spikes_depths)
+
+    def make_cluster_depths(self):
+        """ Make clusters.depths.npy """
+        channel_positions = self.model.channel_positions
+        assert channel_positions.ndim == 2
 
         cluster_channels = np.load(self.out_path / 'clusters.channels.npy')
         assert cluster_channels.ndim == 1
@@ -224,12 +235,9 @@ class EphysAlfCreator(object):
         clusters_depths[self.model.nan_idx] = np.nan
         assert clusters_depths.shape == (n_clusters,)
 
-        if self.model.sparse_features is None:
-            spikes_depths = clusters_depths[spike_clusters]
-        else:
-            spikes_depths = self.model.get_depths()
-        self._save_npy('spikes.depths.npy', spikes_depths)
         self._save_npy('clusters.depths.npy', clusters_depths)
+
+        return clusters_depths
 
     def make_template_and_spikes_objects(self):
         """Creates the template waveforms sparse object
