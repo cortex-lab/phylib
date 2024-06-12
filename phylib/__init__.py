@@ -22,7 +22,7 @@ from .utils.event import connect, unconnect, emit
 
 __author__ = 'Cyrille Rossant'
 __email__ = 'cyrille.rossant at gmail.com'
-__version__ = '2.5.0'
+__version__ = '2.6.0'
 __version_git__ = __version__ + _git_version()
 
 
