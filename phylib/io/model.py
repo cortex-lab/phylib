@@ -1343,6 +1343,9 @@ class TemplateModel(object):
             elif len(val) == 1:
                 data[clust, :, :] = self.sparse_templates.data[val[0], :, :]
                 cols[clust] = self.sparse_templates.cols[val[0]]
+            else:
+                data[clust, :, :] = np.nan
+                cols[clust] = np.arange(self.n_channels_loc, dtype=np.int32)
 
         return Bunch(data=data, cols=cols)
 
