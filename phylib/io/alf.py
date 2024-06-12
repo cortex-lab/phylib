@@ -120,7 +120,7 @@ class EphysAlfCreator(object):
         if not self.out_path.exists():
             self.out_path.mkdir()
 
-        with tqdm(desc="Converting to ALF", total=125) as bar:
+        with tqdm(desc="Converting to ALF", total=135) as bar:
             bar.update(10)
             self.make_cluster_objects()
             bar.update(10)
@@ -138,6 +138,8 @@ class EphysAlfCreator(object):
             self.copy_files(force=force)
             bar.update(10)
             self.rename_with_label()
+            bar.update(10)
+            self.compress_spikes_dtypes()
 
         # Return the TemplateModel of the converted ALF dataset if the params.py file exists.
         params_path = self.out_path / 'params.py'
@@ -167,9 +169,10 @@ class EphysAlfCreator(object):
     # File creation
     # -------------------------------------------------------------------------
 
-    def _save_npy(self, filename, arr):
+    def _save_npy(self, filename, arr, dtype=None):
         """Save an array into a .npy file."""
-        np.save(self.out_path / filename, arr)
+        dtype = arr.dtype if dtype is None else dtype
+        np.save(self.out_path / filename, arr.astype(dtype))
 
     def make_cluster_objects(self):
         """Create clusters.channels, clusters.waveformsDuration and clusters.amps"""
@@ -229,7 +232,7 @@ class EphysAlfCreator(object):
             spikes_depths = clusters_depths[spike_clusters]
         else:
             spikes_depths = self.model.get_depths()
-        self._save_npy('spikes.depths.npy', spikes_depths)
+        self._save_npy('spikes.depths.npy', spikes_depths, np.float32)
         self._save_npy('clusters.depths.npy', clusters_depths)
 
     def make_template_and_spikes_objects(self):
@@ -242,16 +245,16 @@ class EphysAlfCreator(object):
         self._save_npy('spikes.samples.npy', self.model.spike_samples)
         spike_amps, templates_v, template_amps = self.model.get_amplitudes_true(self.ampfactor,
                                                                                 use='templates')
-        self._save_npy('spikes.amps.npy', spike_amps)
+        self._save_npy('spikes.amps.npy', spike_amps, np.float32)
         self._save_npy('templates.amps.npy', template_amps)
 
         if self.model.sparse_templates.cols:
-            raise(NotImplementedError("Sparse template export to ALF not implemented yet"))
+            raise NotImplementedError("Sparse template export to ALF not implemented yet")
         else:
             n_templates, n_wavsamps, nchall = templates_v.shape
             # for some datasets, 32 may be too much
             ncw = min(self.model.n_closest_channels, nchall)
-            assert(n_templates == self.model.n_templates)
+            assert n_templates == self.model.n_templates
             templates = np.zeros((n_templates, n_wavsamps, ncw), dtype=np.float32)
             templates_inds = np.zeros((n_templates, ncw), dtype=np.int32)
             # for each template, find the nearest channels to keep (one the same probe...)
@@ -271,7 +274,7 @@ class EphysAlfCreator(object):
             n_clusters, n_wavsamps, nchall = clusters_v.shape
             # for some datasets, 32 may be too much
             ncw = min(self.model.n_closest_channels, nchall)
-            assert(n_clusters == self.model.n_clusters)
+            assert n_clusters == self.model.n_clusters
             templates = np.zeros((n_clusters, n_wavsamps, ncw), dtype=np.float32)
             templates_inds = np.zeros((n_clusters, ncw), dtype=np.int32)
             # for each template, find the nearest channels to keep (one the same probe...)
@@ -297,3 +300,9 @@ class EphysAlfCreator(object):
         for pattern in glob_patterns:
             for f in self.out_path.glob(pattern):
                 f.rename(f.with_suffix(f'.{self.label}{f.suffix}'))
+
+    def compress_spikes_dtypes(self):
+        """Convert clusters and templates to int16."""
+        for attribute in ['templates', 'clusters']:
+            fn = next(self.out_path.glob(f'spikes.{attribute}.*npy'))
+            np.save(fn, np.load(fn).astype(np.uint16))

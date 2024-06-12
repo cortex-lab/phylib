@@ -602,7 +602,7 @@ class TemplateModel(object):
         if np.max(uc) - np.min(uc) + 1 != uc.size:
             logger.warning(
                 "Unreferenced clusters found in templates (generally not a problem)")
-        assert out.dtype in (np.uint32, np.int32, np.int64)
+        assert out.dtype in (np.uint16, np.uint32, np.int32, np.int64)
         assert out.ndim == 1
         return out
 
