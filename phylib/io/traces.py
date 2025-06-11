@@ -17,7 +17,14 @@ from pathlib import Path
 
 import mtscomp
 import numpy as np
-from numpy.lib.format import _check_version, _write_array_header, dtype_to_descr
+
+try:
+    # NumPy 2.0+
+    from numpy.lib.format import dtype_to_descr
+    from numpy.lib.format import write_array_header_1_0 as _write_array_header
+except ImportError:
+    # NumPy 1.x fallback
+    from numpy.lib.format import _write_array_header, dtype_to_descr
 from tqdm import tqdm
 
 from .array import _index_of
@@ -35,6 +42,13 @@ EPHYS_RAW_EXTENSIONS = ('.dat', '.bin', '.raw', '.mda')
 # ------------------------------------------------------------------------------
 # Utils
 # ------------------------------------------------------------------------------
+
+
+# NumPy 2.0 compatibility: _check_version was removed
+def _check_version(version):
+    """Check numpy format version. Compatible with NumPy 1.x and 2.x."""
+    if version is not None and version != (1, 0):
+        raise ValueError(f'Unsupported format version: {version}')
 
 
 def prod(l):
@@ -586,7 +600,14 @@ class NpyWriter(object):
         version = None
         _check_version(version)
         self.fp = open(path, 'wb')
-        _write_array_header(self.fp, header, version)
+
+        # NumPy 2.0 compatibility: write_array_header_1_0 has different signature
+        try:
+            # NumPy 2.0+ signature: write_array_header_1_0(fp, header)
+            _write_array_header(self.fp, header)
+        except TypeError:
+            # NumPy 1.x signature: _write_array_header(fp, header, version)
+            _write_array_header(self.fp, header, version)
 
     def append(self, chunk):
         if chunk.ndim == len(self.shape):
