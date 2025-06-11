@@ -2,37 +2,48 @@
 
 """Testing the BaseEphysTraces class."""
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Imports
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 import logging
 
-import numpy as np
-from numpy.testing import assert_equal as ae
-from numpy.testing import assert_allclose as ac
 import mtscomp
-from pytest import raises, fixture, mark
+import numpy as np
+from numpy.testing import assert_allclose as ac
+from numpy.testing import assert_equal as ae
+from pytest import fixture, mark, raises
 
 from phylib.utils import Bunch
+
 from ..traces import (
-    _get_subitems, _get_chunk_bounds,
-    get_ephys_reader, BaseEphysReader, extract_waveforms, export_waveforms, RandomEphysReader,
-    get_spike_waveforms)
+    BaseEphysReader,
+    RandomEphysReader,
+    _get_chunk_bounds,
+    _get_subitems,
+    export_waveforms,
+    extract_waveforms,
+    get_ephys_reader,
+    get_spike_waveforms,
+)
 
 logger = logging.getLogger(__name__)
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Test utils
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 def test_get_subitems():
     bounds = [0, 2, 5]
 
     def _a(x, y):
         res = _get_subitems(bounds, x)
-        res = [(chk, val.tolist() if isinstance(val, np.ndarray) else val) for chk, val in res]
+        res = [
+            (chk, val.tolist() if isinstance(val, np.ndarray) else val)
+            for chk, val in res
+        ]
         assert res == y
 
     _a(-1, [(1, 2)])
@@ -88,9 +99,10 @@ def test_get_chunk_bounds():
     _a([3, 7, 5], 10, [0, 3, 10, 15])
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Test ephys reader
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 @fixture
 def arr():
@@ -117,17 +129,22 @@ def traces(request, tempdir, arr, sample_rate):
         with open(path, 'wb') as f:
             arr.tofile(f)
         return get_ephys_reader(
-            path, sample_rate=sample_rate, dtype=arr.dtype, n_channels=arr.shape[1])
+            path, sample_rate=sample_rate, dtype=arr.dtype, n_channels=arr.shape[1]
+        )
 
     elif request.param == 'flat_concat':
         path0 = tempdir / 'data0.bin'
         with open(path0, 'wb') as f:
-            arr[:arr.shape[0] // 2, :].tofile(f)
+            arr[: arr.shape[0] // 2, :].tofile(f)
         path1 = tempdir / 'data1.bin'
         with open(path1, 'wb') as f:
-            arr[arr.shape[0] // 2:, :].tofile(f)
+            arr[arr.shape[0] // 2 :, :].tofile(f)
         return get_ephys_reader(
-            [path0, path1], sample_rate=sample_rate, dtype=arr.dtype, n_channels=arr.shape[1])
+            [path0, path1],
+            sample_rate=sample_rate,
+            dtype=arr.dtype,
+            n_channels=arr.shape[1],
+        )
 
     elif request.param in ('mtscomp', 'mtscomp_reader'):
         path = tempdir / 'data.bin'
@@ -136,10 +153,19 @@ def traces(request, tempdir, arr, sample_rate):
         out = tempdir / 'data.cbin'
         outmeta = tempdir / 'data.ch'
         mtscomp.compress(
-            path, out, outmeta, sample_rate=sample_rate,
-            n_channels=arr.shape[1], dtype=arr.dtype,
-            n_threads=1, check_after_compress=False, quiet=True)
-        reader = mtscomp.decompress(out, outmeta, check_after_decompress=False, quiet=True)
+            path,
+            out,
+            outmeta,
+            sample_rate=sample_rate,
+            n_channels=arr.shape[1],
+            dtype=arr.dtype,
+            n_threads=1,
+            check_after_compress=False,
+            quiet=True,
+        )
+        reader = mtscomp.decompress(
+            out, outmeta, check_after_decompress=False, quiet=True
+        )
         if request.param == 'mtscomp':
             return get_ephys_reader(reader)
         else:
@@ -174,14 +200,14 @@ def test_ephys_reader_1(tempdir, arr, traces, sample_rate):
     _a(lambda x: x * 2)
     _a(lambda x: 2 * x)
 
-    _a(lambda x: x ** 2)
-    _a(lambda x: 2 ** x)
+    _a(lambda x: x**2)
+    _a(lambda x: 2**x)
 
     _a(lambda x: x / 2)
     _a(lambda x: 2 / x)
 
-    _a(lambda x: x / 2.)
-    _a(lambda x: 2. / x)
+    _a(lambda x: x / 2.0)
+    _a(lambda x: 2.0 / x)
 
     _a(lambda x: x // 2)
     _a(lambda x: 2 // x)
@@ -227,7 +253,9 @@ def test_get_spike_waveforms():
     assert c.shape == (ns, nc)
 
     sw = Bunch(waveforms=w, spike_ids=s, spike_channels=c)
-    out = get_spike_waveforms([5, 1, 3], [2, 1], spike_waveforms=sw, n_samples_waveforms=nsw)
+    out = get_spike_waveforms(
+        [5, 1, 3], [2, 1], spike_waveforms=sw, n_samples_waveforms=nsw
+    )
 
     expected = w[[2, 0, 1], ...][..., [1, 0]]
     ae(out, expected)
@@ -247,12 +275,19 @@ def test_waveform_extractor(tempdir, arr, traces, sample_rate, do_export, do_cac
     # Export waveforms into a npy file.
     if do_export:
         export_waveforms(
-            tempdir / 'waveforms.npy', traces, spike_samples, spike_channels,
-            n_samples_waveforms=nsw, cache=do_cache)
+            tempdir / 'waveforms.npy',
+            traces,
+            spike_samples,
+            spike_channels,
+            n_samples_waveforms=nsw,
+            cache=do_cache,
+        )
         w = np.load(tempdir / 'waveforms.npy')
     # Extract waveforms directly.
     else:
-        w = extract_waveforms(traces, spike_samples, channel_ids, n_samples_waveforms=nsw)
+        w = extract_waveforms(
+            traces, spike_samples, channel_ids, n_samples_waveforms=nsw
+        )
 
     assert w.dtype == data.dtype == traces.dtype
 
@@ -263,8 +298,8 @@ def test_waveform_extractor(tempdir, arr, traces, sample_rate, do_export, do_cac
     )
 
     ww = get_spike_waveforms(
-        spike_ids, channel_ids, spike_waveforms=spike_waveforms,
-        n_samples_waveforms=nsw)
+        spike_ids, channel_ids, spike_waveforms=spike_waveforms, n_samples_waveforms=nsw
+    )
     ae(w, ww)
 
     assert np.all(w[0, :5, :] == 0)

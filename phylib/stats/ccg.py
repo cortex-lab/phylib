@@ -2,19 +2,19 @@
 
 """Cross-correlograms."""
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Imports
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 import numpy as np
 
-from phylib.utils._types import _as_array
 from phylib.io.array import _index_of, _unique
+from phylib.utils._types import _as_array
 
-
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Cross-correlograms
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 def _increment(arr, indices):
     """Increment some indices in a 1D vector of non-negative integers.
@@ -22,18 +22,17 @@ def _increment(arr, indices):
     arr = _as_array(arr)
     indices = _as_array(indices)
     bbins = np.bincount(indices)
-    arr[:len(bbins)] += bbins
+    arr[: len(bbins)] += bbins
     return arr
 
 
 def _diff_shifted(arr, steps=1):
     arr = _as_array(arr)
-    return arr[steps:] - arr[:len(arr) - steps]
+    return arr[steps:] - arr[: len(arr) - steps]
 
 
 def _create_correlograms_array(n_clusters, winsize_bins):
-    return np.zeros((n_clusters, n_clusters, winsize_bins // 2 + 1),
-                    dtype=np.int32)
+    return np.zeros((n_clusters, n_clusters, winsize_bins // 2 + 1), dtype=np.int32)
 
 
 def _symmetrize_correlograms(correlograms):
@@ -45,8 +44,7 @@ def _symmetrize_correlograms(correlograms):
     # We symmetrize c[i, j, 0].
     # This is necessary because the algorithm in correlograms()
     # is sensitive to the order of identical spikes.
-    correlograms[..., 0] = np.maximum(correlograms[..., 0],
-                                      correlograms[..., 0].T)
+    correlograms[..., 0] = np.maximum(correlograms[..., 0], correlograms[..., 0].T)
 
     sym = correlograms[..., 1:][..., ::-1]
     sym = np.transpose(sym, (1, 0, 2))
@@ -73,12 +71,18 @@ def firing_rate(spike_clusters, cluster_ids=None, bin_size=None, duration=None):
         n = len(cluster_ids) - len(bc)
         bc = np.concatenate((bc, np.zeros(n, dtype=bc.dtype)))
     assert bc.shape == (len(cluster_ids),)
-    return bc * np.c_[bc] * (bin_size / (duration or 1.))
+    return bc * np.c_[bc] * (bin_size / (duration or 1.0))
 
 
 def correlograms(
-        spike_times, spike_clusters, cluster_ids=None, sample_rate=1.,
-        bin_size=None, window_size=None, symmetrize=True):
+    spike_times,
+    spike_clusters,
+    cluster_ids=None,
+    sample_rate=1.0,
+    bin_size=None,
+    window_size=None,
+    symmetrize=True,
+):
     """Compute all pairwise cross-correlograms among the clusters appearing
     in `spike_clusters`.
 
@@ -108,9 +112,8 @@ def correlograms(
         A `(n_clusters, n_clusters, winsize_samples)` array with all pairwise CCGs.
 
     """
-    assert sample_rate > 0.
-    assert np.all(np.diff(spike_times) >= 0), ("The spike times must be "
-                                               "increasing.")
+    assert sample_rate > 0.0
+    assert np.all(np.diff(spike_times) >= 0), 'The spike times must be increasing.'
 
     # Get the spike samples.
     spike_times = np.asarray(spike_times, dtype=np.float64)
@@ -128,7 +131,7 @@ def correlograms(
 
     # Find `winsize_bins`.
     window_size = np.clip(window_size, 1e-5, 1e5)  # in seconds
-    winsize_bins = 2 * int(.5 * window_size / bin_size) + 1
+    winsize_bins = 2 * int(0.5 * window_size / bin_size) + 1
 
     assert winsize_bins >= 1
     assert winsize_bins % 2 == 1
@@ -177,7 +180,9 @@ def correlograms(
         # Find the indices in the raveled correlograms array that need
         # to be incremented, taking into account the spike clusters.
         indices = np.ravel_multi_index(
-            (spike_clusters_i[:-shift][m], spike_clusters_i[+shift:][m], d), correlograms.shape)
+            (spike_clusters_i[:-shift][m], spike_clusters_i[+shift:][m], d),
+            correlograms.shape,
+        )
 
         # Increment the matching spikes in the correlograms array.
         _increment(correlograms.ravel(), indices)

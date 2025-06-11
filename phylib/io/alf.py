@@ -3,29 +3,29 @@
 """ALF dataset generation."""
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Imports
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
-import logging
-from pathlib import Path
-import shutil
 import ast
+import logging
+import shutil
 import uuid
+from pathlib import Path
 
-from tqdm import tqdm
 import numpy as np
+from tqdm import tqdm
 
-from phylib.utils._misc import _read_tsv_simple, ensure_dir_exists
 from phylib.io.array import _spikes_per_cluster, _unique
 from phylib.io.model import load_model
+from phylib.utils._misc import _read_tsv_simple, ensure_dir_exists
 
 logger = logging.getLogger(__name__)
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # File utils
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 NSAMPLE_WAVEFORMS = 500  # number of waveforrms sampled out of the raw data
 
@@ -68,10 +68,10 @@ def _create_if_possible(path, new_path, force=False):
     """Prepare the copy/move/symlink of a file, by making sure the source exists
     while the destination does not."""
     if not Path(path).exists():  # pragma: no cover
-        logger.warning("Path %s does not exist, skipping.", path)
+        logger.warning('Path %s does not exist, skipping.', path)
         return False
     if Path(new_path).exists() and not force:  # pragma: no cover
-        logger.warning("Path %s already exists, skipping.", new_path)
+        logger.warning('Path %s already exists, skipping.', new_path)
         return False
     ensure_dir_exists(new_path.parent)
     return True
@@ -80,7 +80,7 @@ def _create_if_possible(path, new_path, force=False):
 def _copy_if_possible(path, new_path, force=False):
     if not _create_if_possible(path, new_path, force=force):
         return False
-    logger.debug("Copying %s to %s.", path, new_path)
+    logger.debug('Copying %s to %s.', path, new_path)
     shutil.copy(path, new_path)
     return True
 
@@ -96,9 +96,10 @@ def _load(path):
         return np.fromfile(path, np.int16)
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Ephys ALF creator
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 class EphysAlfCreator(object):
     """Class for converting a dataset in KS/phy format into ALF."""
@@ -111,16 +112,16 @@ class EphysAlfCreator(object):
 
     def convert(self, out_path, force=False, label='', ampfactor=1):
         """Convert from KS/phy format to ALF."""
-        logger.info("Converting dataset to ALF.")
+        logger.info('Converting dataset to ALF.')
         self.out_path = Path(out_path)
         self.label = label
         self.ampfactor = ampfactor
         if self.out_path.resolve() == self.dir_path.resolve():
-            raise IOError("The source and target directories cannot be the same.")
+            raise IOError('The source and target directories cannot be the same.')
         if not self.out_path.exists():
             self.out_path.mkdir()
 
-        with tqdm(desc="Converting to ALF", total=135) as bar:
+        with tqdm(desc='Converting to ALF', total=135) as bar:
             bar.update(10)
             self.make_cluster_objects()
             bar.update(10)
@@ -129,7 +130,8 @@ class EphysAlfCreator(object):
             self.make_template_and_spikes_objects()
             bar.update(30)
             self.model.save_spikes_subset_waveforms(
-                NSAMPLE_WAVEFORMS, sample2unit=self.ampfactor)
+                NSAMPLE_WAVEFORMS, sample2unit=self.ampfactor
+            )
             bar.update(50)
             self.make_depths()
             bar.update(20)
@@ -190,7 +192,12 @@ class EphysAlfCreator(object):
 
         # group by average over cluster number
         # camps = np.zeros(self.model.templates_channels.shape[0],) * np.nan
-        camps = np.zeros(self.model.clusters_channels.shape[0], ) * np.nan
+        camps = (
+            np.zeros(
+                self.model.clusters_channels.shape[0],
+            )
+            * np.nan
+        )
         camps[self.cluster_ids] = self.model.clusters_amplitudes
         amps_path = self.dir_path / 'clusters.amps.npy'
         self._save_npy(amps_path.name, camps * self.ampfactor)
@@ -243,13 +250,16 @@ class EphysAlfCreator(object):
         # and not seconds
         self._save_npy('spikes.times.npy', self.model.spike_times)
         self._save_npy('spikes.samples.npy', self.model.spike_samples)
-        spike_amps, templates_v, template_amps = self.model.get_amplitudes_true(self.ampfactor,
-                                                                                use='templates')
+        spike_amps, templates_v, template_amps = self.model.get_amplitudes_true(
+            self.ampfactor, use='templates'
+        )
         self._save_npy('spikes.amps.npy', spike_amps, np.float32)
         self._save_npy('templates.amps.npy', template_amps)
 
         if self.model.sparse_templates.cols:
-            raise NotImplementedError("Sparse template export to ALF not implemented yet")
+            raise NotImplementedError(
+                'Sparse template export to ALF not implemented yet'
+            )
         else:
             n_templates, n_wavsamps, nchall = templates_v.shape
             # for some datasets, 32 may be too much
@@ -259,18 +269,27 @@ class EphysAlfCreator(object):
             templates_inds = np.zeros((n_templates, ncw), dtype=np.int32)
             # for each template, find the nearest channels to keep (one the same probe...)
             for t in np.arange(n_templates):
-                current_probe = self.model.channel_probes[self.model.templates_channels[t]]
-                channel_distance = np.sum(np.abs(
-                    self.model.channel_positions -
-                    self.model.channel_positions[self.model.templates_channels[t]]), axis=1)
+                current_probe = self.model.channel_probes[
+                    self.model.templates_channels[t]
+                ]
+                channel_distance = np.sum(
+                    np.abs(
+                        self.model.channel_positions
+                        - self.model.channel_positions[self.model.templates_channels[t]]
+                    ),
+                    axis=1,
+                )
                 channel_distance[self.model.channel_probes != current_probe] += np.inf
                 templates_inds[t, :] = np.argsort(channel_distance)[:ncw]
                 templates[t, ...] = templates_v[t, :][:, templates_inds[t, :]]
             np.save(self.out_path.joinpath('templates.waveforms'), templates)
-            np.save(self.out_path.joinpath('templates.waveformsChannels'), templates_inds)
+            np.save(
+                self.out_path.joinpath('templates.waveformsChannels'), templates_inds
+            )
 
-            _, clusters_v, cluster_amps = self.model.get_amplitudes_true(self.ampfactor,
-                                                                         use='clusters')
+            _, clusters_v, cluster_amps = self.model.get_amplitudes_true(
+                self.ampfactor, use='clusters'
+            )
             n_clusters, n_wavsamps, nchall = clusters_v.shape
             # for some datasets, 32 may be too much
             ncw = min(self.model.n_closest_channels, nchall)
@@ -282,14 +301,20 @@ class EphysAlfCreator(object):
                 channels = self.model.clusters_channels
 
                 current_probe = self.model.channel_probes[channels[t]]
-                channel_distance = np.sum(np.abs(
-                    self.model.channel_positions -
-                    self.model.channel_positions[channels[t]]), axis=1)
+                channel_distance = np.sum(
+                    np.abs(
+                        self.model.channel_positions
+                        - self.model.channel_positions[channels[t]]
+                    ),
+                    axis=1,
+                )
                 channel_distance[self.model.channel_probes != current_probe] += np.inf
                 templates_inds[t, :] = np.argsort(channel_distance)[:ncw]
                 templates[t, ...] = clusters_v[t, :][:, templates_inds[t, :]]
             np.save(self.out_path.joinpath('clusters.waveforms'), templates)
-            np.save(self.out_path.joinpath('clusters.waveformsChannels'), templates_inds)
+            np.save(
+                self.out_path.joinpath('clusters.waveformsChannels'), templates_inds
+            )
             np.save(self.out_path.joinpath('clusters.amps'), cluster_amps)
 
     def rename_with_label(self):

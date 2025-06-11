@@ -2,12 +2,12 @@
 
 """Utility functions for NumPy arrays."""
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Imports
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 import logging
-from math import floor, ceil
+from math import ceil, floor
 from operator import itemgetter
 from pathlib import Path
 
@@ -19,9 +19,10 @@ from phylib.utils._types import _as_array
 logger = logging.getLogger(__name__)
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Utility functions
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 def _clip(x, a, b):
     return max(a, min(b, x))
@@ -43,9 +44,11 @@ def _range_from_slice(myslice, start=None, stop=None, step=None, length=None):
     if length is not None:
         stop_inferred = floor(start + step * length)
         if stop is not None and stop < stop_inferred:
-            raise ValueError("'stop' ({stop}) and ".format(stop=stop) +
-                             "'length' ({length}) ".format(length=length) +
-                             "are not compatible.")
+            raise ValueError(
+                "'stop' ({stop}) and ".format(stop=stop)
+                + "'length' ({length}) ".format(length=length)
+                + 'are not compatible.'
+            )
         stop = stop_inferred
     if stop is None and length is None:
         raise ValueError("'stop' and 'length' cannot be both unspecified.")
@@ -79,13 +82,13 @@ def _normalize(arr, keep_ratio=False):
     (x_min, y_min), (x_max, y_max) = arr.min(axis=0), arr.max(axis=0)
 
     if keep_ratio:
-        a = 1. / max(x_max - x_min, y_max - y_min)
+        a = 1.0 / max(x_max - x_min, y_max - y_min)
         ax = ay = a
-        bx = .5 - .5 * a * (x_max + x_min)
-        by = .5 - .5 * a * (y_max + y_min)
+        bx = 0.5 - 0.5 * a * (x_max + x_min)
+        by = 0.5 - 0.5 * a * (y_max + y_min)
     else:
-        ax = 1. / (x_max - x_min)
-        ay = 1. / (y_max - y_min)
+        ax = 1.0 / (x_max - x_min)
+        ay = 1.0 / (y_max - y_min)
         bx = -x_min / (x_max - x_min)
         by = -y_min / (y_max - y_min)
 
@@ -171,12 +174,10 @@ def _get_padded(data, start, end):
     if start < 0 and end > data.shape[0]:
         raise RuntimeError()
     if start < 0:
-        start_zeros = np.zeros((-start, data.shape[1]),
-                               dtype=data.dtype)
+        start_zeros = np.zeros((-start, data.shape[1]), dtype=data.dtype)
         return np.vstack((start_zeros, data[:end]))
     elif end > data.shape[0]:
-        end_zeros = np.zeros((end - data.shape[0], data.shape[1]),
-                             dtype=data.dtype)
+        end_zeros = np.zeros((end - data.shape[0], data.shape[1]), dtype=data.dtype)
         return np.vstack((data[start:], end_zeros))
     else:
         return data[start:end]
@@ -188,14 +189,16 @@ def _get_data_lim(arr, n_spikes=None):
     arr = np.abs(arr[::k])
     n = arr.shape[0]
     arr = arr.reshape((n, -1))
-    return arr.max() or 1.
+    return arr.max() or 1.0
 
 
 def get_closest_clusters(cluster_id, cluster_ids, sim_func, max_n=None):
     """Return a list of pairs `(cluster, similarity)` sorted by decreasing
     similarity to a given cluster."""
-    l = [(_as_scalar(candidate), _as_scalar(sim_func(cluster_id, candidate)))
-         for candidate in _as_scalars(cluster_ids)]
+    l = [
+        (_as_scalar(candidate), _as_scalar(sim_func(cluster_id, candidate)))
+        for candidate in _as_scalars(cluster_ids)
+    ]
     l = sorted(l, key=itemgetter(1), reverse=True)
     max_n = None or len(l)
     return l[:max_n]
@@ -209,13 +212,16 @@ def _flatten(l):
 # I/O functions
 # -----------------------------------------------------------------------------
 
+
 def read_array(path, mmap_mode=None):
     """Read a .npy array."""
     path = Path(path)
     file_ext = path.suffix
     if file_ext == '.npy':
         return np.load(str(path), mmap_mode=mmap_mode)
-    raise NotImplementedError("The file extension `{}` is not currently supported." % file_ext)
+    raise NotImplementedError(
+        'The file extension `{}` is not currently supported.' % file_ext
+    )
 
 
 def write_array(path, arr):
@@ -224,19 +230,21 @@ def write_array(path, arr):
     file_ext = path.suffix
     if file_ext == '.npy':
         return np.save(str(path), arr)
-    raise NotImplementedError("The file extension `{}` is not currently supported." % file_ext)
+    raise NotImplementedError(
+        'The file extension `{}` is not currently supported.' % file_ext
+    )
 
 
 # -----------------------------------------------------------------------------
 # Chunking functions
 # -----------------------------------------------------------------------------
 
+
 def _excerpt_step(n_samples, n_excerpts=None, excerpt_size=None):
     """Compute the step of an excerpt set as a function of the number
     of excerpts or their sizes."""
     assert n_excerpts >= 2
-    step = max((n_samples - excerpt_size) // (n_excerpts - 1),
-               excerpt_size)
+    step = max((n_samples - excerpt_size) // (n_excerpts - 1), excerpt_size)
     return step
 
 
@@ -299,7 +307,9 @@ def data_chunk(data, chunk, with_overlap=False):
         else:
             i, j = chunk[2:]
     else:
-        raise ValueError("'chunk' should have 2 or 4 elements, not {0:d}".format(len(chunk)))
+        raise ValueError(
+            "'chunk' should have 2 or 4 elements, not {0:d}".format(len(chunk))
+        )
     return data[i:j, ...]
 
 
@@ -313,9 +323,14 @@ def get_excerpts(data, n_excerpts=None, excerpt_size=None):
         return data[:0]
     elif n_excerpts == 1:
         return data[:excerpt_size]
-    out = np.concatenate([
-        data_chunk(data, chunk)
-        for chunk in excerpts(len(data), n_excerpts=n_excerpts, excerpt_size=excerpt_size)])
+    out = np.concatenate(
+        [
+            data_chunk(data, chunk)
+            for chunk in excerpts(
+                len(data), n_excerpts=n_excerpts, excerpt_size=excerpt_size
+            )
+        ]
+    )
     assert len(out) <= n_excerpts * excerpt_size
     return out
 
@@ -323,6 +338,7 @@ def get_excerpts(data, n_excerpts=None, excerpt_size=None):
 # -----------------------------------------------------------------------------
 # Spike clusters utility functions
 # -----------------------------------------------------------------------------
+
 
 def _spikes_in_clusters(spike_clusters, clusters):
     """Return the ids of all spikes belonging to the specified clusters."""
@@ -354,8 +370,9 @@ def _spikes_per_cluster(spike_clusters, spike_ids=None):
     # NOTE: we don't have to sort abs_spikes[...] here because the argsort
     # using 'mergesort' above is stable.
     spikes_in_clusters = {
-        clusters[i]: abs_spikes[idx[i]:idx[i + 1]] for i in range(len(clusters) - 1)}
-    spikes_in_clusters[clusters[-1]] = abs_spikes[idx[-1]:]
+        clusters[i]: abs_spikes[idx[i] : idx[i + 1]] for i in range(len(clusters) - 1)
+    }
+    spikes_in_clusters[clusters[-1]] = abs_spikes[idx[-1] :]
 
     return spikes_in_clusters
 
@@ -391,6 +408,7 @@ def grouped_mean(arr, spike_clusters):
 # Spike selection
 # -----------------------------------------------------------------------------
 
+
 def _times_in_chunks(times, chunks_kept):
     """Return the indices of the times that belong to a list of kept chunks."""
     ind = np.searchsorted(chunks_kept, times, side='right')
@@ -399,16 +417,21 @@ def _times_in_chunks(times, chunks_kept):
 
 class SpikeSelector(object):
     """Select a given number of spikes per cluster among a subset of the chunks."""
+
     def __init__(
-            self, get_spikes_per_cluster=None, spike_times=None,
-            chunk_bounds=None, n_chunks_kept=None):
+        self,
+        get_spikes_per_cluster=None,
+        spike_times=None,
+        chunk_bounds=None,
+        n_chunks_kept=None,
+    ):
         self.get_spikes_per_cluster = get_spikes_per_cluster
         self.spike_times = spike_times
         self.chunks_kept = []
         n_chunks = len(chunk_bounds) - 1
 
         for i in range(0, n_chunks, max(1, int(ceil(n_chunks / n_chunks_kept)))):
-            self.chunks_kept.extend(chunk_bounds[i:i + 2])
+            self.chunks_kept.extend(chunk_bounds[i : i + 2])
         self.chunks_kept = np.array(self.chunks_kept)
 
     def __call__(self, n_spk_clu, cluster_ids, subset_chunks=False, subset_spikes=None):

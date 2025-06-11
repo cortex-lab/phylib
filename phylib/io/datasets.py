@@ -2,9 +2,9 @@
 
 """Utility functions for test datasets."""
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Imports
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 import hashlib
 import logging
@@ -13,16 +13,17 @@ from pathlib import Path
 from phylib.utils._misc import ensure_dir_exists, phy_config_dir
 from phylib.utils.event import ProgressReporter
 
-
 logger = logging.getLogger(__name__)
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Utility functions
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 def _remote_file_size(path):
     import requests
+
     try:  # pragma: no cover
         response = requests.head(path)
         return int(response.headers.get('content-length', 0))
@@ -52,9 +53,10 @@ def _save_stream(r, path):
 
 def _download(url, stream=None):
     from requests import get
+
     r = get(url, stream=stream)
     if r.status_code != 200:  # pragma: no cover
-        logger.debug("Error while downloading %s.", url)
+        logger.debug('Error while downloading %s.', url)
         r.raise_for_status()
     return r
 
@@ -64,7 +66,7 @@ def download_text_file(url):
     return _download(url).text
 
 
-def _md5(path, blocksize=2 ** 20):
+def _md5(path, blocksize=2**20):
     """Compute the checksum of a file."""
     m = hashlib.md5()
     with open(path, 'rb') as f:
@@ -110,9 +112,11 @@ def download_file(url, output_path):
         checked = _check_md5_of_url(output_path, url)
         if checked is False:
             logger.debug(
-                "The file `%s` already exists but is invalid: redownloading.", output_path)
+                'The file `%s` already exists but is invalid: redownloading.',
+                output_path,
+            )
         elif checked is True:
-            logger.debug("The file `%s` already exists: skipping.", output_path)
+            logger.debug('The file `%s` already exists: skipping.', output_path)
             return output_path
     r = _download(url, stream=True)
     _save_stream(r, output_path)
@@ -121,8 +125,10 @@ def download_file(url, output_path):
         r = _download(url, stream=True)
         _save_stream(r, output_path)
         if _check_md5_of_url(output_path, url) is False:
-            raise RuntimeError("The checksum of the downloaded file "
-                               "doesn't match the provided checksum.")
+            raise RuntimeError(
+                'The checksum of the downloaded file '
+                "doesn't match the provided checksum."
+            )
     return
 
 

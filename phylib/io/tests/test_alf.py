@@ -3,26 +3,27 @@
 """Test ALF dataset generation."""
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Imports
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 import os
-from pathlib import Path
 import shutil
-from pytest import fixture, raises
+from pathlib import Path
 
 import numpy as np
 import numpy.random as nr
+from pytest import fixture, raises
 
 from phylib.utils._misc import _write_tsv_simple
-from ..alf import _FILE_RENAMES, _load, EphysAlfCreator
+
+from ..alf import _FILE_RENAMES, EphysAlfCreator, _load
 from ..model import TemplateModel
 
-
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Fixture
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 class Dataset(object):
     def __init__(self, tempdir):
@@ -35,11 +36,13 @@ class Dataset(object):
         self.nc = 10
         self.nt = 5
         self.ncd = 1000
-        np.save(p / 'spike_times.npy', .01 * np.cumsum(nr.exponential(size=self.ns)))
+        np.save(p / 'spike_times.npy', 0.01 * np.cumsum(nr.exponential(size=self.ns)))
         np.save(p / 'spike_clusters.npy', nr.randint(low=1, high=self.nt, size=self.ns))
         shutil.copy(p / 'spike_clusters.npy', p / 'spike_templates.npy')
         np.save(p / 'amplitudes.npy', nr.uniform(low=0.5, high=1.5, size=self.ns))
-        np.save(p / 'channel_positions.npy', np.c_[np.arange(self.nc), np.zeros(self.nc)])
+        np.save(
+            p / 'channel_positions.npy', np.c_[np.arange(self.nc), np.zeros(self.nc)]
+        )
         np.save(p / 'templates.npy', np.random.normal(size=(self.nt, 50, self.nc)))
         np.save(p / 'similar_templates.npy', np.tile(np.arange(self.nt), (self.nt, 1)))
         np.save(p / 'channel_map.npy', np.c_[np.arange(self.nc)])
@@ -47,13 +50,19 @@ class Dataset(object):
         np.save(p / 'whitening_mat.npy', np.eye(self.nc, self.nc))
         np.save(p / '_phy_spikes_subset.channels.npy', np.zeros([self.ns, self.ncmax]))
         np.save(p / '_phy_spikes_subset.spikes.npy', np.zeros([self.ns]))
-        np.save(p / '_phy_spikes_subset.waveforms.npy', np.zeros(
-            [self.ns, self.nsamp, self.ncmax])
+        np.save(
+            p / '_phy_spikes_subset.waveforms.npy',
+            np.zeros([self.ns, self.nsamp, self.ncmax]),
         )
 
-        _write_tsv_simple(p / 'cluster_group.tsv', 'group', {2: 'good', 3: 'mua', 5: 'noise'})
-        _write_tsv_simple(p / 'cluster_Amplitude.tsv', field_name='Amplitude',
-                          data={str(n): np.random.rand() * 120 for n in np.arange(self.nt)})
+        _write_tsv_simple(
+            p / 'cluster_group.tsv', 'group', {2: 'good', 3: 'mua', 5: 'noise'}
+        )
+        _write_tsv_simple(
+            p / 'cluster_Amplitude.tsv',
+            field_name='Amplitude',
+            data={str(n): np.random.rand() * 120 for n in np.arange(self.nt)},
+        )
         with open(p / 'probes.description.txt', 'w+') as fid:
             fid.writelines(['label\n'])
 
@@ -90,7 +99,10 @@ def test_ephys_1(dataset):
     assert dataset._load('rawdata.npy').shape == (1000, dataset.nc)
     assert dataset._load('mydata.lf.bin').shape == (1000 * dataset.nc,)
     assert dataset._load('whitening_mat.npy').shape == (dataset.nc, dataset.nc)
-    assert dataset._load('_phy_spikes_subset.channels.npy').shape == (dataset.ns, dataset.ncmax)
+    assert dataset._load('_phy_spikes_subset.channels.npy').shape == (
+        dataset.ns,
+        dataset.ncmax,
+    )
     assert dataset._load('_phy_spikes_subset.spikes.npy').shape == (dataset.ns,)
     assert dataset._load('_phy_spikes_subset.waveforms.npy').shape == (
         (dataset.ns, dataset.nsamp, dataset.ncmax)
@@ -102,7 +114,11 @@ def test_spike_depths(dataset):
     out_path = path / 'alf'
 
     mtemp = TemplateModel(
-        dir_path=path, dat_path=dataset.dat_path, sample_rate=2000, n_channels_dat=dataset.nc)
+        dir_path=path,
+        dat_path=dataset.dat_path,
+        sample_rate=2000,
+        n_channels_dat=dataset.nc,
+    )
 
     # create some sparse PC features
     n_subch = int(np.round(mtemp.n_channels / 2) - 1)
@@ -123,7 +139,11 @@ def test_spike_depths(dataset):
     np.save(path / 'channel_positions.npy', mtemp.channel_positions)
 
     model = TemplateModel(
-        dir_path=path, dat_path=dataset.dat_path, sample_rate=2000, n_channels_dat=dataset.nc)
+        dir_path=path,
+        dat_path=dataset.dat_path,
+        sample_rate=2000,
+        n_channels_dat=dataset.nc,
+    )
 
     c = EphysAlfCreator(model)
     shutil.rmtree(out_path, ignore_errors=True)
@@ -154,7 +174,11 @@ def test_creator(dataset):
     out_path = path / 'alf'
 
     model = TemplateModel(
-        dir_path=path, dat_path=dataset.dat_path, sample_rate=2000, n_channels_dat=dataset.nc)
+        dir_path=path,
+        dat_path=dataset.dat_path,
+        sample_rate=2000,
+        n_channels_dat=dataset.nc,
+    )
 
     c = EphysAlfCreator(model)
     with raises(IOError):
@@ -181,19 +205,27 @@ def test_creator(dataset):
             elif f.name.startswith('clusters.') and f.name.endswith('.csv'):
                 with open(f) as fid:
                     cl_shape.append(len(fid.readlines()) - 1)
-        sp_shape = [np.load(f).shape[0] for f in new_files if f.name.startswith('spikes.')]
-        ch_shape = [np.load(f).shape[0] for f in new_files if f.name.startswith('channels.')]
+        sp_shape = [
+            np.load(f).shape[0] for f in new_files if f.name.startswith('spikes.')
+        ]
+        ch_shape = [
+            np.load(f).shape[0] for f in new_files if f.name.startswith('channels.')
+        ]
 
         assert len(set(cl_shape)) == 1
         assert len(set(sp_shape)) == 1
         assert len(set(ch_shape)) == 1
 
         dur = np.load(next(out_path.glob('clusters.peakToTrough*.npy')))
-        assert np.all(dur == np.array([-9.5, 3., 13., -4.5, -2.5]))
+        assert np.all(dur == np.array([-9.5, 3.0, 13.0, -4.5, -2.5]))
 
     def read_after_write():
-        model = TemplateModel(dir_path=out_path, dat_path=dataset.dat_path,
-                              sample_rate=2000, n_channels_dat=dataset.nc)
+        model = TemplateModel(
+            dir_path=out_path,
+            dat_path=dataset.dat_path,
+            sample_rate=2000,
+            n_channels_dat=dataset.nc,
+        )
 
         np.all(model.spike_templates == c.model.spike_templates)
         np.all(model.spike_times == c.model.spike_times)
@@ -213,12 +245,15 @@ def test_creator(dataset):
 
 
 def test_merger(dataset):
-
     path = Path(dataset.tmp_dir)
     out_path = path / 'alf'
 
     model = TemplateModel(
-        dir_path=path, dat_path=dataset.dat_path, sample_rate=2000, n_channels_dat=dataset.nc)
+        dir_path=path,
+        dat_path=dataset.dat_path,
+        sample_rate=2000,
+        n_channels_dat=dataset.nc,
+    )
 
     c = EphysAlfCreator(model)
     c.convert(out_path)
@@ -235,18 +270,23 @@ def test_merger(dataset):
 
     # merge the first two clusters
     merge_clu = clu[0:2]
-    spike_clusters[np.bitwise_or(spike_clusters == clu[0],
-                                 spike_clusters == clu[1])] = np.max(clu) + 1
+    spike_clusters[
+        np.bitwise_or(spike_clusters == clu[0], spike_clusters == clu[1])
+    ] = np.max(clu) + 1
     # split the cluster with the most spikes
     split_clu = clu[-1]
     idx = np.where(spike_clusters == split_clu)[0]
-    spike_clusters[idx[0:int(n_clu[-1] / 2)]] = np.max(clu) + 2
-    spike_clusters[idx[int(n_clu[-1] / 2):]] = np.max(clu) + 3
+    spike_clusters[idx[0 : int(n_clu[-1] / 2)]] = np.max(clu) + 2
+    spike_clusters[idx[int(n_clu[-1] / 2) :]] = np.max(clu) + 3
 
     np.save(path / 'spike_clusters.npy', spike_clusters)
 
     model = TemplateModel(
-        dir_path=path, dat_path=dataset.dat_path, sample_rate=2000, n_channels_dat=dataset.nc)
+        dir_path=path,
+        dat_path=dataset.dat_path,
+        sample_rate=2000,
+        n_channels_dat=dataset.nc,
+    )
 
     c = EphysAlfCreator(model)
     c.convert(out_path_merge)

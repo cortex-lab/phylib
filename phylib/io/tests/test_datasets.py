@@ -2,46 +2,49 @@
 
 """Tests of dataset utility functions."""
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Imports
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 import logging
-from pathlib import Path
 from itertools import product
+from pathlib import Path
 
 import numpy as np
-from numpy.testing import assert_array_equal as ae
 import responses
-from pytest import raises, fixture
+from numpy.testing import assert_array_equal as ae
+from pytest import fixture, raises
 
-from ..datasets import (download_file,
-                        download_test_file,
-                        _check_md5_of_url,
-                        )
 from phylib.utils.testing import captured_logging
+
+from ..datasets import (
+    _check_md5_of_url,
+    download_file,
+    download_test_file,
+)
 
 logger = logging.getLogger(__name__)
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Fixtures
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 # Test URL and data
 _URL = 'http://test/data'
-_DATA = np.linspace(0., 1., 100000).astype(np.float32)
+_DATA = np.linspace(0.0, 1.0, 100000).astype(np.float32)
 _CHECKSUM = '7d257d0ae7e3af8ca3574ccc3a4bf072'
 
 
 def _add_mock_response(url, body, file_type='binary'):
-    content_type = ('application/octet-stream'
-                    if file_type == 'binary' else 'text/plain')
-    responses.add(responses.GET, url,
-                  body=body,
-                  status=200,
-                  content_type=content_type,
-                  )
+    content_type = 'application/octet-stream' if file_type == 'binary' else 'text/plain'
+    responses.add(
+        responses.GET,
+        url,
+        body=body,
+        status=200,
+        content_type=content_type,
+    )
 
 
 @fixture
@@ -90,9 +93,10 @@ def _check(data):
     ae(np.frombuffer(data, np.float32), _DATA)
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Test utility functions
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 @responses.activate
 def test_check_md5_of_url(tempdir, mock_url):
@@ -101,9 +105,10 @@ def test_check_md5_of_url(tempdir, mock_url):
     assert _check_md5_of_url(output_path, _URL)
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Test download functions
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 @responses.activate
 def test_download_not_found(tempdir):
@@ -139,12 +144,18 @@ def test_download_file(tempdir, mock_urls):
     param, url_data, url_checksum = mock_urls
     data_here, data_valid, checksum_here, checksum_valid = param
 
-    assert_succeeds = (data_here and data_valid and
-                       ((checksum_here == checksum_valid) or
-                        (not(checksum_here) and checksum_valid)))
+    assert_succeeds = (
+        data_here
+        and data_valid
+        and (
+            (checksum_here == checksum_valid)
+            or (not (checksum_here) and checksum_valid)
+        )
+    )
 
-    download_succeeds = (assert_succeeds or (data_here and
-                                             (not(data_valid) and not(checksum_here))))
+    download_succeeds = assert_succeeds or (
+        data_here and (not (data_valid) and not (checksum_here))
+    )
 
     if download_succeeds:
         data = _dl(path)

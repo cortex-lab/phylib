@@ -3,26 +3,26 @@
 """Plotting utilities."""
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Imports
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
-from functools import partial
 import logging
+from functools import partial
 
 import numpy as np
 
 logger = logging.getLogger(__name__)
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Common probe layouts
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 def linear_positions(n_channels):
     """Linear channel positions along the vertical axis."""
-    return np.c_[np.zeros(n_channels),
-                 np.linspace(0., 1., n_channels)]
+    return np.c_[np.zeros(n_channels), np.linspace(0.0, 1.0, n_channels)]
 
 
 def staggered_positions(n_channels):
@@ -33,9 +33,10 @@ def staggered_positions(n_channels):
     return pos
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Box positioning
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 def range_transform(from_bounds, to_bounds, positions, do_offset=True):
     """Transform for a rectangle to another."""
@@ -57,7 +58,7 @@ def range_transform(from_bounds, to_bounds, positions, do_offset=True):
             z0[ind, i] = -1
             z1[ind, i] = +1
 
-    d = (f1 - f0)
+    d = f1 - f0
     d[d == 0] = 1
 
     out = positions.copy()
@@ -73,17 +74,17 @@ def _boxes_overlap(x0, y0, x1, y1):
     """Return whether a set of boxes, defined by their 2D corners, overlap or  not."""
     assert x0.ndim == y0.ndim == y0.ndim == y1.ndim == 2
     n = len(x0)
-    overlap_matrix = ((x0 < x1.T) & (x1 > x0.T) & (y0 < y1.T) & (y1 > y0.T))
+    overlap_matrix = (x0 < x1.T) & (x1 > x0.T) & (y0 < y1.T) & (y1 > y0.T)
     overlap_matrix[np.arange(n), np.arange(n)] = False
     return np.any(overlap_matrix.ravel())
 
 
 def _binary_search(f, xmin, xmax, eps=1e-9):
     """Return the largest x such f(x) is True."""
-    middle = (xmax + xmin) / 2.
+    middle = (xmax + xmin) / 2.0
     while xmax - xmin > eps:
         assert xmin < xmax
-        middle = (xmax + xmin) / 2.
+        middle = (xmax + xmin) / 2.0
         if f(xmax):
             return xmax
         if not f(xmin):
@@ -95,19 +96,19 @@ def _binary_search(f, xmin, xmax, eps=1e-9):
     return middle
 
 
-def _find_box_size(x, y, ar=.5, margin=0):
+def _find_box_size(x, y, ar=0.5, margin=0):
     """Return the maximum (half) box size such that boxes centered around box positions
     do not overlap."""
     if x.ndim == 1:
         x = x[:, np.newaxis]
     if y.ndim == 1:
         y = y[:, np.newaxis]
-    logger.log(5, "Get box size for %d points.", len(x))
+    logger.log(5, 'Get box size for %d points.', len(x))
     # Deal with degenerate x case.
     xmin, xmax = x.min(), x.max()
     if xmin == xmax:
         # If all positions are vertical, the width can be maximum.
-        wmax = 1.
+        wmax = 1.0
     else:
         wmax = xmax - xmin
 
@@ -143,7 +144,7 @@ def get_non_overlapping_boxes(box_pos):
     box_pos = range_transform([[mx, my, Mx, My]], [[-1, -1, +1, +1]], box_pos)
     # Compute box size.
     x, y = box_pos.T
-    w, h = _find_box_size(x, y, margin=.1)
+    w, h = _find_box_size(x, y, margin=0.1)
     # Renormalize again so that the boxes fit inside the view.
     mx, my = np.min(box_pos - np.array([[w, h]]), axis=0)
     Mx, My = np.max(box_pos + np.array([[w, h]]), axis=0)
@@ -151,9 +152,9 @@ def get_non_overlapping_boxes(box_pos):
     b2 = [[-1, -1, 1, 1]]
     box_pos = range_transform(b1, b2, box_pos)
     w, h = range_transform(b1, b2, [[w, h]], do_offset=False).ravel()
-    w *= .95
-    h *= .9
-    logger.log(5, "Found box size %s.", (w, h))
+    w *= 0.95
+    h *= 0.9
+    logger.log(5, 'Found box size %s.', (w, h))
     return box_pos, (w, h)
 
 
@@ -170,12 +171,13 @@ def get_closest_box(pos, box_pos, box_size):
     return np.argmin(d)
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Data bounds utilities
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 def _get_data_bounds(data_bounds, pos=None, length=None):
-    """"Prepare data bounds, possibly using min/max of the data."""
+    """ "Prepare data bounds, possibly using min/max of the data."""
     if data_bounds is None or (isinstance(data_bounds, str) and data_bounds == 'auto'):
         if pos is not None and len(pos):
             m, M = pos.min(axis=0), pos.max(axis=0)
