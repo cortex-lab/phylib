@@ -1,0 +1,121 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "phylib"
+dynamic = ["version"]
+description = "Ephys data analysis for thousands of channels"
+readme = "README.md"
+license = { text = "BSD" }
+authors = [{ name = "Cyrille Rossant", email = "cyrille.rossant@gmail.com" }]
+keywords = ["phy", "data analysis", "electrophysiology", "neuroscience"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: BSD License",
+    "Natural Language :: English",
+    "Framework :: IPython",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+requires-python = ">=3.9"
+dependencies = [
+    "numpy",
+    "scipy",
+    "dask",
+    "requests",
+    "tqdm",
+    "toolz",
+    "joblib",
+    "mtscomp",
+]
+
+[project.urls]
+Homepage = "https://github.com/cortex-lab/phylib"
+Repository = "https://github.com/cortex-lab/phylib"
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-cov", "ruff", "coverage", "coveralls", "responses"]
+
+[tool.setuptools.dynamic]
+version = { attr = "phylib.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["phylib*"]
+
+[tool.setuptools.package-data]
+phylib = [
+    "*.vert",
+    "*.frag",
+    "*.glsl",
+    "*.npy",
+    "*.gz",
+    "*.txt",
+    "*.html",
+    "*.css",
+    "*.js",
+    "*.prb",
+]
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    "default",
+    "ignore::DeprecationWarning:responses",
+    "ignore::DeprecationWarning:cookies",
+    "ignore::DeprecationWarning:socks",
+    "ignore::DeprecationWarning:matplotlib",
+    "ignore:numpy.ufunc",
+]
+testpaths = ["phylib"]
+addopts = "--cov=phylib --cov-report=term-missing"
+
+[tool.coverage.run]
+branch = false
+source = ["phylib"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "raise",
+    "except IOError:",
+    "pass",
+    "return$",
+    "continue$",
+]
+show_missing = true
+
+[tool.ruff]
+line-length = 99
+target-version = "py39"
+
+[tool.ruff.lint]
+# Enable pycodestyle (`E`) and Pyflakes (`F`) codes by default
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM", "PIE", "NPY201"]
+ignore = [
+    "E265", # block comment should start with '# '
+    "E731", # do not assign a lambda expression, use a def
+    "E741", # ambiguous variable name
+    "W504", # line break after binary operator
+    "W605", # invalid escape sequence
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["phylib"]
+
+[tool.ruff.format]
+quote-style = "single"
+indent-style = "space"
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=6.0",
+    "pytest-cov>=3.0",
+    "ruff>=0.1.0",
+    "coverage>=6.0",
+    "coveralls>=3.0",
+    "responses>=0.20",
+]
