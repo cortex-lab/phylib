@@ -36,20 +36,20 @@ def _encode_qbytearray(arr):
     return data_b64
 
 
-# TODO : update to QT6
 def _decode_qbytearray(data_b64):
     """Decode binary arrays with base64."""
     encoded = base64.b64decode(data_b64)
     try:
-        from PyQt5.QtCore import QByteArray
+        from PyQt6.QtCore import QByteArray
 
         out = QByteArray.fromBase64(encoded)
-    try: 
-        from PyQt6.QtCore import QByteArray  # pragma: no cover
-        out = QByteArray.fromBase64(encoded)
-        
-    except ImportError:  # pragma: no cover
-        pass
+    except ImportError:
+        try:
+            from PyQt5.QtCore import QByteArray
+
+            out = QByteArray.fromBase64(encoded)
+        except ImportError:  # pragma: no cover
+            out = None
     return out
 
 
