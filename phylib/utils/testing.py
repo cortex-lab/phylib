@@ -2,27 +2,28 @@
 
 """Utility functions used for tests."""
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Imports
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
-from contextlib import contextmanager
-from io import StringIO
 import logging
 import os
 import sys
+from contextlib import contextmanager
+from io import StringIO
 
-from numpy.testing import assert_array_equal as ae
 from numpy.testing import assert_allclose as ac
+from numpy.testing import assert_array_equal as ae
 
 from ._types import _is_array_like
 
 logger = logging.getLogger(__name__)
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Utility functions
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 @contextmanager
 def captured_output():

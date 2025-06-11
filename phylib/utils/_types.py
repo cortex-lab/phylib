@@ -3,24 +3,36 @@
 """Utility functions."""
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Imports
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 import numpy as np
 
-
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Various Python utility functions
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 _ACCEPTED_ARRAY_DTYPES = (
-    float, np.float32, np.float64, int, np.int8, np.int16, np.uint8, np.uint16,
-    np.int32, np.int64, np.uint32, np.uint64, bool)
+    float,
+    np.float32,
+    np.float64,
+    int,
+    np.int8,
+    np.int16,
+    np.uint8,
+    np.uint16,
+    np.int32,
+    np.int64,
+    np.uint32,
+    np.uint64,
+    bool,
+)
 
 
 class Bunch(dict):
     """A subclass of dictionary with an additional dot syntax."""
+
     def __init__(self, *args, **kwargs):
         super(Bunch, self).__init__(*args, **kwargs)
         self.__dict__ = self
@@ -60,12 +72,12 @@ def _as_scalars(arr):
 
 def _is_integer(x):
     """Return whether an object is an integer."""
-    return isinstance(x, (int, np.generic))
+    return isinstance(x, (int, np.integer))
 
 
 def _is_float(x):
     """Return whether an object is a floating point number."""
-    return isinstance(x, (float, np.float32, np.float64))
+    return isinstance(x, (float, np.floating))
 
 
 def _as_list(obj):
@@ -104,8 +116,9 @@ def _as_array(arr, dtype=None):
         if out.dtype != dtype:
             out = out.astype(dtype)
     if out.dtype not in _ACCEPTED_ARRAY_DTYPES:
-        raise ValueError("'arr' seems to have an invalid dtype: "
-                         "{0:s}".format(str(out.dtype)))
+        raise ValueError(
+            "'arr' seems to have an invalid dtype: {0:s}".format(str(out.dtype))
+        )
     return out
 
 

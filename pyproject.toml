@@ -99,7 +99,6 @@ ignore = [
     "E265", # block comment should start with '# '
     "E731", # do not assign a lambda expression, use a def
     "E741", # ambiguous variable name
-    "W504", # line break after binary operator
     "W605", # invalid escape sequence
 ]
 
