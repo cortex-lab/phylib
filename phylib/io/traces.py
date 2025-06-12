@@ -1,24 +1,28 @@
-# -*- coding: utf-8 -*-
-
 """EphysReader class."""
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Imports
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 import copy
 import logging
+import multiprocessing as mp
 from functools import reduce
 from math import ceil
-import multiprocessing as mp
 from operator import mul
 from pathlib import Path
 
-import numpy as np
-from numpy.lib.format import (
-    _check_version, _write_array_header, dtype_to_descr)
 import mtscomp
+import numpy as np
+
+try:
+    # NumPy 2.0+
+    from numpy.lib.format import dtype_to_descr
+    from numpy.lib.format import write_array_header_1_0 as _write_array_header
+except ImportError:
+    # NumPy 1.x fallback
+    from numpy.lib.format import _write_array_header, dtype_to_descr
 from tqdm import tqdm
 
 from .array import _index_of
@@ -33,9 +37,17 @@ DEFAULT_CHUNK_DURATION = 600.0  # seconds
 EPHYS_RAW_EXTENSIONS = ('.dat', '.bin', '.raw', '.mda')
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Utils
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
+
+# NumPy 2.0 compatibility: _check_version was removed
+def _check_version(version):
+    """Check numpy format version. Compatible with NumPy 1.x and 2.x."""
+    if version is not None and version != (1, 0):
+        raise ValueError(f'Unsupported format version: {version}')
+
 
 def prod(l):
     return reduce(mul, l, 1)
@@ -66,7 +78,7 @@ def _get_subitems(bounds, item):
         first_chunk, last_chunk = _find_chunks(bounds, [start, stop - 1])
         out = []
         for chunk in range(first_chunk, last_chunk + 1):
-            i0, i1 = bounds[chunk:chunk + 2]
+            i0, i1 = bounds[chunk : chunk + 2]
             chunk_start = max(0, start - i0)
             chunk_stop = min(i1 - i0, stop - i0)
             assert chunk_start >= 0
@@ -84,7 +96,7 @@ def _get_subitems(bounds, item):
         for chunk in np.unique(chunks):
             if chunk >= len(bounds) - 1:
                 raise IndexError()
-            i0, i1 = bounds[chunk:chunk + 2]
+            i0, i1 = bounds[chunk : chunk + 2]
             out.append((chunk, item[(i0 <= item) & (item < i1)] - i0))
         return out
     elif isinstance(item, tuple):
@@ -148,7 +160,7 @@ def _get_chunk_bounds(arr_sizes, chunk_size):
 def _apply_op(op, arg, arr):
     if op == 'cols':
         return arr[:, arg]
-    f = getattr(arr, '__%s__' % op)
+    f = getattr(arr, f'__{op}__')
     return f(arg) if arg is not None else f()
 
 
@@ -159,18 +171,20 @@ def _memmap_flat(path, dtype=None, n_channels=None, offset=0, mode='r+'):
     fsize = path.stat().st_size
     item_size = np.dtype(dtype).itemsize
     if (fsize - offset) % (item_size * n_channels) != 0:
-        logger.warning('Inconsistent number of channels between the '
-                       'params file and the binary dat file')
+        logger.warning(
+            'Inconsistent number of channels between the params file and the binary dat file'
+        )
     n_samples = (fsize - offset) // (item_size * n_channels)
     shape = (n_samples, n_channels)
     return np.memmap(path, dtype=dtype, offset=offset, shape=shape, mode=mode)
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # EphysReader
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
-class BaseEphysReader(object):
+
+class BaseEphysReader:
     # To be set in child classes:
     sample_rate = 0
     n_channels = 0
@@ -306,9 +320,17 @@ class BaseEphysReader(object):
 
 
 class FlatEphysReader(BaseEphysReader):
-    def __init__(self, paths, sample_rate=None, dtype=None, offset=0, n_channels=None, mode='r',
-                 **kwargs):
-        super(FlatEphysReader, self).__init__()
+    def __init__(
+        self,
+        paths,
+        sample_rate=None,
+        dtype=None,
+        offset=0,
+        n_channels=None,
+        mode='r',
+        **kwargs,
+    ):
+        super().__init__()
         if isinstance(paths, (str, Path)):
             paths = [paths]
         self._paths = [Path(p) for p in paths]
@@ -317,7 +339,8 @@ class FlatEphysReader(BaseEphysReader):
         self.dir_path = paths[0].parent
         self._mmaps = [
             _memmap_flat(path, dtype=dtype, n_channels=n_channels, offset=offset, mode=mode)
-            for path in paths]
+            for path in paths
+        ]
 
         self.sample_rate = sample_rate
         self.dtype = dtype
@@ -325,7 +348,8 @@ class FlatEphysReader(BaseEphysReader):
         chunk_size = int(round(DEFAULT_CHUNK_DURATION * sample_rate))
         self.part_bounds = _get_part_bounds(self._mmaps)
         self.chunk_bounds = _get_chunk_bounds(
-            [arr.shape[0] for arr in self._mmaps], chunk_size=chunk_size)
+            [arr.shape[0] for arr in self._mmaps], chunk_size=chunk_size
+        )
 
         assert self.sample_rate > 0
         assert self.n_channels >= 0
@@ -337,14 +361,15 @@ class FlatEphysReader(BaseEphysReader):
 
 class MtscompEphysReader(BaseEphysReader):
     def __init__(self, reader, **kwargs):
-        super(MtscompEphysReader, self).__init__()
+        super().__init__()
         if isinstance(reader, (tuple, list)):  # pragma: no cover
             assert reader
             # TODO: support concatenation of multiple .cbin files. Currently, only take the first.
             if len(reader) >= 2:
                 logger.warning(
-                    "Support of multiple concatenate .cbin files is not supported yet. "
-                    "Taking the first file only.")
+                    'Support of multiple concatenate .cbin files is not supported yet. '
+                    'Taking the first file only.'
+                )
             reader = reader[0]
         assert isinstance(reader, mtscomp.Reader)
         self.reader = reader
@@ -353,7 +378,10 @@ class MtscompEphysReader(BaseEphysReader):
         self.sample_rate = reader.sample_rate
         self.dtype = reader.dtype
         self.n_channels = reader.n_channels
-        self.part_bounds = [0, reader.n_samples]  # TODO: support multiple concatenated readers
+        self.part_bounds = [
+            0,
+            reader.n_samples,
+        ]  # TODO: support multiple concatenated readers
         self.chunk_bounds = reader.chunk_bounds
 
     def _get_part(self, part_idx, subitem):
@@ -377,9 +405,11 @@ class MtscompEphysReader(BaseEphysReader):
 
             if cache:
                 logger.debug(
-                    "Processing batch #%d/%d with chunks %s.",
+                    'Processing batch #%d/%d with chunks %s.',
                     batch + 1,
-                    reader.n_batches, ', '.join(map(str, range(first_chunk, last_chunk))))
+                    reader.n_batches,
+                    ', '.join(map(str, range(first_chunk, last_chunk))),
+                )
                 # Decompress all chunks in the batch.
                 reader.decompress_chunks(range(first_chunk, last_chunk), reader.pool)
 
@@ -398,7 +428,7 @@ class MtscompEphysReader(BaseEphysReader):
 
 class ArrayEphysReader(BaseEphysReader):
     def __init__(self, arr, **kwargs):
-        super(ArrayEphysReader, self).__init__()
+        super().__init__()
         self._arr = arr
         self.sample_rate = kwargs.pop('sample_rate', None)
         assert self.sample_rate > 0
@@ -417,20 +447,20 @@ class NpyEphysReader(ArrayEphysReader):
     def __init__(self, path, **kwargs):
         if isinstance(path, (tuple, list)):
             if len(path) != 1:
-                raise ValueError("There should be exactly one path to a npy file.")
+                raise ValueError('There should be exactly one path to a npy file.')
             path = path[0]
         path = Path(path)
         self.name = path.stem
         self.dir_path = path.parent
         self._arr = np.load(path, mmap_mode='r')  # TODO: support for multiple npy files
-        super(NpyEphysReader, self).__init__(self._arr, **kwargs)
+        super().__init__(self._arr, **kwargs)
 
 
 class RandomEphysReader(BaseEphysReader):
     name = 'random'
 
     def __init__(self, n_samples, n_channels, sample_rate=None, **kwargs):
-        super(RandomEphysReader, self).__init__()
+        super().__init__()
         self.sample_rate = sample_rate
         assert self.sample_rate > 0
         self.dtype = np.float32
@@ -445,9 +475,10 @@ class RandomEphysReader(BaseEphysReader):
         return np.random.randn(n, self.n_channels).astype(np.float32)
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # High-level functions
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 def _get_ephys_constructor(obj, **kwargs):
     """Return the class, argument, and kwargs to create an Ephys instance from any
@@ -459,11 +490,11 @@ def _get_ephys_constructor(obj, **kwargs):
     elif isinstance(obj, (str, Path)):
         path = Path(obj)
         if not path.exists():  # pragma: no cover
-            logger.warning("File %s does not exist.", path)
+            logger.warning('File %s does not exist.', path)
             return None, None, {}
         assert path.exists()
         ext = path.suffix
-        assert ext, "No extension found in file `%s`" % path
+        assert ext, f'No extension found in file `{path}`'
         # Mtscomp file
         if ext == '.cbin':
             reader = mtscomp.Reader(n_threads=mp.cpu_count() // 2)
@@ -476,7 +507,7 @@ def _get_ephys_constructor(obj, **kwargs):
             return (NpyEphysReader, obj, kwargs)
             # TODO: other standard binary formats
         else:  # pragma: no cover
-            raise IOError("Unknown file extension: `%s`." % ext)
+            raise OSError(f'Unknown file extension: `{ext}`.')
     elif isinstance(obj, (tuple, list)):
         if obj:
             # Concatenate the main argument to the constructor.
@@ -499,9 +530,10 @@ def get_ephys_reader(obj, **kwargs):
     return klass(arg, **kwargs)
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Waveform extractor
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 def get_spike_waveforms(spike_ids, channel_ids, spike_waveforms=None, n_samples_waveforms=None):
     """Get spike waveforms from precomputed doubly sparse spike waveforms array.
@@ -547,7 +579,7 @@ def _npy_header(shape, dtype, order='C'):  # pragma: no cover
     return d
 
 
-class NpyWriter(object):
+class NpyWriter:
     def __init__(self, path, shape, dtype, axis=0):
         assert axis == 0  # only concatenation along the first axis is supported right now
         # Only C order is supported at the moment.
@@ -557,7 +589,14 @@ class NpyWriter(object):
         version = None
         _check_version(version)
         self.fp = open(path, 'wb')
-        _write_array_header(self.fp, header, version)
+
+        # NumPy 2.0 compatibility: write_array_header_1_0 has different signature
+        try:
+            # NumPy 2.0+ signature: write_array_header_1_0(fp, header)
+            _write_array_header(self.fp, header)
+        except TypeError:
+            # NumPy 1.x signature: _write_array_header(fp, header, version)
+            _write_array_header(self.fp, header, version)
 
     def append(self, chunk):
         if chunk.ndim == len(self.shape):
@@ -586,7 +625,7 @@ def _extract_waveform(traces, sample, channel_ids=None, n_samples_waveforms=None
         n_channels = len(channel_ids)
     t0, t1 = int(sample - a), int(sample + b)
     # Extract the waveforms.
-    w = traces[max(0, t0):t1][:, channel_ids]
+    w = traces[max(0, t0) : t1][:, channel_ids]
     if not isinstance(channel_ids, slice):
         w[:, channel_ids == -1] = 0
     # Deal with side effects.
@@ -603,13 +642,14 @@ def extract_waveforms(traces, spike_samples, channel_ids, n_samples_waveforms=No
     # Create the output array.
     ns = len(spike_samples)
     nsw = n_samples_waveforms
-    assert nsw > 0, "Please specify n_samples_waveforms > 0"
+    assert nsw > 0, 'Please specify n_samples_waveforms > 0'
     nc = len(channel_ids)
     # Extract the spike waveforms.
     out = np.zeros((ns, nsw, nc), dtype=traces.dtype)
     for i, ts in enumerate(spike_samples):
-        out[i] = _extract_waveform(
-            traces, ts, channel_ids=channel_ids, n_samples_waveforms=nsw)[np.newaxis, ...]
+        out[i] = _extract_waveform(traces, ts, channel_ids=channel_ids, n_samples_waveforms=nsw)[
+            np.newaxis, ...
+        ]
     return out
 
 
@@ -624,7 +664,7 @@ def iter_waveforms(traces, spike_samples, spike_channels, n_samples_waveforms=No
     n_samples_waveforms = n_samples_waveforms
     n_channels_loc = spike_channels.shape[1]
 
-    pb = tqdm(desc="Extracting waveforms", total=traces.duration)
+    pb = tqdm(desc='Extracting waveforms', total=traces.duration)
     for i0, i1 in traces.iter_chunks(cache=cache):
         # Get spikes in chunk.
         ind = _find_chunks([i0, i1], spike_samples) == 0
@@ -639,15 +679,24 @@ def iter_waveforms(traces, spike_samples, spike_channels, n_samples_waveforms=No
         for i, s in enumerate(ss):
             channel_ids = sc[i, :]
             waveforms[i, ...] = _extract_waveform(
-                traces, int(s), channel_ids=channel_ids,
-                n_samples_waveforms=n_samples_waveforms)
+                traces,
+                int(s),
+                channel_ids=channel_ids,
+                n_samples_waveforms=n_samples_waveforms,
+            )
         yield waveforms
     pb.close()
 
 
 def export_waveforms(
-        path, traces, spike_samples, spike_channels, n_samples_waveforms=None, cache=False,
-        sample2unit=1):
+    path,
+    traces,
+    spike_samples,
+    spike_channels,
+    n_samples_waveforms=None,
+    cache=False,
+    sample2unit=1,
+):
     """Export a selection of spike waveforms to a npy file by iterating over the data on a chunk
     by chunk basis."""
     n_spikes = len(spike_samples)
@@ -658,8 +707,12 @@ def export_waveforms(
     writer = NpyWriter(path, shape, dtype)
     size_written = 0
     for waveforms in iter_waveforms(
-            traces, spike_samples, spike_channels, n_samples_waveforms=n_samples_waveforms,
-            cache=cache):
+        traces,
+        spike_samples,
+        spike_channels,
+        n_samples_waveforms=n_samples_waveforms,
+        cache=cache,
+    ):
         writer.append(waveforms * sample2unit)
         size_written += waveforms.size
     writer.close()

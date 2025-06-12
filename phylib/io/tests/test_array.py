@@ -1,30 +1,46 @@
-# -*- coding: utf-8 -*-
-
 """Tests of array utility functions."""
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Imports
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 from pathlib import Path
 
 import numpy as np
 from pytest import raises
 
-from ..array import (
-    _unique, _normalize, _index_of, _spikes_in_clusters, _spikes_per_cluster,
-    _flatten_per_cluster, get_closest_clusters, _get_data_lim, _flatten, _clip,
-    chunk_bounds, excerpts, data_chunk, grouped_mean, SpikeSelector,
-    get_excerpts, _range_from_slice, _pad, _get_padded,
-    read_array, write_array)
 from phylib.utils._types import _as_array
 from phylib.utils.testing import _assert_equal as ae
+
+from ..array import (
+    SpikeSelector,
+    _clip,
+    _flatten,
+    _flatten_per_cluster,
+    _get_data_lim,
+    _get_padded,
+    _index_of,
+    _normalize,
+    _pad,
+    _range_from_slice,
+    _spikes_in_clusters,
+    _spikes_per_cluster,
+    _unique,
+    chunk_bounds,
+    data_chunk,
+    excerpts,
+    get_closest_clusters,
+    get_excerpts,
+    grouped_mean,
+    read_array,
+    write_array,
+)
 from ..mock import artificial_spike_clusters, artificial_spike_samples
 
-
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Test utility functions
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 def test_clip():
     assert _clip(-1, 0, 1) == 0
@@ -33,8 +49,9 @@ def test_clip():
 def test_range_from_slice():
     """Test '_range_from_slice'."""
 
-    class _SliceTest(object):
+    class _SliceTest:
         """Utility class to make it more convenient to test slice objects."""
+
         def __init__(self, **kwargs):
             self._kwargs = kwargs
 
@@ -144,10 +161,10 @@ def test_normalize():
     x_min, y_min = positions_n.min(axis=0)
     x_max, y_max = positions_n.max(axis=0)
 
-    np.allclose(x_min, 0.)
-    np.allclose(x_max, 1.)
-    np.allclose(y_min, 0.)
-    np.allclose(y_max, 1.)
+    np.allclose(x_min, 0.0)
+    np.allclose(x_max, 1.0)
+    np.allclose(y_min, 0.0)
+    np.allclose(y_max, 1.0)
 
     # Keep ratio is True.
     positions_n = _normalize(positions, keep_ratio=True)
@@ -155,8 +172,8 @@ def test_normalize():
     x_min, y_min = positions_n.min(axis=0)
     x_max, y_max = positions_n.max(axis=0)
 
-    np.allclose(min(x_min, y_min), 0.)
-    np.allclose(max(x_max, y_max), 1.)
+    np.allclose(min(x_min, y_min), 0.0)
+    np.allclose(max(x_max, y_max), 1.0)
     np.allclose(x_min + x_max, 1)
     np.allclose(y_min + y_max, 1)
 
@@ -171,8 +188,8 @@ def test_index_of():
 def test_as_array():
     ae(_as_array(3), [3])
     ae(_as_array([3]), [3])
-    ae(_as_array(3.), [3.])
-    ae(_as_array([3.]), [3.])
+    ae(_as_array(3.0), [3.0])
+    ae(_as_array([3.0]), [3.0])
 
     with raises(ValueError):
         _as_array(map)
@@ -187,9 +204,10 @@ def test_get_closest_clusters():
     assert [_ for _, __ in out] == [2, 1, 0]
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Test read/save
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 def test_read_write(tempdir):
     arr = np.arange(10).astype(np.float32)
@@ -201,9 +219,10 @@ def test_read_write(tempdir):
     ae(read_array(path, mmap_mode='r'), arr)
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Test chunking
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 def test_chunk_bounds():
     chunks = chunk_bounds(200, 100, overlap=20)
@@ -240,16 +259,12 @@ def test_chunk():
 
 
 def test_excerpts_1():
-    bounds = [(start, end) for (start, end) in excerpts(100,
-                                                        n_excerpts=3,
-                                                        excerpt_size=10)]
+    bounds = [(start, end) for (start, end) in excerpts(100, n_excerpts=3, excerpt_size=10)]
     assert bounds == [(0, 10), (45, 55), (90, 100)]
 
 
 def test_excerpts_2():
-    bounds = [(start, end) for (start, end) in excerpts(10,
-                                                        n_excerpts=3,
-                                                        excerpt_size=10)]
+    bounds = [(start, end) for (start, end) in excerpts(10, n_excerpts=3, excerpt_size=10)]
     assert bounds == [(0, 10)]
 
 
@@ -271,9 +286,10 @@ def test_get_excerpts():
     assert len(get_excerpts(data, n_excerpts=0, excerpt_size=10)) == 0
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Test spike clusters functions
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 def test_spikes_in_clusters():
     """Test _spikes_in_clusters()."""
@@ -288,8 +304,7 @@ def test_spikes_in_clusters():
         assert np.all(spike_clusters[_spikes_in_clusters(spike_clusters, [i])] == i)
 
     clusters = [1, 2, 3]
-    assert np.all(np.isin(
-        spike_clusters[_spikes_in_clusters(spike_clusters, clusters)], clusters))
+    assert np.all(np.isin(spike_clusters[_spikes_in_clusters(spike_clusters, clusters)], clusters))
 
 
 def test_spikes_per_cluster():
@@ -321,12 +336,13 @@ def test_grouped_mean():
     ae(grouped_mean(arr, spike_clusters), [10, -3, -5])
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Test spike selection
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 def test_select_spikes_1():
-    spike_times = np.array([0., 1., 2., 3.3, 4.4])
+    spike_times = np.array([0.0, 1.0, 2.0, 3.3, 4.4])
     spike_clusters = np.array([1, 2, 1, 2, 4])
     chunk_bounds = [0.0, 1.1, 2.2, 3.3, 4.4, 5.5, 6.6]
     n_chunks_kept = 2
@@ -336,7 +352,10 @@ def test_select_spikes_1():
     spc = _spikes_per_cluster(spike_clusters)
     ss = SpikeSelector(
         get_spikes_per_cluster=lambda cl: spc.get(cl, np.array([], dtype=np.int64)),
-        spike_times=spike_times, chunk_bounds=chunk_bounds, n_chunks_kept=n_chunks_kept)
+        spike_times=spike_times,
+        chunk_bounds=chunk_bounds,
+        n_chunks_kept=n_chunks_kept,
+    )
     ae(ss.chunks_kept, [0.0, 1.1, 3.3, 4.4])
 
     ae(ss(3, [], subset_chunks=True), [])
@@ -357,16 +376,19 @@ def test_select_spikes_2():
     n_spikes = 1000
     n_clusters = 10
     spike_times = artificial_spike_samples(n_spikes)
-    spike_times = 10. * spike_times / spike_times.max()
+    spike_times = 10.0 * spike_times / spike_times.max()
     chunk_bounds = np.linspace(0.0, 10.0, 11)
     n_chunks_kept = 3
-    chunks_kept = [0., 1., 4., 5., 8., 9.]
+    chunks_kept = [0.0, 1.0, 4.0, 5.0, 8.0, 9.0]
     spike_clusters = artificial_spike_clusters(n_spikes, n_clusters)
 
     spc = _spikes_per_cluster(spike_clusters)
     ss = SpikeSelector(
         get_spikes_per_cluster=lambda cl: spc.get(cl, np.array([], dtype=np.int64)),
-        spike_times=spike_times, chunk_bounds=chunk_bounds, n_chunks_kept=n_chunks_kept)
+        spike_times=spike_times,
+        chunk_bounds=chunk_bounds,
+        n_chunks_kept=n_chunks_kept,
+    )
     ae(ss.chunks_kept, chunks_kept)
 
     def _check_chunks(sid):

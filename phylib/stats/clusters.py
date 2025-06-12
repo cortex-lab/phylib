@@ -1,24 +1,22 @@
-# -*- coding: utf-8 -*-
-
 """Cluster statistics."""
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Imports
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 import numpy as np
 
-
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Cluster statistics
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 def mean(x):
     """Return the mean of an array across the first dimension."""
     return x.mean(axis=0)
 
 
-def get_unmasked_channels(mean_masks, min_mask=.25):
+def get_unmasked_channels(mean_masks, min_mask=0.25):
     """Return the unmasked channels (mean masks above a given threshold)."""
     return np.nonzero(mean_masks > min_mask)[0]
 
@@ -32,14 +30,14 @@ def get_mean_probe_position(mean_masks, site_positions):
 def get_sorted_main_channels(mean_masks, unmasked_channels):
     """Weighted mean of the channels, weighted by the mean masks."""
     main_channels = np.argsort(mean_masks)[::-1]
-    main_channels = np.array([c for c in main_channels
-                              if c in unmasked_channels])
+    main_channels = np.array([c for c in main_channels if c in unmasked_channels])
     return main_channels
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Wizard measures
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 def get_waveform_amplitude(mean_masks, mean_waveforms):
     """Return the amplitude of the waveforms on all channels."""
@@ -59,7 +57,12 @@ def get_waveform_amplitude(mean_masks, mean_waveforms):
 
 
 def get_mean_masked_features_distance(
-        mean_features_0, mean_features_1, mean_masks_0, mean_masks_1, n_features_per_channel=None):
+    mean_features_0,
+    mean_features_1,
+    mean_masks_0,
+    mean_masks_1,
+    n_features_per_channel=None,
+):
     """Compute the distance between the mean masked features."""
 
     assert n_features_per_channel > 0

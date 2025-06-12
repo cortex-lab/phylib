@@ -1,24 +1,38 @@
-# -*- coding: utf-8 -*-
-
 """Tests of misc utility functions."""
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Imports
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 import numpy as np
 from numpy.testing import assert_array_equal as ae
-from pytest import raises, mark
+from pytest import mark, raises
 
 from .._misc import (
-    _git_version, load_json, save_json, load_pickle, save_pickle, read_python, write_python,
-    read_text, write_text, _read_tsv_simple, _write_tsv_simple, read_tsv, write_tsv,
-    _pretty_floats, _encode_qbytearray, _decode_qbytearray, _fullname, _load_from_fullname)
+    _decode_qbytearray,
+    _encode_qbytearray,
+    _fullname,
+    _git_version,
+    _load_from_fullname,
+    _pretty_floats,
+    _read_tsv_simple,
+    _write_tsv_simple,
+    load_json,
+    load_pickle,
+    read_python,
+    read_text,
+    read_tsv,
+    save_json,
+    save_pickle,
+    write_python,
+    write_text,
+    write_tsv,
+)
 
-
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Misc tests
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 def test_qbytearray(tempdir):
     try:
@@ -60,7 +74,7 @@ def test_json_simple(tempdir):
     path.write_text('')
     assert load_json(path) == {}
     with raises(IOError):
-        load_json('%s_bis' % path)
+        load_json(f'{path}_bis')
 
 
 @mark.parametrize('kind', ['json', 'pickle'])
@@ -101,9 +115,10 @@ def test_write_python(tempdir):
 
 
 def test_write_text(tempdir):
-    for path in (tempdir / 'test_1',
-                 tempdir / 'test_dir/test_2.txt',
-                 ):
+    for path in (
+        tempdir / 'test_1',
+        tempdir / 'test_dir/test_2.txt',
+    ):
         write_text(path, 'hello world')
         assert read_text(path) == 'hello world'
 
