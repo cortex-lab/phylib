@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 """Multi-electrode arrays."""
 
 
@@ -38,11 +36,7 @@ def _edges_to_adjacency_list(edges):
 
 
 def _adjacency_subset(adjacency, subset):
-    return {
-        c: [v for v in vals if v in subset]
-        for (c, vals) in adjacency.items()
-        if c in subset
-    }
+    return {c: [v for v in vals if v in subset] for (c, vals) in adjacency.items() if c in subset}
 
 
 def _remap_adjacency(adjacency, mapping):
@@ -87,9 +81,9 @@ def load_probe(name_or_path):
     path = Path(name_or_path)
     # The argument can be either a path to a PRB file or the name of a built-in probe..
     if not path.exists():
-        path = Path(__file__).parent / ('probes/%s.prb' % name_or_path)
+        path = Path(__file__).parent / (f'probes/{name_or_path}.prb')
     if not path.exists():
-        raise IOError('The probe `{}` cannot be found.'.format(name_or_path))
+        raise OSError(f'The probe `{name_or_path}` cannot be found.')
     return MEA(probe=read_python(path))
 
 
@@ -104,7 +98,7 @@ def list_probes():
 # ------------------------------------------------------------------------------
 
 
-class MEA(object):
+class MEA:
     """A Multi-Electrode Array.
 
     There are two modes:
@@ -142,8 +136,8 @@ class MEA(object):
         positions = _as_array(positions)
         if positions.shape[0] != self.n_channels:
             raise ValueError(
-                "'positions' (shape {0:s})".format(str(positions.shape))
-                + " and 'n_channels' ({0:d})".format(self.n_channels)
+                f"'positions' (shape {str(positions.shape):s})"
+                + f" and 'n_channels' ({self.n_channels:d})"
                 + ' do not match.'
             )
 

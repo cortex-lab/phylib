@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 """Utility functions for test datasets."""
 
 # ------------------------------------------------------------------------------
@@ -37,7 +35,7 @@ def _save_stream(r, path):
     size = _remote_file_size(r.url)
     pr = ProgressReporter()
     pr.value_max = size or 1
-    pr.set_progress_message('Downloading `' + str(path) + '`: {progress:.1f}%.')
+    pr.set_progress_message(f'Downloading `{str(path)}`: {{progress:.1f}}%.')
     pr.set_complete_message('Download complete.')
     downloaded = 0
     with open(path, 'wb') as f:
@@ -84,12 +82,14 @@ def _check_md5(path, checksum):
 
 def _check_md5_of_url(output_path, url):
     try:
-        checksum = download_text_file(url + '.md5').split(' ')[0]
+        checksum = download_text_file(f'{url}.md5').split(' ')[0]
     except Exception:
         checksum = None
-    finally:
-        if checksum:
-            return _check_md5(output_path, checksum)
+
+    # Move the return outside finally
+    if checksum:
+        return _check_md5(output_path, checksum)
+    return None
 
 
 def download_file(url, output_path):
@@ -126,8 +126,7 @@ def download_file(url, output_path):
         _save_stream(r, output_path)
         if _check_md5_of_url(output_path, url) is False:
             raise RuntimeError(
-                'The checksum of the downloaded file '
-                "doesn't match the provided checksum."
+                "The checksum of the downloaded file doesn't match the provided checksum."
             )
     return
 

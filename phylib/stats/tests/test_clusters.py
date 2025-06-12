@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 """Tests of cluster statistics."""
 
 # ------------------------------------------------------------------------------
@@ -139,7 +137,5 @@ def test_mean_masked_features_distance(
 
     # Check the distance.
     d_expected = np.sqrt(n_features_per_channel) * shift
-    d_computed = get_mean_masked_features_distance(
-        f0, f1, m0, m1, n_features_per_channel
-    )
+    d_computed = get_mean_masked_features_distance(f0, f1, m0, m1, n_features_per_channel)
     ac(d_expected, d_computed)

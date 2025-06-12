@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 """Utility functions for NumPy arrays."""
 
 # ------------------------------------------------------------------------------
@@ -44,11 +42,7 @@ def _range_from_slice(myslice, start=None, stop=None, step=None, length=None):
     if length is not None:
         stop_inferred = floor(start + step * length)
         if stop is not None and stop < stop_inferred:
-            raise ValueError(
-                "'stop' ({stop}) and ".format(stop=stop)
-                + "'length' ({length}) ".format(length=length)
-                + 'are not compatible.'
-            )
+            raise ValueError(f"'stop' ({stop}) and 'length' ({length}) are not compatible.")
         stop = stop_inferred
     if stop is None and length is None:
         raise ValueError("'stop' and 'length' cannot be both unspecified.")
@@ -140,7 +134,7 @@ def _pad(arr, n, dir='right'):
     """
     assert dir in ('left', 'right')
     if n < 0:
-        raise ValueError("'n' must be positive: {0}.".format(n))
+        raise ValueError(f"'n' must be positive: {n}.")
     elif n == 0:
         return np.zeros((0,) + arr.shape[1:], dtype=arr.dtype)
     n_arr = arr.shape[0]
@@ -219,9 +213,7 @@ def read_array(path, mmap_mode=None):
     file_ext = path.suffix
     if file_ext == '.npy':
         return np.load(str(path), mmap_mode=mmap_mode)
-    raise NotImplementedError(
-        'The file extension `{}` is not currently supported.' % file_ext
-    )
+    raise NotImplementedError('The file extension `{{}}` is not currently supported.')
 
 
 def write_array(path, arr):
@@ -230,9 +222,7 @@ def write_array(path, arr):
     file_ext = path.suffix
     if file_ext == '.npy':
         return np.save(str(path), arr)
-    raise NotImplementedError(
-        'The file extension `{}` is not currently supported.' % file_ext
-    )
+    raise NotImplementedError('The file extension `{{}}` is not currently supported.')
 
 
 # -----------------------------------------------------------------------------
@@ -307,9 +297,7 @@ def data_chunk(data, chunk, with_overlap=False):
         else:
             i, j = chunk[2:]
     else:
-        raise ValueError(
-            "'chunk' should have 2 or 4 elements, not {0:d}".format(len(chunk))
-        )
+        raise ValueError(f"'chunk' should have 2 or 4 elements, not {len(chunk):d}")
     return data[i:j, ...]
 
 
@@ -326,9 +314,7 @@ def get_excerpts(data, n_excerpts=None, excerpt_size=None):
     out = np.concatenate(
         [
             data_chunk(data, chunk)
-            for chunk in excerpts(
-                len(data), n_excerpts=n_excerpts, excerpt_size=excerpt_size
-            )
+            for chunk in excerpts(len(data), n_excerpts=n_excerpts, excerpt_size=excerpt_size)
         ]
     )
     assert len(out) <= n_excerpts * excerpt_size
@@ -415,7 +401,7 @@ def _times_in_chunks(times, chunks_kept):
     return ind % 2 == 1
 
 
-class SpikeSelector(object):
+class SpikeSelector:
     """Select a given number of spikes per cluster among a subset of the chunks."""
 
     def __init__(

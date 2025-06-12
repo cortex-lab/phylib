@@ -1,23 +1,30 @@
-# -*- coding: utf-8 -*-
-
 """Tests of misc type utility functions."""
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Imports
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 import numpy as np
 from pytest import raises
 
-from .._types import (Bunch, _bunchify, _is_integer, _is_list, _is_float,
-                      _as_list, _is_array_like, _as_array, _as_tuple,
-                      _as_scalar, _as_scalars,
-                      )
+from .._types import (
+    Bunch,
+    _as_array,
+    _as_list,
+    _as_scalar,
+    _as_scalars,
+    _as_tuple,
+    _bunchify,
+    _is_array_like,
+    _is_float,
+    _is_integer,
+    _is_list,
+)
 
-
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Tests
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 def test_bunch():
     obj = Bunch()
@@ -37,15 +44,15 @@ def test_bunchify():
 
 def test_number():
     assert not _is_integer(None)
-    assert not _is_integer(3.)
+    assert not _is_integer(3.0)
     assert _is_integer(3)
     assert _is_integer(np.arange(1)[0])
 
     assert not _is_float(None)
     assert not _is_float(3)
     assert not _is_float(np.array([3])[0])
-    assert _is_float(3.)
-    assert _is_float(np.array([3.])[0])
+    assert _is_float(3.0)
+    assert _is_float(np.array([3.0])[0])
 
 
 def test_list():
@@ -67,14 +74,14 @@ def test_as_tuple():
     assert _as_tuple(None) is None
     assert _as_tuple((None,)) == (None,)
     assert _as_tuple((3, 4)) == (3, 4)
-    assert _as_tuple([3]) == ([3], )
-    assert _as_tuple([3, 4]) == ([3, 4], )
+    assert _as_tuple([3]) == ([3],)
+    assert _as_tuple([3, 4]) == ([3, 4],)
 
 
 def test_as_scalar():
     assert _as_scalar(1) == 1
-    assert _as_scalar(np.ones(1)[0]) == 1.
-    assert type(_as_scalar(np.ones(1)[0])) == float
+    assert _as_scalar(np.ones(1)[0]) == 1.0
+    assert isinstance(_as_scalar(np.ones(1)[0]), float)
 
     assert _as_scalars(np.arange(3)) == [0, 1, 2]
 
@@ -85,11 +92,11 @@ def test_array():
         assert np.all(arr == [3])
 
     _check(_as_array(3))
-    _check(_as_array(3.))
+    _check(_as_array(3.0))
     _check(_as_array([3]))
 
     _check(_as_array(3, float))
-    _check(_as_array(3., float))
+    _check(_as_array(3.0, float))
     _check(_as_array([3], float))
     _check(_as_array(np.array([3])))
     with raises(ValueError):

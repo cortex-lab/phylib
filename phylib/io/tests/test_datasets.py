@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 """Tests of dataset utility functions."""
 
 # ------------------------------------------------------------------------------
@@ -14,6 +12,7 @@ import numpy as np
 import responses
 from numpy.testing import assert_array_equal as ae
 from pytest import fixture, raises
+from requests.exceptions import HTTPError, RequestException
 
 from phylib.utils.testing import captured_logging
 
@@ -50,7 +49,7 @@ def _add_mock_response(url, body, file_type='binary'):
 @fixture
 def mock_url():
     _add_mock_response(_URL, _DATA.tobytes())
-    _add_mock_response(_URL + '.md5', _CHECKSUM + '  ' + Path(_URL).name)
+    _add_mock_response(f'{_URL}.md5', f'{_CHECKSUM}  {Path(_URL).name}')
     yield _URL
     responses.reset()
 
@@ -60,7 +59,7 @@ def mock_urls(request):
     data = _DATA.tobytes()
     checksum = _CHECKSUM
     url_data = _URL
-    url_checksum = _URL + '.md5'
+    url_checksum = f'{_URL}.md5'
 
     if not request.param[0]:
         # Data URL is corrupted.
@@ -113,8 +112,8 @@ def test_check_md5_of_url(tempdir, mock_url):
 @responses.activate
 def test_download_not_found(tempdir):
     path = Path(tempdir) / 'test'
-    with raises(Exception):
-        download_file(_URL + '_notfound', path)
+    with raises(RequestException):
+        download_file(f'{_URL}_notfound', path)
 
 
 @responses.activate
@@ -147,10 +146,7 @@ def test_download_file(tempdir, mock_urls):
     assert_succeeds = (
         data_here
         and data_valid
-        and (
-            (checksum_here == checksum_valid)
-            or (not (checksum_here) and checksum_valid)
-        )
+        and ((checksum_here == checksum_valid) or (not (checksum_here) and checksum_valid))
     )
 
     download_succeeds = assert_succeeds or (
@@ -160,7 +156,7 @@ def test_download_file(tempdir, mock_urls):
     if download_succeeds:
         data = _dl(path)
     else:
-        with raises(Exception):
+        with raises(RequestException):
             data = _dl(path)
 
     if assert_succeeds:

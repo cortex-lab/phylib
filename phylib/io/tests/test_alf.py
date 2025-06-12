@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 """Test ALF dataset generation."""
 
 
@@ -25,7 +23,7 @@ from ..model import TemplateModel
 # ------------------------------------------------------------------------------
 
 
-class Dataset(object):
+class Dataset:
     def __init__(self, tempdir):
         np.random.seed(42)
         self.tmp_dir = tempdir
@@ -40,9 +38,7 @@ class Dataset(object):
         np.save(p / 'spike_clusters.npy', nr.randint(low=1, high=self.nt, size=self.ns))
         shutil.copy(p / 'spike_clusters.npy', p / 'spike_templates.npy')
         np.save(p / 'amplitudes.npy', nr.uniform(low=0.5, high=1.5, size=self.ns))
-        np.save(
-            p / 'channel_positions.npy', np.c_[np.arange(self.nc), np.zeros(self.nc)]
-        )
+        np.save(p / 'channel_positions.npy', np.c_[np.arange(self.nc), np.zeros(self.nc)])
         np.save(p / 'templates.npy', np.random.normal(size=(self.nt, 50, self.nc)))
         np.save(p / 'similar_templates.npy', np.tile(np.arange(self.nt), (self.nt, 1)))
         np.save(p / 'channel_map.npy', np.c_[np.arange(self.nc)])
@@ -55,9 +51,7 @@ class Dataset(object):
             np.zeros([self.ns, self.nsamp, self.ncmax]),
         )
 
-        _write_tsv_simple(
-            p / 'cluster_group.tsv', 'group', {2: 'good', 3: 'mua', 5: 'noise'}
-        )
+        _write_tsv_simple(p / 'cluster_group.tsv', 'group', {2: 'good', 3: 'mua', 5: 'noise'})
         _write_tsv_simple(
             p / 'cluster_Amplitude.tsv',
             field_name='Amplitude',
@@ -205,12 +199,8 @@ def test_creator(dataset):
             elif f.name.startswith('clusters.') and f.name.endswith('.csv'):
                 with open(f) as fid:
                     cl_shape.append(len(fid.readlines()) - 1)
-        sp_shape = [
-            np.load(f).shape[0] for f in new_files if f.name.startswith('spikes.')
-        ]
-        ch_shape = [
-            np.load(f).shape[0] for f in new_files if f.name.startswith('channels.')
-        ]
+        sp_shape = [np.load(f).shape[0] for f in new_files if f.name.startswith('spikes.')]
+        ch_shape = [np.load(f).shape[0] for f in new_files if f.name.startswith('channels.')]
 
         assert len(set(cl_shape)) == 1
         assert len(set(sp_shape)) == 1
@@ -270,9 +260,9 @@ def test_merger(dataset):
 
     # merge the first two clusters
     merge_clu = clu[0:2]
-    spike_clusters[
-        np.bitwise_or(spike_clusters == clu[0], spike_clusters == clu[1])
-    ] = np.max(clu) + 1
+    spike_clusters[np.bitwise_or(spike_clusters == clu[0], spike_clusters == clu[1])] = (
+        np.max(clu) + 1
+    )
     # split the cluster with the most spikes
     split_clu = clu[-1]
     idx = np.where(spike_clusters == split_clu)[0]

@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 """Tests of array utility functions."""
 
 # ------------------------------------------------------------------------------
@@ -51,7 +49,7 @@ def test_clip():
 def test_range_from_slice():
     """Test '_range_from_slice'."""
 
-    class _SliceTest(object):
+    class _SliceTest:
         """Utility class to make it more convenient to test slice objects."""
 
         def __init__(self, **kwargs):
@@ -261,16 +259,12 @@ def test_chunk():
 
 
 def test_excerpts_1():
-    bounds = [
-        (start, end) for (start, end) in excerpts(100, n_excerpts=3, excerpt_size=10)
-    ]
+    bounds = [(start, end) for (start, end) in excerpts(100, n_excerpts=3, excerpt_size=10)]
     assert bounds == [(0, 10), (45, 55), (90, 100)]
 
 
 def test_excerpts_2():
-    bounds = [
-        (start, end) for (start, end) in excerpts(10, n_excerpts=3, excerpt_size=10)
-    ]
+    bounds = [(start, end) for (start, end) in excerpts(10, n_excerpts=3, excerpt_size=10)]
     assert bounds == [(0, 10)]
 
 
@@ -310,9 +304,7 @@ def test_spikes_in_clusters():
         assert np.all(spike_clusters[_spikes_in_clusters(spike_clusters, [i])] == i)
 
     clusters = [1, 2, 3]
-    assert np.all(
-        np.isin(spike_clusters[_spikes_in_clusters(spike_clusters, clusters)], clusters)
-    )
+    assert np.all(np.isin(spike_clusters[_spikes_in_clusters(spike_clusters, clusters)], clusters))
 
 
 def test_spikes_per_cluster():

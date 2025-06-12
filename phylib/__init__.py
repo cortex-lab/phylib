@@ -43,10 +43,10 @@ class _Formatter(logging.Formatter):
         # Only keep the first character in the level name.
         record.levelname = record.levelname[0]
         filename = op.splitext(op.basename(record.pathname))[0]
-        record.caller = '{:s}:{:d}'.format(filename, record.lineno).ljust(20)
+        record.caller = f'{filename:s}:{record.lineno:d}'.ljust(20)
         message = super(_Formatter, self).format(record)
         color_code = self.color_codes.get(record.levelname, '90')
-        message = '\33[%sm%s\33[0m' % (color_code, message)
+        message = f'\x1b[{color_code}m{message}\x1b[0m'
         return message
 
 

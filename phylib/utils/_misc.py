@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 """Utility functions."""
 
 
@@ -63,12 +61,16 @@ class _CustomEncoder(json.JSONEncoder):
         elif isinstance(obj, np.ndarray):
             obj_contiguous = np.ascontiguousarray(obj)
             data_b64 = base64.b64encode(obj_contiguous.data).decode('utf8')
-            return dict(__ndarray__=data_b64, dtype=str(obj.dtype), shape=obj.shape)
+            return {
+                '__ndarray__': data_b64,
+                'dtype': str(obj.dtype),
+                'shape': obj.shape,
+            }
         elif obj.__class__.__name__ == 'QByteArray':
             return {'__qbytearray__': _encode_qbytearray(obj)}
         elif isinstance(obj, np.generic):
             return obj.item()
-        return super(_CustomEncoder, self).default(obj)  # pragma: no cover
+        return super().default(obj)  # pragma: no cover
 
 
 def _json_custom_hook(d):
@@ -106,9 +108,9 @@ def _stringify_keys(d):
 def _pretty_floats(obj, n=2):
     """Display floating point numbers properly."""
     if isinstance(obj, (float, np.floating)):
-        return ('%.' + str(n) + 'f') % obj
+        return (f'%.{str(n)}f') % obj
     elif isinstance(obj, dict):
-        return dict((k, _pretty_floats(v)) for k, v in obj.items())
+        return {k: _pretty_floats(v) for k, v in obj.items()}
     elif isinstance(obj, (list, tuple)):
         return list(map(_pretty_floats, obj))
     return obj
@@ -118,7 +120,7 @@ def load_json(path):
     """Load a JSON file."""
     path = Path(path)
     if not path.exists():
-        raise IOError("The JSON file `{}` doesn't exist.".format(path))
+        raise OSError(f"The JSON file `{path}` doesn't exist.")
     contents = path.read_text()
     if not contents:
         return {}
@@ -178,7 +180,7 @@ def read_python(path):
     """
     path = Path(path)
     if not path.exists():  # pragma: no cover
-        raise IOError('Path %s does not exist.', path)
+        raise OSError('Path %s does not exist.', path)
     contents = path.read_text()
     metadata = {}
     exec(contents, {}, metadata)
@@ -204,8 +206,8 @@ def write_python(path, data):
     with open(path, 'w') as f:
         for k, v in data.items():
             if isinstance(v, str):
-                v = '"%s"' % v
-            f.write('%s = %s\n' % (k, str(v)))
+                v = f'"{v}"'
+            f.write(f'{k} = {str(v)}\n')
 
 
 def read_text(path):
@@ -256,9 +258,7 @@ def read_tsv(path):
         # Skip the header.
         field_names = list(next(reader))
         for row in reader:
-            data.append(
-                {k: _try_make_number(v) for k, v in zip(field_names, row) if v != ''}
-            )
+            data.append({k: _try_make_number(v) for k, v in zip(field_names, row) if v != ''})
     logger.log(5, 'Read %s.', path)
     return data
 
@@ -303,10 +303,7 @@ def write_tsv(path, data, first_field=None, exclude_fields=(), n_significant_fig
         # Write all rows.
         writer.writerows(
             [
-                [
-                    _pretty_floats(row.get(field, None), n_significant_figures)
-                    for field in fields
-                ]
+                [_pretty_floats(row.get(field, None), n_significant_figures) for field in fields]
                 for row in data
             ]
         )
@@ -351,9 +348,7 @@ def _write_tsv_simple(path, field_name, data):
     with path.open('w', newline='') as f:
         writer = csv.writer(f, delimiter=delimiter)
         writer.writerow(['cluster_id', field_name])
-        writer.writerows(
-            [(cluster_id, data[cluster_id]) for cluster_id in sorted(data)]
-        )
+        writer.writerows([(cluster_id, data[cluster_id]) for cluster_id in sorted(data)])
     logger.debug('Wrote %s.', path)
 
 
@@ -364,7 +359,7 @@ def _write_tsv_simple(path, field_name, data):
 
 def _fullname(o):
     """Return the fully-qualified name of a function."""
-    return o.__module__ + '.' + o.__name__ if o.__module__ else o.__name__
+    return f'{o.__module__}.{o.__name__}' if o.__module__ else o.__name__
 
 
 def _load_from_fullname(name):

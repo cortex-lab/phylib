@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 """Test fixtures."""
 
 # ------------------------------------------------------------------------------
@@ -63,9 +61,7 @@ def _make_dataset(tempdir, param='dense', has_spike_attributes=True):
     for path in paths:
         to_path = tempdir / path.name
         # Skip sparse arrays if is_sparse is False.
-        if param == 'sparse' and (
-            '_ind.' in str(to_path) or 'spike_ids.' in str(to_path)
-        ):
+        if param == 'sparse' and ('_ind.' in str(to_path) or 'spike_ids.' in str(to_path)):
             continue
         logger.debug('Copying file to %s.', to_path)
         shutil.copy(path, to_path)
@@ -110,9 +106,7 @@ def _make_dataset(tempdir, param='dense', has_spike_attributes=True):
 
     # Spike attributes.
     if has_spike_attributes:
-        write_array(
-            tempdir / 'spike_fail.npy', np.full(10, np.nan)
-        )  # wrong number of spikes
+        write_array(tempdir / 'spike_fail.npy', np.full(10, np.nan))  # wrong number of spikes
         write_array(tempdir / 'spike_works.npy', np.random.rand(314))
         write_array(tempdir / 'spike_randn.npy', np.random.randn(314, 2))
 

@@ -32,7 +32,9 @@ dependencies = [
     "toolz",
     "joblib",
     "mtscomp",
+    "responses>=0.25.7",
 ]
+
 
 [project.urls]
 Homepage = "https://github.com/cortex-lab/phylib"
@@ -40,6 +42,11 @@ Repository = "https://github.com/cortex-lab/phylib"
 
 [project.optional-dependencies]
 dev = ["pytest", "pytest-cov", "ruff", "coverage", "coveralls", "responses"]
+# Qt5 support (default for older systems)
+qt5 = ["PyQt5>=5.12.0", "PyQtWebEngine>=5.12.0"]
+
+# Qt6 support (recommended for new installations)
+qt6 = ["pyqt6>=6.9.1", "pyqt6-webengine>=6.9.0"]
 
 [tool.setuptools.dynamic]
 version = { attr = "phylib.__version__" }
@@ -93,13 +100,27 @@ line-length = 99
 target-version = "py39"
 
 [tool.ruff.lint]
-# Enable pycodestyle (`E`) and Pyflakes (`F`) codes by default
 select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM", "PIE", "NPY201"]
 ignore = [
-    "E265", # block comment should start with '# '
-    "E731", # do not assign a lambda expression, use a def
-    "E741", # ambiguous variable name
-    "W605", # invalid escape sequence
+    "E265",   # block comment should start with '# '
+    "E731",   # do not assign a lambda expression, use a def
+    "E741",   # ambiguous variable name
+    "W605",   # invalid escape sequence,
+    "N806",
+    "SIM102",
+    "B007",
+    "N803",
+    "N802",
+    "B018",
+    "F401",
+    "SIM118",
+    "B015",
+    "C416",
+    "E402",
+    "E501",
+    "SIM108",
+    "SIM115",
+    "UP028",
 ]
 
 [tool.ruff.lint.isort]
@@ -112,9 +133,11 @@ indent-style = "space"
 [tool.uv]
 dev-dependencies = [
     "pytest>=6.0",
+    "pytest-qt>=4.0",
     "pytest-cov>=3.0",
     "ruff>=0.1.0",
     "coverage>=6.0",
     "coveralls>=3.0",
-    "responses>=0.20",
+    "memory_profiler>=0.60",
+    "mkdocs>=1.4",
 ]

@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 """ALF dataset generation."""
 
 
@@ -101,7 +99,7 @@ def _load(path):
 # ------------------------------------------------------------------------------
 
 
-class EphysAlfCreator(object):
+class EphysAlfCreator:
     """Class for converting a dataset in KS/phy format into ALF."""
 
     def __init__(self, model):
@@ -117,7 +115,7 @@ class EphysAlfCreator(object):
         self.label = label
         self.ampfactor = ampfactor
         if self.out_path.resolve() == self.dir_path.resolve():
-            raise IOError('The source and target directories cannot be the same.')
+            raise OSError('The source and target directories cannot be the same.')
         if not self.out_path.exists():
             self.out_path.mkdir()
 
@@ -129,9 +127,7 @@ class EphysAlfCreator(object):
             bar.update(5)
             self.make_template_and_spikes_objects()
             bar.update(30)
-            self.model.save_spikes_subset_waveforms(
-                NSAMPLE_WAVEFORMS, sample2unit=self.ampfactor
-            )
+            self.model.save_spikes_subset_waveforms(NSAMPLE_WAVEFORMS, sample2unit=self.ampfactor)
             bar.update(50)
             self.make_depths()
             bar.update(20)
@@ -257,9 +253,7 @@ class EphysAlfCreator(object):
         self._save_npy('templates.amps.npy', template_amps)
 
         if self.model.sparse_templates.cols:
-            raise NotImplementedError(
-                'Sparse template export to ALF not implemented yet'
-            )
+            raise NotImplementedError('Sparse template export to ALF not implemented yet')
         else:
             n_templates, n_wavsamps, nchall = templates_v.shape
             # for some datasets, 32 may be too much
@@ -269,9 +263,7 @@ class EphysAlfCreator(object):
             templates_inds = np.zeros((n_templates, ncw), dtype=np.int32)
             # for each template, find the nearest channels to keep (one the same probe...)
             for t in np.arange(n_templates):
-                current_probe = self.model.channel_probes[
-                    self.model.templates_channels[t]
-                ]
+                current_probe = self.model.channel_probes[self.model.templates_channels[t]]
                 channel_distance = np.sum(
                     np.abs(
                         self.model.channel_positions
@@ -283,9 +275,7 @@ class EphysAlfCreator(object):
                 templates_inds[t, :] = np.argsort(channel_distance)[:ncw]
                 templates[t, ...] = templates_v[t, :][:, templates_inds[t, :]]
             np.save(self.out_path.joinpath('templates.waveforms'), templates)
-            np.save(
-                self.out_path.joinpath('templates.waveformsChannels'), templates_inds
-            )
+            np.save(self.out_path.joinpath('templates.waveformsChannels'), templates_inds)
 
             _, clusters_v, cluster_amps = self.model.get_amplitudes_true(
                 self.ampfactor, use='clusters'
@@ -303,8 +293,7 @@ class EphysAlfCreator(object):
                 current_probe = self.model.channel_probes[channels[t]]
                 channel_distance = np.sum(
                     np.abs(
-                        self.model.channel_positions
-                        - self.model.channel_positions[channels[t]]
+                        self.model.channel_positions - self.model.channel_positions[channels[t]]
                     ),
                     axis=1,
                 )
@@ -312,9 +301,7 @@ class EphysAlfCreator(object):
                 templates_inds[t, :] = np.argsort(channel_distance)[:ncw]
                 templates[t, ...] = clusters_v[t, :][:, templates_inds[t, :]]
             np.save(self.out_path.joinpath('clusters.waveforms'), templates)
-            np.save(
-                self.out_path.joinpath('clusters.waveformsChannels'), templates_inds
-            )
+            np.save(self.out_path.joinpath('clusters.waveformsChannels'), templates_inds)
             np.save(self.out_path.joinpath('clusters.amps'), cluster_amps)
 
     def rename_with_label(self):

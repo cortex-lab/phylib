@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 """Probe merging."""
 
 
@@ -69,7 +67,7 @@ def _load_multiple_files(fn, subdirs):
 # ------------------------------------------------------------------------------
 
 
-class Merger(object):
+class Merger:
     """Merge spike-sorted data from different probes and output datasets to disk.
 
     Constructor
@@ -96,9 +94,7 @@ class Merger(object):
         self.out_dir.mkdir(parents=True, exist_ok=True)
 
         # Default probe info if not provided: the label is the probe folder name.
-        self.probe_info = probe_info or [
-            {'label': subdir.parts[-1]} for subdir in self.subdirs
-        ]
+        self.probe_info = probe_info or [{'label': subdir.parts[-1]} for subdir in self.subdirs]
         assert len(self.probe_info) == len(self.subdirs)
 
     def _save(self, name, arr):
@@ -222,9 +218,7 @@ class Merger(object):
 
     def write_channel_positions(self):
         """Write the channel positions."""
-        channel_positions_l = _load_multiple_files(
-            'channel_positions.npy', self.subdirs
-        )
+        channel_positions_l = _load_multiple_files('channel_positions.npy', self.subdirs)
         x_offset = 0.0
         for array in channel_positions_l:
             array[:, 0] += x_offset
@@ -242,12 +236,8 @@ class Merger(object):
 
         # Determine the templates array shape.
         n_templates = sum(tmp.shape[0] for tmp in templates_l)
-        n_samples = templates_l[0].shape[
-            1
-        ]  # assuming all have the same number of samples
-        assert np.all(
-            np.array([templates_i.shape[1] for templates_i in templates_l]) == n_samples
-        )
+        n_samples = templates_l[0].shape[1]  # assuming all have the same number of samples
+        assert np.all(np.array([templates_i.shape[1] for templates_i in templates_l]) == n_samples)
 
         n_channels = sum(tmp.shape[2] for tmp in templates_l)
         shape = (n_templates, n_samples, n_channels)
@@ -262,9 +252,7 @@ class Merger(object):
                 j0 = templates_l[i - 1].shape[2] if i > 0 else 0
                 j1 = j0 + templates_l[i].shape[2]
                 for it in np.arange(templates_l[i].shape[0]):
-                    one_template = np.zeros(
-                        (n_samples, n_channels), dtype=templates_l[0].dtype
-                    )
+                    one_template = np.zeros((n_samples, n_channels), dtype=templates_l[0].dtype)
                     one_template[:, j0:j1] = templates_l[i][it, :]
                     fid.write(one_template.tobytes())
 
