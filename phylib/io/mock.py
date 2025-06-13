@@ -1,35 +1,33 @@
-# -*- coding: utf-8 -*-
-
 """Mock datasets."""
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Imports
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 import numpy as np
 import numpy.random as nr
 
-
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Artificial data
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 def artificial_waveforms(n_spikes=None, n_samples=None, n_channels=None):
-    return .25 * nr.normal(size=(n_spikes, n_samples, n_channels))
+    return 0.25 * nr.normal(size=(n_spikes, n_samples, n_channels))
 
 
 def artificial_features(*args):
-    return .25 * nr.normal(size=args)
+    return 0.25 * nr.normal(size=args)
 
 
 def artificial_masks(n_spikes=None, n_channels=None):
     masks = nr.uniform(size=(n_spikes, n_channels))
-    masks[masks < .25] = 0
+    masks[masks < 0.25] = 0
     return masks
 
 
 def artificial_traces(n_samples, n_channels):
-    return .25 * nr.normal(size=(n_samples, n_channels))
+    return 0.25 * nr.normal(size=(n_samples, n_channels))
 
 
 def artificial_spike_clusters(n_spikes, n_clusters, low=0):

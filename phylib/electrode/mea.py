@@ -1,24 +1,22 @@
-# -*- coding: utf-8 -*-
-
 """Multi-electrode arrays."""
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Imports
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 import itertools
 from pathlib import Path
 
 import numpy as np
 
-from phylib.utils._types import _as_array
 from phylib.utils._misc import read_python
+from phylib.utils._types import _as_array
 
-
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # PRB file utilities
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 def _edges_to_adjacency_list(edges):
     """Convert a list of edges into an adjacency list."""
@@ -38,8 +36,7 @@ def _edges_to_adjacency_list(edges):
 
 
 def _adjacency_subset(adjacency, subset):
-    return {c: [v for v in vals if v in subset]
-            for (c, vals) in adjacency.items() if c in subset}
+    return {c: [v for v in vals if v in subset] for (c, vals) in adjacency.items() if c in subset}
 
 
 def _remap_adjacency(adjacency, mapping):
@@ -76,8 +73,7 @@ def _probe_adjacency_list(probe):
 
 def _channels_per_group(probe):
     groups = probe['channel_groups'].keys()
-    return {group: probe['channel_groups'][group]['channels']
-            for group in groups}
+    return {group: probe['channel_groups'][group]['channels'] for group in groups}
 
 
 def load_probe(name_or_path):
@@ -85,9 +81,9 @@ def load_probe(name_or_path):
     path = Path(name_or_path)
     # The argument can be either a path to a PRB file or the name of a built-in probe..
     if not path.exists():
-        path = Path(__file__).parent / ('probes/%s.prb' % name_or_path)
+        path = Path(__file__).parent / (f'probes/{name_or_path}.prb')
     if not path.exists():
-        raise IOError("The probe `{}` cannot be found.".format(name_or_path))
+        raise OSError(f'The probe `{name_or_path}` cannot be found.')
     return MEA(probe=read_python(path))
 
 
@@ -97,11 +93,12 @@ def list_probes():
     return [fn.stem for fn in path.glob('*.prb')]
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # MEA class
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
-class MEA(object):
+
+class MEA:
     """A Multi-Electrode Array.
 
     There are two modes:
@@ -112,12 +109,13 @@ class MEA(object):
 
     """
 
-    def __init__(self,
-                 channels=None,
-                 positions=None,
-                 adjacency=None,
-                 probe=None,
-                 ):
+    def __init__(
+        self,
+        channels=None,
+        positions=None,
+        adjacency=None,
+        probe=None,
+    ):
         self._probe = probe
         self._channels = channels
         self._check_positions(positions)
@@ -137,11 +135,11 @@ class MEA(object):
             return
         positions = _as_array(positions)
         if positions.shape[0] != self.n_channels:
-            raise ValueError("'positions' "
-                             "(shape {0:s})".format(str(positions.shape)) +
-                             " and 'n_channels' "
-                             "({0:d})".format(self.n_channels) +
-                             " do not match.")
+            raise ValueError(
+                f"'positions' (shape {str(positions.shape):s})"
+                + f" and 'n_channels' ({self.n_channels:d})"
+                + ' do not match.'
+            )
 
     @property
     def positions(self):

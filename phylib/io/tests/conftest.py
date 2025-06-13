@@ -1,10 +1,8 @@
-# -*- coding: utf-8 -*-
-
 """Test fixtures."""
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Imports
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 import logging
 import shutil
@@ -12,16 +10,17 @@ import shutil
 import numpy as np
 from pytest import fixture
 
-from phylib.utils._misc import write_text, write_tsv
-from ..model import load_model, write_array
 from phylib.io.datasets import download_test_file
+from phylib.utils._misc import write_text, write_tsv
+
+from ..model import load_model, write_array
 
 logger = logging.getLogger(__name__)
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Fixtures
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 _FILES = [
     'template/params.py',
@@ -30,23 +29,17 @@ _FILES = [
     'template/spike_templates.npy',
     'template/spike_clusters.npy',
     'template/amplitudes.npy',
-
     'template/cluster_group.tsv',
-
     'template/channel_map.npy',
     'template/channel_positions.npy',
     'template/channel_shanks.npy',
-
     'template/similar_templates.npy',
     'template/whitening_mat.npy',
-
     'template/templates.npy',
     'template/template_ind.npy',
-
     'template/pc_features.npy',
     'template/pc_feature_ind.npy',
     'template/pc_feature_spike_ids.npy',
-
     'template/template_features.npy',
     'template/template_feature_ind.npy',
     'template/template_feature_spike_ids.npy',
@@ -56,7 +49,7 @@ _FILES = [
 def _remove(path):
     if path.exists():
         path.unlink()
-        logger.debug("Removed %s.", path)
+        logger.debug('Removed %s.', path)
 
 
 def _make_dataset(tempdir, param='dense', has_spike_attributes=True):
@@ -70,7 +63,7 @@ def _make_dataset(tempdir, param='dense', has_spike_attributes=True):
         # Skip sparse arrays if is_sparse is False.
         if param == 'sparse' and ('_ind.' in str(to_path) or 'spike_ids.' in str(to_path)):
             continue
-        logger.debug("Copying file to %s.", to_path)
+        logger.debug('Copying file to %s.', to_path)
         shutil.copy(path, to_path)
 
     # Some changes to files if 'misc' fixture parameter.
@@ -84,7 +77,7 @@ def _make_dataset(tempdir, param='dense', has_spike_attributes=True):
             assert st_r.shape == st.shape
             # Reordered spikes.
             np.save(tempdir / 'spike_times_reordered.npy', st_r)
-            np.save(tempdir / 'spikes.times.npy', st / 25000.)  # sample rate
+            np.save(tempdir / 'spikes.times.npy', st / 25000.0)  # sample rate
             _remove(tempdir / 'spike_times.npy')
         # Buggy TSV file should not cause a crash.
         write_text(tempdir / 'error.tsv', '')
@@ -119,15 +112,19 @@ def _make_dataset(tempdir, param='dense', has_spike_attributes=True):
 
     # TSV file with cluster data.
     write_tsv(
-        tempdir / 'cluster_Amplitude.tsv', [{'cluster_id': 1, 'Amplitude': 123.4}],
-        first_field='cluster_id')
+        tempdir / 'cluster_Amplitude.tsv',
+        [{'cluster_id': 1, 'Amplitude': 123.4}],
+        first_field='cluster_id',
+    )
 
     write_tsv(
-        tempdir / 'cluster_metrics.tsv', [
+        tempdir / 'cluster_metrics.tsv',
+        [
             {'cluster_id': 2, 'met1': 123.4, 'met2': 'hello world 1'},
             {'cluster_id': 3, 'met1': 5.678},
             {'cluster_id': 5, 'met2': 'hello world 2'},
-        ])
+        ],
+    )
 
     template_path = tempdir / paths[0].name
     return template_path
