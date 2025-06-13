@@ -1,26 +1,30 @@
-# -*- coding: utf-8 -*-
-
 """Test MEA."""
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Imports
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 from pathlib import Path
 
-from pytest import raises
 import numpy as np
 from numpy.testing import assert_array_equal as ae
+from pytest import raises
 
-from ..mea import (_probe_channels, _remap_adjacency, _adjacency_subset,
-                   _probe_positions, _probe_adjacency_list,
-                   MEA, load_probe, list_probes
-                   )
+from ..mea import (
+    MEA,
+    _adjacency_subset,
+    _probe_adjacency_list,
+    _probe_channels,
+    _probe_positions,
+    _remap_adjacency,
+    list_probes,
+    load_probe,
+)
 
-
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Tests
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 def test_remap():
     adjacency = {1: [2, 3, 7], 3: [5, 11]}
@@ -41,19 +45,24 @@ def test_adjacency_subset():
 
 
 def test_probe():
-    probe = {'channel_groups': {
-             0: {'channels': [0, 3, 1],
-                 'graph': [[0, 3], [1, 0]],
-                 'geometry': {0: (10, 10), 1: (10, 20), 3: (20, 30)},
-                 },
-             1: {'channels': [7],
-                 'graph': [],
-                 },
-             }}
-    adjacency = {0: set([1, 3]),
-                 1: set([0]),
-                 3: set([0]),
-                 }
+    probe = {
+        'channel_groups': {
+            0: {
+                'channels': [0, 3, 1],
+                'graph': [[0, 3], [1, 0]],
+                'geometry': {0: (10, 10), 1: (10, 20), 3: (20, 30)},
+            },
+            1: {
+                'channels': [7],
+                'graph': [],
+            },
+        }
+    }
+    adjacency = {
+        0: {1, 3},
+        1: {0},
+        3: {0},
+    }
     assert _probe_channels(probe, 0) == [0, 3, 1]
     ae(_probe_positions(probe, 0), [(10, 10), (20, 30), (10, 20)])
     assert _probe_adjacency_list(probe) == adjacency
@@ -68,7 +77,6 @@ def test_probe():
 
 
 def test_mea():
-
     n_channels = 10
     channels = np.arange(n_channels)
     positions = np.random.randn(n_channels, 2)

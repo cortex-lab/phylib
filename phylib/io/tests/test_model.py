@@ -1,10 +1,8 @@
-# -*- coding: utf-8 -*-
-
 """Testing the Template model."""
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Imports
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 import logging
 
@@ -14,14 +12,16 @@ from pytest import raises
 
 # from phylib.utils import Bunch
 from phylib.utils.testing import captured_output
+
 from ..model import from_sparse, load_model
 
 logger = logging.getLogger(__name__)
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Tests
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 def test_from_sparse():
     data = np.array([[0, 1, 2], [3, 4, 5]])
@@ -60,7 +60,11 @@ def test_model_2(template_model_full):
     spike_ids = m.get_cluster_spikes(3)
 
     w = m.get_waveforms(spike_ids, channel_ids)
-    assert w is None or w.shape == (len(spike_ids), tmp.template.shape[0], len(channel_ids))
+    assert w is None or w.shape == (
+        len(spike_ids),
+        tmp.template.shape[0],
+        len(channel_ids),
+    )
 
     f = m.get_features(spike_ids, channel_ids)
     assert f is None or f.shape == (len(spike_ids), len(channel_ids), 3)
@@ -170,7 +174,7 @@ def test_model_spike_waveforms(template_path_full):
             # Check each array with the ground truth, obtained from the raw data.
             for i, spike in enumerate(spike_ids):
                 t = int(model.spike_samples[spike])
-                wt = traces[t - nsw:t + nsw, channel_ids]
+                wt = traces[t - nsw : t + nsw, channel_ids]
 
                 ae(waveforms[tid][i], wt)
                 ae(w[i], wt)
@@ -215,6 +219,6 @@ def test_model_metadata_3(template_model):
 
 def test_model_spike_attributes(template_model_full):
     model = template_model_full
-    assert set(model.spike_attributes.keys()) == set(('randn', 'works'))
+    assert set(model.spike_attributes.keys()) == {'randn', 'works'}
     assert model.spike_attributes.works.shape == (model.n_spikes,)
     assert model.spike_attributes.randn.shape == (model.n_spikes, 2)
