@@ -1,29 +1,33 @@
-# -*- coding: utf-8 -*-
-
 """Probe merging."""
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Imports
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 import logging
 from pathlib import Path
 
-from tqdm import tqdm
 import numpy as np
 from scipy.linalg import block_diag
+from tqdm import tqdm
 
-from phylib.utils._misc import (
-    _read_tsv_simple, _write_tsv_simple, write_tsv, read_python, write_python)
 from phylib.io.model import load_model
+from phylib.utils._misc import (
+    _read_tsv_simple,
+    _write_tsv_simple,
+    read_python,
+    write_python,
+    write_tsv,
+)
 
 logger = logging.getLogger(__name__)
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Merge utils
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 def _concat(arrs, axis=0, dtype=None):
     dtype = dtype or arrs[0].dtype
@@ -58,11 +62,12 @@ def _load_multiple_files(fn, subdirs):
     return [np.load(str(subdir / fn)).squeeze() for subdir in subdirs]
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Main Merger class
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
-class Merger(object):
+
+class Merger:
     """Merge spike-sorted data from different probes and output datasets to disk.
 
     Constructor
@@ -80,6 +85,7 @@ class Merger(object):
         All fields will be saved in `probes.description.tsv`.
 
     """
+
     def __init__(self, subdirs, out_dir, probe_info=None):
         assert subdirs
         self.subdirs = [Path(subdir) for subdir in subdirs]
@@ -93,7 +99,7 @@ class Merger(object):
 
     def _save(self, name, arr):
         """Save a npy array in the output directory."""
-        logger.debug("Saving %s %s %s.", name, arr.dtype, arr.shape)
+        logger.debug('Saving %s %s %s.', name, arr.dtype, arr.shape)
         np.save(self.out_dir / name, arr)
 
     def write_params(self):
@@ -109,7 +115,11 @@ class Merger(object):
 
     def write_probe_desc(self):
         """Write the probe description in a TSV file."""
-        write_tsv(self.out_dir / 'probes.description.tsv', self.probe_info, first_field='label')
+        write_tsv(
+            self.out_dir / 'probes.description.tsv',
+            self.probe_info,
+            first_field='label',
+        )
 
     def write_spike_times(self):
         """Write the merged spike times, and register self.spike_order with the reordering
@@ -133,7 +143,7 @@ class Merger(object):
 
     def write_spike_clusters(self):
         """Write the merged spike clusters, and register self.cluster_offsets.
-           Write the merged spike templates, and register self.template_offsets.
+        Write the merged spike templates, and register self.template_offsets.
         """
         spike_clusters_l = _load_multiple_files('spike_clusters.npy', self.subdirs)
         spike_templates_l = _load_multiple_files('spike_templates.npy', self.subdirs)
@@ -143,7 +153,8 @@ class Merger(object):
         coffset = 0
         toffset = 0
         for i, (subdir, sc, st) in enumerate(
-                zip(self.subdirs, spike_clusters_l, spike_templates_l)):
+            zip(self.subdirs, spike_clusters_l, spike_templates_l)
+        ):
             n_clu = np.max(sc) + 1
             n_tmp = np.max(st) + 1
             sc += coffset
@@ -154,9 +165,11 @@ class Merger(object):
             coffset += n_clu
             toffset += n_tmp
         spike_clusters = _load_multiple_spike_arrays(
-            *spike_clusters_l, spike_order=self.spike_order)
+            *spike_clusters_l, spike_order=self.spike_order
+        )
         spike_templates = _load_multiple_spike_arrays(
-            *spike_templates_l, spike_order=self.spike_order)
+            *spike_templates_l, spike_order=self.spike_order
+        )
         cluster_probes = _concat(cluster_probes_l)
         assert np.max(spike_clusters) + 1 == cluster_probes.size
         self._save('spike_clusters.npy', spike_clusters)
@@ -165,12 +178,12 @@ class Merger(object):
 
     def write_cluster_data(self):
         """We load all cluster metadata from TSV files, renumber the clusters,
-        merge the dictionaries, and save in a new merged TSV file. """
+        merge the dictionaries, and save in a new merged TSV file."""
 
         cluster_data = [
             'cluster_Amplitude.tsv',
             'cluster_ContamPct.tsv',
-            'cluster_KSLabel.tsv'
+            'cluster_KSLabel.tsv',
         ]
 
         for fn in cluster_data:
@@ -206,10 +219,10 @@ class Merger(object):
     def write_channel_positions(self):
         """Write the channel positions."""
         channel_positions_l = _load_multiple_files('channel_positions.npy', self.subdirs)
-        x_offset = 0.
+        x_offset = 0.0
         for array in channel_positions_l:
             array[:, 0] += x_offset
-            x_offset = 2. * array[:, 0].max() - array[:, 0].min()
+            x_offset = 2.0 * array[:, 0].max() - array[:, 0].min()
         channel_positions = _concat(channel_positions_l, axis=0)
         self._save('channel_positions.npy', channel_positions)
 
@@ -278,14 +291,14 @@ class Merger(object):
             try:
                 concat = block_diag(*_load_multiple_files(fn, self.subdirs))
             except FileNotFoundError:
-                logger.debug("File %s not found, skipping.", fn)
+                logger.debug('File %s not found, skipping.', fn)
                 continue
             self._save(fn, concat)
 
     def merge(self):
         """Merge the probes data and return a TemplateModel instance of the merged data."""
 
-        with tqdm(desc="Merging", total=100) as bar:
+        with tqdm(desc='Merging', total=100) as bar:
             self.write_params()
             self.write_probe_desc()
             bar.update(10)

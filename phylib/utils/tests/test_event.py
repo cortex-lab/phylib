@@ -1,19 +1,17 @@
-# -*- coding: utf-8 -*-
-
 """Test event system."""
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Imports
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 from pytest import raises
 
 from ..event import EventEmitter, ProgressReporter, connect
 
-
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Test event system
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 def test_event_system():
     ev = EventEmitter()
@@ -78,9 +76,10 @@ def test_event_single():
     assert l == [0, 1, 0]
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Test progress reporter
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 def test_progress_reporter():
     """Test the progress reporter."""
@@ -102,19 +101,19 @@ def test_progress_reporter():
     pr.value = 0
     pr.value = 5
     assert pr.value == 5
-    assert pr.progress == .5
+    assert pr.progress == 0.5
     assert not pr.is_complete()
     pr.value = 10
     assert pr.is_complete()
-    assert pr.progress == 1.
+    assert pr.progress == 1.0
     assert _completed == [True]
 
     pr.value_max = 11
     assert not pr.is_complete()
-    assert pr.progress < 1.
+    assert pr.progress < 1.0
     pr.set_complete()
     assert pr.is_complete()
-    assert pr.progress == 1.
+    assert pr.progress == 1.0
 
     assert _reported == [(0, 10), (5, 10), (10, 10), (11, 11)]
     assert _completed == [True, True]
@@ -130,8 +129,8 @@ def test_progress_message():
     """Test messages with the progress reporter."""
     pr = ProgressReporter()
     pr.reset(5)
-    pr.set_progress_message("The progress is {progress}%. ({hello:d})")
-    pr.set_complete_message("Finished {hello}.")
+    pr.set_progress_message('The progress is {progress}%. ({hello:d})')
+    pr.set_complete_message('Finished {hello}.')
 
     pr.value_max = 10
     pr.value = 0

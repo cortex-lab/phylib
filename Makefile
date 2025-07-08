@@ -2,6 +2,7 @@ clean-build:
 	rm -fr build/
 	rm -fr dist/
 	rm -fr *.egg-info
+	rm -fr .eggs/
 
 clean-pyc:
 	find . -name '*.pyc' -exec rm -f {} +
@@ -9,22 +10,53 @@ clean-pyc:
 	find . -name '*~' -exec rm -f {} +
 	find . -name '__pycache__' -exec rm -fr {} +
 
-clean: clean-build clean-pyc
+clean-test:
+	rm -fr .tox/
+	rm -f .coverage
+	rm -fr htmlcov/
+	rm -fr .pytest_cache/
+	rm -fr .ruff_cache/
+
+clean: clean-build clean-pyc clean-test
+
+install:
+	uv sync --dev
 
 lint:
-	flake8 phylib
+	uv run ruff check phylib
 
-test: lint
-	py.test --cov-report term-missing --cov=phylib phylib
+format:
+	uv run ruff format phylib
+
+format-check:
+	uv run ruff format --check phylib
+
+lint-fix:
+	uv run ruff check --fix phylib
+
+test: lint format-check
+	uv run pytest --cov-report term-missing --cov=phylib phylib
+
+test-fast:
+	uv run pytest phylib
 
 coverage:
-	coverage --html
+	uv run coverage html
 
 apidoc:
-	python tools/api.py
+	uv run python tools/api.py
 
 build:
-	python setup.py sdist --formats=zip
+	uv build
 
 upload:
-	python setup.py sdist --formats=zip upload
+	uv publish
+
+upload-test:
+	uv publish --publish-url https://test.pypi.org/legacy/
+
+dev: install lint format test
+
+ci: lint format-check test build
+
+.PHONY: clean-build clean-pyc clean-test clean install lint format format-check lint-fix test test-fast coverage apidoc build upload upload-test dev ci

@@ -4,9 +4,9 @@
 """Utilities for large-scale ephys data analysis."""
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Imports
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 import atexit
 import logging
@@ -16,9 +16,9 @@ from .utils._misc import _git_version
 from .utils.event import connect, unconnect, emit
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Global variables and functions
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 __author__ = 'Cyrille Rossant'
 __email__ = 'cyrille.rossant at gmail.com'
@@ -43,10 +43,10 @@ class _Formatter(logging.Formatter):
         # Only keep the first character in the level name.
         record.levelname = record.levelname[0]
         filename = op.splitext(op.basename(record.pathname))[0]
-        record.caller = '{:s}:{:d}'.format(filename, record.lineno).ljust(20)
+        record.caller = f'{filename:s}:{record.lineno:d}'.ljust(20)
         message = super(_Formatter, self).format(record)
         color_code = self.color_codes.get(record.levelname, '90')
-        message = '\33[%sm%s\33[0m' % (color_code, message)
+        message = f'\x1b[{color_code}m{message}\x1b[0m'
         return message
 
 
@@ -80,4 +80,5 @@ def on_exit():  # pragma: no cover
 def test():  # pragma: no cover
     """Run the full testing suite of phylib."""
     import pytest
+
     pytest.main()
