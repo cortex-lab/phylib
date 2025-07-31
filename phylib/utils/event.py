@@ -1,26 +1,24 @@
-# -*- coding: utf-8 -*-
-from __future__ import print_function
-
 """Simple event system."""
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Imports
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
-from contextlib import contextmanager
 import logging
-import string
 import re
+import string
+from contextlib import contextmanager
 from functools import partial
 
 logger = logging.getLogger(__name__)
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Event system
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
-class EventEmitter(object):
+
+class EventEmitter:
     """Singleton class that emits events and accepts registered callbacks.
 
     Example
@@ -56,12 +54,11 @@ class EventEmitter(object):
 
     def _get_on_name(self, func):
         """Return `eventname` when the function name is `on_<eventname>()`."""
-        r = re.match("^on_(.+)$", func.__name__)
+        r = re.match('^on_(.+)$', func.__name__)
         if r:
             event = r.group(1)
         else:
-            raise ValueError("The function name should be "
-                             "`on_<eventname>`().")
+            raise ValueError('The function name should be `on_<eventname>`().')
         return event
 
     @contextmanager
@@ -69,9 +66,9 @@ class EventEmitter(object):
         """Prevent all callbacks to be called if events are raised
         in the context manager.
         """
-        self.is_silent = not(self.is_silent)
+        self.is_silent = not (self.is_silent)
         yield
-        self.is_silent = not(self.is_silent)
+        self.is_silent = not (self.is_silent)
 
     def connect(self, func=None, event=None, sender=None, **kwargs):
         """Register a callback function to a given event.
@@ -109,8 +106,8 @@ class EventEmitter(object):
         self._callbacks = [
             (event, sender, f, kwargs)
             for (event, sender, f, kwargs) in self._callbacks
-            if f not in items and sender not in items and
-            getattr(f, '__self__', None) not in items]
+            if f not in items and sender not in items and getattr(f, '__self__', None) not in items
+        ]
 
     def emit(self, event, sender, *args, **kwargs):
         """Call all callback functions registered with an event.
@@ -125,8 +122,13 @@ class EventEmitter(object):
             return
         sender_name = sender.__class__.__name__
         logger.log(
-            5, "Emit %s.%s(%s, %s)", sender_name, event,
-            ', '.join(map(str, args)), ', '.join('%s=%s' % (k, v) for k, v in kwargs.items()))
+            5,
+            'Emit %s.%s(%s, %s)',
+            sender_name,
+            event,
+            ', '.join(map(str, args)),
+            ', '.join(f'{k}={v}' for k, v in kwargs.items()),
+        )
         # Call the last callback if this is a single event.
         single = kwargs.pop('single', None)
         res = []
@@ -137,24 +139,24 @@ class EventEmitter(object):
             if e == event and (s is None or s == sender):
                 f_name = getattr(f, '__qualname__', getattr(f, '__name__', str(f)))
                 s_name = s.__class__.__name__
-                logger.log(5, "Callback %s (%s).", f_name, s_name)
+                logger.log(5, 'Callback %s (%s).', f_name, s_name)
                 res.append(f(sender, *args, **kwargs))
                 if single:
                     return res[-1]
         return res
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Progress reporter
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 class PartialFormatter(string.Formatter):
     """Prevent KeyError when a format parameter is absent."""
+
     def get_field(self, field_name, args, kwargs):
         try:
-            return super(PartialFormatter, self).get_field(field_name,
-                                                           args,
-                                                           kwargs)
+            return super().get_field(field_name, args, kwargs)
         except (KeyError, AttributeError):
             return None, field_name
 
@@ -163,7 +165,7 @@ class PartialFormatter(string.Formatter):
         if value is None:
             return '?'
         try:
-            return super(PartialFormatter, self).format_field(value, spec)
+            return super().format_field(value, spec)
         except ValueError:
             return '?'
 
@@ -183,10 +185,10 @@ def _default_on_complete(message, end='\n', **kwargs):
     # Override the initializing message and clear the terminal
     # line.
     fmt = PartialFormatter()
-    print(fmt.format(message + '\033[K', **kwargs), end=end)
+    print(fmt.format(f'{message}\x1b[K', **kwargs), end=end)
 
 
-class ProgressReporter(object):
+class ProgressReporter:
     """A class that reports progress done.
 
     Example
@@ -212,8 +214,9 @@ class ProgressReporter(object):
     * `complete()`
 
     """
+
     def __init__(self):
-        super(ProgressReporter, self).__init__()
+        super().__init__()
         self._value = 0
         self._value_max = 0
         self._has_completed = False
@@ -297,9 +300,9 @@ class ProgressReporter(object):
         return self._value / float(self._value_max)
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Global event system
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 _EVENT = EventEmitter()
 

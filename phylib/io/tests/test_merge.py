@@ -1,23 +1,22 @@
-# -*- coding: utf-8 -*-
-
 """Test probe merging."""
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Imports
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 import numpy as np
 
-from ..merge import Merger
 from phylib.io.alf import EphysAlfCreator
 from phylib.io.model import load_model
 from phylib.io.tests.conftest import _make_dataset
 
+from ..merge import Merger
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Merging tests
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 def test_probe_merge_1(tempdir):
     out_dir = tempdir / 'merged'
@@ -78,8 +77,9 @@ def test_probe_merge_2(tempdir):
         if merged_original_amps is None:
             merged_original_amps = merged.amplitudes
         _, im1, i1 = np.intersect1d(merged_original_amps, single.amplitudes, return_indices=True)
-        _, im2, i2 = np.intersect1d(merged_original_amps, single.amplitudes + 20,
-                                    return_indices=True)
+        _, im2, i2 = np.intersect1d(
+            merged_original_amps, single.amplitudes + 20, return_indices=True
+        )
         # intersection spans the full vector
         assert i1.size + i2.size == merged.amplitudes.size
         # test spikes
@@ -92,8 +92,9 @@ def test_probe_merge_2(tempdir):
         assert np.all(merged.spike_templates[im1] - single.spike_templates[i1] == 0)
         assert np.all(merged.spike_templates[im2] - single.spike_templates[i2] == 64)
         # test probes
-        assert np.all(merged.channel_probes == np.r_[single.channel_probes,
-                                                     single.channel_probes + 1])
+        assert np.all(
+            merged.channel_probes == np.r_[single.channel_probes, single.channel_probes + 1]
+        )
         assert np.all(merged.templates_channels[merged.templates_probes == 0] < single.n_channels)
         assert np.all(merged.templates_channels[merged.templates_probes == 1] >= single.n_channels)
         spike_probes = merged.templates_probes[merged.spike_templates]
@@ -114,8 +115,11 @@ def test_probe_merge_2(tempdir):
     assert np.all(chid == np.r_[single.channel_mapping, single.channel_mapping])
 
     out_files = list(tempdir.joinpath('alf').glob('*.*'))
-    cl_shape = [np.load(f).shape[0] for f in out_files if f.name.startswith('clusters.') and
-                f.name.endswith('.npy')]
+    cl_shape = [
+        np.load(f).shape[0]
+        for f in out_files
+        if f.name.startswith('clusters.') and f.name.endswith('.npy')
+    ]
     sp_shape = [np.load(f).shape[0] for f in out_files if f.name.startswith('spikes.')]
     ch_shape = [np.load(f).shape[0] for f in out_files if f.name.startswith('channels.')]
     assert len(set(cl_shape)) == 1
