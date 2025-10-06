@@ -16,8 +16,7 @@ from operator import mul
 from pathlib import Path
 
 import numpy as np
-from numpy.lib.format import (
-    _check_version, _write_array_header, dtype_to_descr)
+from numpy.lib.format import (write_array_header_1_0, dtype_to_descr)
 import mtscomp
 from tqdm import tqdm
 
@@ -554,10 +553,8 @@ class NpyWriter(object):
         self.shape = shape
         self.dtype = np.dtype(dtype)
         header = _npy_header(self.shape, self.dtype)
-        version = None
-        _check_version(version)
         self.fp = open(path, 'wb')
-        _write_array_header(self.fp, header, version)
+        write_array_header_1_0(self.fp, header)
 
     def append(self, chunk):
         if chunk.ndim == len(self.shape):

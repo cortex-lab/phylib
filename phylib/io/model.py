@@ -91,10 +91,10 @@ def from_sparse(data, cols, channel_ids):
     c = cols.flatten().astype(np.int32)
     # Remove columns that do not belong to the specified channels.
     c[~np.isin(c, channel_ids)] = -1
-    assert np.all(np.isin(c, np.r_[channel_ids, -1]))
+    assert np.all(np.isin(c, np.r_[channel_ids.astype(np.int32), -1]))
     # Convert column indices to relative indices given the specified
     # channel_ids.
-    cols_loc = _index_of(c, np.r_[channel_ids, -1]).reshape(cols.shape)
+    cols_loc = _index_of(c, np.r_[channel_ids.astype(np.int32), -1]).reshape(cols.shape)
     assert cols_loc.shape == (n_spikes, n_channels_loc)
     n_channels = len(channel_ids)
     # Shape of the output array.
