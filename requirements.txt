@@ -2,6 +2,7 @@ numpy
 scipy
 dask
 requests
+responses
 tqdm
 toolz
 joblib
