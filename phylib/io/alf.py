@@ -31,6 +31,7 @@ NSAMPLE_WAVEFORMS = 500  # number of waveforrms sampled out of the raw data
 
 _FILE_RENAMES = [  # file_in, file_out, squeeze (bool to squeeze vector from matlab in npy)
     ('params.py', 'params.py', None),
+    ('iblsorter_parameters.yaml', 'iblsorter_parameters.yaml', None),
     ('cluster_KSLabel.tsv', 'cluster_KSLabel.tsv', None),
     ('spike_clusters.npy', 'spikes.clusters.npy', True),
     ('spike_templates.npy', 'spikes.templates.npy', True),
