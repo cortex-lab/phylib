@@ -636,10 +636,10 @@ def iter_waveforms(traces, spike_samples, spike_channels, n_samples_waveforms=No
             continue
         # Extract the spike waveforms within the chunk.
         waveforms = np.zeros((ns, n_samples_waveforms, n_channels_loc), dtype=traces.dtype)
-        for i, ss in enumerate(ss):
+        for i, s in enumerate(ss):
             channel_ids = sc[i, :]
             waveforms[i, ...] = _extract_waveform(
-                traces, ss, channel_ids=channel_ids,
+                traces, int(s), channel_ids=channel_ids,
                 n_samples_waveforms=n_samples_waveforms)
         yield waveforms
     pb.close()
