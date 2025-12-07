@@ -9,6 +9,7 @@ Electrophysiological data analysis library used by [phy](https://github.com/kwik
 
 - run all tests using pytest `pytest phylib`
 - PR to main
+- update `CHANGELOG.md` and version in `phylib\__init__.py`
 - publish to pypi:
 ```shell
 rm -R dist
