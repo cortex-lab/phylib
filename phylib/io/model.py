@@ -77,6 +77,7 @@ def from_sparse(data, cols, channel_ids):
         List of requested channel ids (columns).
 
     """
+    channel_ids = np.array(channel_ids)
     # The axis in the data that contains the channels.
     if len(channel_ids) != len(np.unique(channel_ids)):
         raise NotImplementedError("Multiple identical requested channels "
