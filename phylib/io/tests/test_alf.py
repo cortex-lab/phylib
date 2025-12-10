@@ -16,7 +16,7 @@ import numpy as np
 import numpy.random as nr
 
 from phylib.utils._misc import _write_tsv_simple
-from ..alf import _FILE_RENAMES, _load, EphysAlfCreator
+from ..alf import _FILE_RENAMES, _load, EphysAlfCreator, alf2phy
 from ..model import TemplateModel
 
 
@@ -40,7 +40,9 @@ class Dataset(object):
         shutil.copy(p / 'spike_clusters.npy', p / 'spike_templates.npy')
         np.save(p / 'amplitudes.npy', nr.uniform(low=0.5, high=1.5, size=self.ns))
         np.save(p / 'channel_positions.npy', np.c_[np.arange(self.nc), np.zeros(self.nc)])
-        np.save(p / 'templates.npy', np.random.normal(size=(self.nt, 50, self.nc)))
+        templates = np.random.normal(size=(self.nt, 50, self.nc))
+        templates = templates / (np.sum(np.sum(templates ** 2, axis=1), axis=1) ** .5)[:, np.newaxis, np.newaxis]
+        np.save(p / 'templates.npy', templates)
         np.save(p / 'similar_templates.npy', np.tile(np.arange(self.nt), (self.nt, 1)))
         np.save(p / 'channel_map.npy', np.c_[np.arange(self.nc)])
         np.save(p / 'channel_probe.npy', np.zeros(self.nc))
@@ -281,3 +283,20 @@ def test_merger(dataset):
     clu_new = np.load(next(out_path_merge.glob('clusters.waveformsChannels.npy')))
     assert np.array_equal(clu_old[split_clu], clu_new[np.max(clu) + 2])
     assert np.array_equal(clu_old[split_clu], clu_new[np.max(clu) + 3])
+
+
+def test_alf2phy(dataset):
+    path = Path(dataset.tmp_dir)
+    # do the Alf2phy forward conversion
+    alf_path = path / 'alf'
+    model = TemplateModel(
+        dir_path=path, dat_path=dataset.dat_path, sample_rate=2000, n_channels_dat=dataset.nc)
+    c = EphysAlfCreator(model)
+    c.convert(alf_path)
+    # do the phy2alf backward conversion
+    path_phy_reverse = alf2phy(alf_path, s2v=1)
+    np.testing.assert_allclose(
+        np.load(path_phy_reverse.joinpath('amplitudes.npy')),
+        np.load(path.joinpath('amplitudes.npy')),
+        rtol=1e-4
+    )
