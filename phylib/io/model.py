@@ -561,11 +561,24 @@ class TemplateModel(object):
             return np.zeros(self.n_channels, dtype=np.int32)
 
     def _load_channel_shanks(self):
+        """
+        Return a 1 x num_channels array of shank indices,
+        where the channels x-position is mapped
+        to shank idx (starting with lowest x-position, shank idx 0).
+
+        If channel positions cannot be loaded, return an array of zeros.
+        """
         try:
-            path = self._find_path('channel_shanks.npy', 'channels.shanks*.npy')
-            out = self._read_array(path).reshape((-1,))
-            assert out.ndim == 1
-            return out
+            channel_positions = self._load_channel_positions()
+
+            shanks = channel_positions[:, 0].astype(np.int32)
+            unqiue_x_channel_pos = np.sort(np.unique(shanks))
+
+            for idx, chan_pos in enumerate(unqiue_x_channel_pos):
+                shanks[np.where(shanks == chan_pos)] = idx
+
+            return shanks
+
         except IOError:
             logger.debug("No channel shank file found.")
             return np.zeros(self.n_channels, dtype=np.int32)
