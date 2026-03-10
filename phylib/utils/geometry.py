@@ -80,10 +80,14 @@ def _boxes_overlap(x0, y0, x1, y1):
 
 def _binary_search(f, xmin, xmax, eps=1e-9):
     """Return the largest x such f(x) is True."""
+    xmin = float(xmin)
+    xmax = float(xmax)
     middle = (xmax + xmin) / 2.
     while xmax - xmin > eps:
         assert xmin < xmax
         middle = (xmax + xmin) / 2.
+        if middle == xmin or middle == xmax:
+            break
         if f(xmax):
             return xmax
         if not f(xmin):
