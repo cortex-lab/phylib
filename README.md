@@ -7,13 +7,12 @@ Electrophysiological data analysis library used by [phy](https://github.com/kwik
 
 ## Contribution
 
-- run all tests using pytest `pytest phylib`
+- create a local environment with `uv venv --python 3.12` and `uv sync --extra dev`
+- run all tests using `uv run pytest phylib`
 - PR to main
 - update `CHANGELOG.md` and version in `phylib\__init__.py`
 - publish to pypi:
 ```shell
-rm -R dist
-rm -R build 
-python setup.py sdist bdist_wheel
+uv build
 twine upload dist/*
 ```
