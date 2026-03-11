@@ -12,19 +12,19 @@ clean-pyc:
 clean: clean-build clean-pyc
 
 lint:
-	flake8 phylib
+	uv run flake8 --jobs=1 phylib
 
 test: lint
-	py.test --cov-report term-missing --cov=phylib phylib
+	uv run pytest --cov-report term-missing --cov=phylib phylib
 
 coverage:
-	coverage --html
+	uv run coverage html
 
 apidoc:
-	python tools/api.py
+	uv run python tools/api.py
 
 build:
-	python setup.py sdist --formats=zip
+	uv build
 
 upload:
-	python setup.py sdist --formats=zip upload
+	@echo "Build artifacts with 'uv build' and upload them with twine."
