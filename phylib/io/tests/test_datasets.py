@@ -141,10 +141,10 @@ def test_download_file(tempdir, mock_urls):
 
     assert_succeeds = (data_here and data_valid and
                        ((checksum_here == checksum_valid) or
-                        (not(checksum_here) and checksum_valid)))
+                        (not (checksum_here) and checksum_valid)))
 
     download_succeeds = (assert_succeeds or (data_here and
-                                             (not(data_valid) and not(checksum_here))))
+                                             (not (data_valid) and not (checksum_here))))
 
     if download_succeeds:
         data = _dl(path)

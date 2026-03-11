@@ -328,7 +328,8 @@ class TemplateModel(object):
         elif not isinstance(self.dat_path, (list, tuple)):
             self.dat_path = [self.dat_path]
         assert isinstance(self.dat_path, (list, tuple))
-        self.dat_path = [Path(p).resolve() if not Path(p).is_symlink() else p for p in self.dat_path]
+        self.dat_path = [
+            Path(p).resolve() if not Path(p).is_symlink() else p for p in self.dat_path]
 
         self.dtype = getattr(self, 'dtype', np.int16)
         if not self.sample_rate:  # pragma: no cover
@@ -973,14 +974,15 @@ class TemplateModel(object):
             # Load from precomputed spikes.
             try:
                 return get_spike_waveforms(
-                spike_ids, channel_ids, spike_waveforms=self.spike_waveforms,
-                n_samples_waveforms=nsw)
+                    spike_ids, channel_ids, spike_waveforms=self.spike_waveforms,
+                    n_samples_waveforms=nsw)
             except AssertionError:
-              logger.warning(
-                  "Error when loading waveforms from precomputed waveforms, trying to load the raw data.")
-              spike_samples = self.spike_samples[spike_ids]
-              return extract_waveforms(
-                  self.traces, spike_samples, channel_ids, n_samples_waveforms=nsw)
+                logger.warning(
+                    "Error when loading waveforms from precomputed waveforms, "
+                    "trying to load the raw data.")
+                spike_samples = self.spike_samples[spike_ids]
+                return extract_waveforms(
+                    self.traces, spike_samples, channel_ids, n_samples_waveforms=nsw)
         else:
             # Or load directly from raw data (slower).
             spike_samples = self.spike_samples[spike_ids]
