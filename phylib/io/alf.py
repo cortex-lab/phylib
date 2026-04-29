@@ -373,10 +373,11 @@ def alf2phy(alf_path: Path, target_path=None, use_symlinks: bool = True, s2v=2.3
         cha = np.max(templates, axis=1) - np.min(templates, axis=1)
         return np.max(cha, axis=1)
 
-    # we unwhiten the templates waveforms, this will expand the templates to the original non-sparse size
+    # Unwhiten templates and expand them to the original non-sparse size.
     templates_phy = np.zeros([nclu, templates['waveforms'].shape[1], nch], dtype=np.float32)
     for i in np.arange(templates_phy.shape[0]):
-        templates_phy[i] = np.matmul(templates['waveforms'][i], wm[templates['waveformsChannels'][i], :])
+        templates_phy[i] = np.matmul(
+            templates['waveforms'][i], wm[templates['waveformsChannels'][i], :])
 
     # the original templates have a rms of 1.0, so here we just need to normalize by rms
     rms_templates = np.sum(np.sum(templates['waveforms'] ** 2, axis=1), axis=1) ** 0.5
@@ -390,7 +391,10 @@ def alf2phy(alf_path: Path, target_path=None, use_symlinks: bool = True, s2v=2.3
     np.save(target_path.joinpath('channel_map.npy'), np.arange(nch))
     np.save(target_path.joinpath('templates.npy'), templates_phy)
 
-    np.save(target_path.joinpath('templates_ind.npy'), np.tile(np.arange(nclu)[np.newaxis, :], reps=[nch, 1]))
+    np.save(
+        target_path.joinpath('templates_ind.npy'),
+        np.tile(np.arange(nclu)[np.newaxis, :], reps=[nch, 1]),
+    )
 
     # if we have metrics information, output the ks2_label information
     if alf_path.joinpath('cluster.metrics.pqt').exists():
