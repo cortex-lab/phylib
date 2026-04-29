@@ -462,7 +462,6 @@ def _get_ephys_constructor(obj, **kwargs):
             return None, None, {}
         assert path.exists()
         ext = path.suffix
-        assert ext, "No extension found in file `%s`" % path
         # Mtscomp file
         if ext == '.cbin':
             reader = mtscomp.Reader(n_threads=mp.cpu_count() // 2)
@@ -475,7 +474,8 @@ def _get_ephys_constructor(obj, **kwargs):
             return (NpyEphysReader, obj, kwargs)
             # TODO: other standard binary formats
         else:  # pragma: no cover
-            raise IOError("Unknown file extension: `%s`." % ext)
+            logger.warning("Unknown file extension: `%s`, of type `%s`", path, ext)
+            return None, None, {}
     elif isinstance(obj, (tuple, list)):
         if obj:
             # Concatenate the main argument to the constructor.
