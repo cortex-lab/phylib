@@ -7,6 +7,7 @@ Electrophysiological data analysis library used by [phy](https://github.com/kwik
 
 ## Contribution
 
+- participation in phylib is governed by the project [Code of Conduct](CODE_OF_CONDUCT.md)
 - run all tests using pytest `pytest phylib`
 - PR to main
 - update `CHANGELOG.md` and version in `phylib\__init__.py`
