@@ -15,10 +15,11 @@ import mtscomp
 from pytest import raises, fixture, mark
 
 from phylib.utils import Bunch
+from ..array import _index_of
 from ..traces import (
     _get_subitems, _get_chunk_bounds,
     get_ephys_reader, BaseEphysReader, extract_waveforms, export_waveforms, RandomEphysReader,
-    get_spike_waveforms)
+    _get_spike_ids_rel, _get_spike_waveforms_fast, get_spike_waveforms)
 
 logger = logging.getLogger(__name__)
 
@@ -215,6 +216,39 @@ def test_ephys_random(sample_rate):
     assert reader[-10:-1].shape == (9, 10)
 
 
+def _get_spike_waveforms_reference(
+        spike_ids, channel_ids, spike_waveforms=None, n_samples_waveforms=None):
+    """Reference implementation of the historical per-spike algorithm."""
+    assert spike_waveforms
+    assert np.all(np.isin(spike_ids, spike_waveforms.spike_ids))
+    spike_ids_rel = _index_of(spike_ids, spike_waveforms.spike_ids)
+    ns = len(spike_ids)
+    nsw = n_samples_waveforms
+    assert nsw > 0
+    nc = len(channel_ids)
+    assert nc > 0
+    out = np.zeros((ns, nsw, nc), dtype=spike_waveforms.waveforms.dtype)
+    for i, sid in enumerate(spike_ids_rel):
+        ind = spike_waveforms.spike_channels[sid, :]
+        channel_common = np.intersect1d(channel_ids, ind)
+        if len(channel_ids) > 0:
+            cols0 = _index_of(channel_common, channel_ids)
+            cols1 = _index_of(channel_common, ind)
+            assert len(cols0) == len(cols1)
+            out[i, :, cols0] = spike_waveforms.waveforms[sid, :, cols1]
+    return out
+
+
+def _assert_spike_waveforms_match_reference(
+        spike_ids, channel_ids, spike_waveforms, n_samples_waveforms):
+    expected = _get_spike_waveforms_reference(
+        spike_ids, channel_ids, spike_waveforms, n_samples_waveforms)
+    actual = get_spike_waveforms(
+        spike_ids, channel_ids, spike_waveforms, n_samples_waveforms)
+    ae(actual, expected)
+    assert actual.dtype == expected.dtype
+
+
 def test_get_spike_waveforms():
     ns, nsw, nc = 8, 5, 3
 
@@ -231,6 +265,183 @@ def test_get_spike_waveforms():
 
     expected = w[[2, 0, 1], ...][..., [1, 0]]
     ae(out, expected)
+
+
+@mark.parametrize('dtype', [np.int16, np.float32, np.float64])
+def test_get_spike_waveforms_characterization(dtype):
+    """Cover ordering, duplicates, missing channels, and padded sparse rows."""
+    nsw = 4
+    waveforms = np.arange(4 * nsw * 5, dtype=dtype).reshape(4, nsw, 5)
+    spike_waveforms = Bunch(
+        waveforms=waveforms,
+        spike_ids=np.array([11, 3, 20, 7], dtype=np.int64),
+        spike_channels=np.array([
+            [5, 2, -1, -1, -1],
+            [9, 4, 2, -1, -1],
+            [2, 5, 2, 8, -1],
+            [8, 7, 6, 5, 4],
+        ], dtype=np.int16),
+    )
+
+    cases = [
+        ([], [2, 5]),
+        ([11], [2]),
+        ([20, 11, 20, 3], [8, 2, 99, 5]),
+        ([7, 3], [9, 4, 2]),
+        ([20], [2, 8, 2]),
+        ([11, 3], [-1, 2]),
+    ]
+    for spike_ids, channel_ids in cases:
+        _assert_spike_waveforms_match_reference(
+            spike_ids, channel_ids, spike_waveforms, nsw)
+
+
+def test_get_spike_waveforms_noncontiguous():
+    rng = np.random.RandomState(0)
+    waveforms_base = rng.randn(6, 7, 8).astype(np.float32)
+    channels_base = np.tile(np.arange(8, dtype=np.int32), (6, 1))
+    spike_waveforms = Bunch(
+        waveforms=waveforms_base[:, ::2, ::2],
+        spike_ids=np.arange(0, 12, 2, dtype=np.int32),
+        spike_channels=channels_base[:, ::2],
+    )
+    requested_spikes = np.array([8, -99, 0, -99, 4, -99, 8, -99])[::2]
+    requested_channels = np.array(
+        [6, 0, 0, 0, 13, 0, 2, 0], dtype=np.uint16)[::2]
+    assert not spike_waveforms.waveforms.flags.c_contiguous
+    assert not spike_waveforms.spike_channels.flags.c_contiguous
+    assert not requested_spikes.flags.c_contiguous
+    assert not requested_channels.flags.c_contiguous
+    _assert_spike_waveforms_match_reference(
+        requested_spikes, requested_channels, spike_waveforms, 4)
+
+
+def test_get_spike_waveforms_memmap(tempdir):
+    rng = np.random.RandomState(1)
+    waveforms = rng.randn(6, 5, 4).astype(np.float32)
+    path = tempdir / 'sparse_waveforms.npy'
+    np.save(path, waveforms)
+    mapped_waveforms = np.load(path, mmap_mode='r')
+    assert isinstance(mapped_waveforms, np.memmap)
+
+    spike_waveforms = Bunch(
+        waveforms=mapped_waveforms,
+        spike_ids=np.arange(6, dtype=np.int64) * 100_000,
+        spike_channels=np.array([
+            [8, 3, -1, -1],
+            [2, 8, 3, -1],
+            [5, 3, 8, 2],
+            [8, 8, 1, -1],
+            [1, 2, 3, 4],
+            [4, 3, 2, 1],
+        ], dtype=np.int32),
+    )
+    _assert_spike_waveforms_match_reference(
+        [500_000, 0, 300_000, 500_000], [3, 8, 99, 3],
+        spike_waveforms, 5)
+
+
+def test_get_spike_waveforms_randomized():
+    rng = np.random.RandomState(42)
+    for _ in range(100):
+        n_spikes = rng.randint(1, 20)
+        n_samples = rng.randint(1, 10)
+        n_sparse_channels = rng.randint(1, 9)
+        n_requested_spikes = rng.randint(0, 30)
+        n_requested_channels = rng.randint(1, 12)
+        spike_ids = rng.choice(
+            np.arange(100, 100 + 3 * n_spikes), size=n_spikes, replace=False)
+        spike_channels = rng.randint(
+            -1, 14, size=(n_spikes, n_sparse_channels)).astype(np.int32)
+        waveforms = rng.randn(n_spikes, n_samples, n_sparse_channels).astype(np.float32)
+        spike_waveforms = Bunch(
+            waveforms=waveforms,
+            spike_ids=spike_ids,
+            spike_channels=spike_channels,
+        )
+        requested_spikes = rng.choice(
+            spike_ids, size=n_requested_spikes, replace=True).tolist()
+        requested_channels = rng.randint(
+            -1, 18, size=n_requested_channels).astype(np.int64)
+        _assert_spike_waveforms_match_reference(
+            requested_spikes, requested_channels, spike_waveforms, n_samples)
+
+
+def test_get_spike_waveforms_empty_channels():
+    spike_waveforms = Bunch(
+        waveforms=np.zeros((1, 2, 1)),
+        spike_ids=np.array([0]),
+        spike_channels=np.array([[0]]),
+    )
+    with raises(AssertionError):
+        get_spike_waveforms(
+            [0], [], spike_waveforms=spike_waveforms, n_samples_waveforms=2)
+
+
+def test_get_spike_waveforms_fast_path_structure(monkeypatch):
+    spike_waveforms = Bunch(
+        waveforms=np.arange(3 * 2 * 3).reshape(3, 2, 3),
+        spike_ids=np.array([4, 8, 12]),
+        spike_channels=np.array([[3, 1, -1], [2, 3, 1], [1, 1, -1]]),
+    )
+
+    def fail_intersect(*args, **kwargs):
+        raise AssertionError("the integer fast path called np.intersect1d")
+
+    monkeypatch.setattr(np, 'intersect1d', fail_intersect)
+    out = get_spike_waveforms(
+        [12, 4, 12], [1, 3, 1], spike_waveforms=spike_waveforms,
+        n_samples_waveforms=2)
+    assert out.shape == (3, 2, 3)
+
+
+def test_get_spike_waveforms_fast_path_guard():
+    spike_waveforms = Bunch(
+        waveforms=np.zeros((1, 2, 2)),
+        spike_ids=np.array([0]),
+        spike_channels=np.array([[0., 1.]]),
+    )
+    assert _get_spike_waveforms_fast(
+        np.array([0]), [0, 1], spike_waveforms, 2) is None
+    spike_waveforms.spike_channels = spike_waveforms.spike_channels.astype(np.int32)
+    assert _get_spike_waveforms_fast(
+        np.array([[0]]), [0, 1], spike_waveforms, 2) is None
+    assert _get_spike_waveforms_fast(
+        np.array([0]), [[0, 1]], spike_waveforms, 2) is None
+
+
+def test_get_spike_waveforms_sparse_global_spike_ids(monkeypatch):
+    spike_ids = np.arange(12, dtype=np.int64) * 1_000_000_000 + 3_000_000_123
+    spike_waveforms = Bunch(
+        waveforms=np.arange(12 * 3 * 2).reshape(12, 3, 2),
+        spike_ids=spike_ids,
+        spike_channels=np.tile([4, 2], (12, 1)),
+    )
+    requested = spike_ids[[11, 0, 7, 11, 2]]
+
+    def fail_legacy_resolution(*args, **kwargs):
+        raise AssertionError("sorted sparse spike IDs used the dense resolver")
+
+    monkeypatch.setattr('phylib.io.traces._index_of', fail_legacy_resolution)
+    monkeypatch.setattr(np, 'isin', fail_legacy_resolution)
+    out = get_spike_waveforms(
+        requested, [2, 4], spike_waveforms=spike_waveforms,
+        n_samples_waveforms=3)
+    expected = spike_waveforms.waveforms[[11, 0, 7, 11, 2], :, ::-1]
+    ae(out, expected)
+
+
+def test_get_spike_waveforms_spike_id_resolution_fallback():
+    # Duplicate/unsorted lookup IDs use _index_of(), where the last duplicate
+    # is selected. A missing requested ID still raises AssertionError.
+    available = np.array([30, 10, 30, 20])
+    ae(_get_spike_ids_rel([30, 20, 30], available), [2, 3, 2])
+    with raises(AssertionError):
+        _get_spike_ids_rel([30, 99], available)
+    with raises(AssertionError):
+        _get_spike_ids_rel([99], np.array([], dtype=np.int64))
+    with raises(AssertionError):
+        _get_spike_ids_rel([2_000_001], np.array([1, 1_000_001, 3_000_001]))
 
 
 @mark.parametrize('do_export', [False, True])

@@ -502,24 +502,13 @@ def get_ephys_reader(obj, **kwargs):
 # Waveform extractor
 #------------------------------------------------------------------------------
 
-def get_spike_waveforms(spike_ids, channel_ids, spike_waveforms=None, n_samples_waveforms=None):
-    """Get spike waveforms from precomputed doubly sparse spike waveforms array.
-
-    The `spike_waveforms` object is a Bunch with attributes
-    `spike_ids`, `spike_channels`, `waveforms`.
-
-    """
-    assert spike_waveforms
-    # Make sure the requested spikes all belong to the spike_waveforms object.
-    assert np.all(np.isin(spike_ids, spike_waveforms.spike_ids))
-    spike_ids_rel = _index_of(spike_ids, spike_waveforms.spike_ids)
-    ns = len(spike_ids)
-    nsw = n_samples_waveforms
-    assert nsw > 0
+def _get_spike_waveforms_legacy(
+        spike_ids_rel, channel_ids, spike_waveforms, n_samples_waveforms):
+    """Extract sparse waveforms with the historical per-spike algorithm."""
+    ns = len(spike_ids_rel)
     nc = len(channel_ids)
-    assert nc > 0
-    out = np.zeros((ns, nsw, nc), dtype=spike_waveforms.waveforms.dtype)
-    # Extract the spike waveforms.
+    out = np.zeros(
+        (ns, n_samples_waveforms, nc), dtype=spike_waveforms.waveforms.dtype)
     for i, sid in enumerate(spike_ids_rel):
         ind = spike_waveforms.spike_channels[sid, :]
         channel_common = np.intersect1d(channel_ids, ind)
@@ -529,6 +518,129 @@ def get_spike_waveforms(spike_ids, channel_ids, spike_waveforms=None, n_samples_
             assert len(cols0) == len(cols1)
             out[i, :, cols0] = spike_waveforms.waveforms[sid, :, cols1]
     return out
+
+
+def _get_spike_ids_rel(spike_ids, available_spike_ids):
+    """Resolve spike IDs without allocating by the largest global spike ID.
+
+    The search-sorted path is used only for the normal strictly increasing,
+    unique integer index. Other layouts retain _index_of()'s historical
+    behavior, including its last-occurrence rule for duplicate lookup IDs.
+    """
+    spike_ids_array = np.asarray(spike_ids)
+    available_spike_ids_array = np.asarray(available_spike_ids)
+    use_searchsorted = (
+        spike_ids_array.ndim == 1 and
+        available_spike_ids_array.ndim == 1 and
+        spike_ids_array.dtype.kind in 'iu' and
+        available_spike_ids_array.dtype.kind in 'iu' and
+        np.result_type(
+            spike_ids_array.dtype, available_spike_ids_array.dtype).kind in 'iu' and
+        (len(available_spike_ids_array) < 2 or
+         np.all(available_spike_ids_array[1:] > available_spike_ids_array[:-1]))
+    )
+    if use_searchsorted:
+        positions = np.searchsorted(available_spike_ids_array, spike_ids_array)
+        valid = positions < len(available_spike_ids_array)
+        if len(available_spike_ids_array):
+            clipped = np.minimum(positions, len(available_spike_ids_array) - 1)
+            valid &= available_spike_ids_array[clipped] == spike_ids_array
+        assert np.all(valid)
+        return positions
+
+    assert np.all(np.isin(spike_ids, available_spike_ids))
+    return _index_of(spike_ids, available_spike_ids)
+
+
+def _get_spike_waveforms_fast(
+        spike_ids_rel, channel_ids, spike_waveforms, n_samples_waveforms):
+    """Extract integer-channel sparse waveforms, or return None if unsupported.
+
+    Spike-channel columns need not be sorted. Applying their columns from left
+    to right preserves the legacy behavior when a sparse row contains the same
+    channel more than once: the last waveform column wins.
+    """
+    channel_ids = np.asarray(channel_ids)
+    spike_ids_rel = np.asarray(spike_ids_rel)
+    spike_channels = np.asarray(spike_waveforms.spike_channels)
+    waveforms = spike_waveforms.waveforms
+
+    # _index_of(), used by the legacy implementation, assumes channel IDs are
+    # int32-compatible integers (with -1 optionally used for sparse padding).
+    if channel_ids.ndim != 1 or spike_ids_rel.ndim != 1:
+        return None
+    if channel_ids.dtype.kind not in 'iu' or spike_channels.dtype.kind not in 'iu':
+        return None
+    if np.result_type(channel_ids.dtype, spike_channels.dtype).kind not in 'iu':
+        return None
+    if spike_channels.ndim != 2 or np.ndim(waveforms) != 3:
+        return None
+    if (waveforms.shape[0] != spike_channels.shape[0] or
+            waveforms.shape[2] != spike_channels.shape[1]):
+        return None
+    int32_max = np.iinfo(np.int32).max
+    if channel_ids.dtype.kind == 'i' and channel_ids.min() < -1:
+        return None
+    if spike_channels.size and spike_channels.dtype.kind == 'i' and spike_channels.min() < -1:
+        return None
+    if channel_ids.max() > int32_max:
+        return None
+    if spike_channels.size and spike_channels.max() > int32_max:
+        return None
+
+    channel_ids = channel_ids.astype(np.int64, copy=False)
+    selected_channels = spike_channels[spike_ids_rel].astype(np.int64, copy=False)
+    ns = len(spike_ids_rel)
+    nc = len(channel_ids)
+    out = np.zeros(
+        (ns, n_samples_waveforms, nc), dtype=waveforms.dtype)
+
+    # np.intersect1d() sorts and deduplicates. Reversing before np.unique()
+    # reproduces _index_of()'s last-requested-column behavior for duplicates.
+    unique_channels, reverse_indices = np.unique(
+        channel_ids[::-1], return_index=True)
+    output_cols = nc - 1 - reverse_indices
+
+    # Search only the sorted unique requested IDs. Sparse channel rows remain
+    # in their original (often amplitude-ranked) order, including -1 padding.
+    positions = np.searchsorted(unique_channels, selected_channels)
+    valid = positions < len(unique_channels)
+    positions = np.minimum(positions, len(unique_channels) - 1)
+    valid &= unique_channels[positions] == selected_channels
+    mapped_output_cols = output_cols[positions]
+
+    # This loop scales with sparse channel count, rather than spike count.
+    # Left-to-right assignment also preserves last-stored-column semantics.
+    for source_col in range(selected_channels.shape[1]):
+        rows = np.flatnonzero(valid[:, source_col])
+        if len(rows):
+            cols = mapped_output_cols[rows, source_col]
+            source_rows = spike_ids_rel[rows]
+            out[rows, :, cols] = waveforms[source_rows, :, source_col]
+    return out
+
+
+def get_spike_waveforms(spike_ids, channel_ids, spike_waveforms=None, n_samples_waveforms=None):
+    """Get spike waveforms from precomputed doubly sparse spike waveforms array.
+
+    The `spike_waveforms` object is a Bunch with attributes
+    `spike_ids`, `spike_channels`, `waveforms`.
+
+    """
+    assert spike_waveforms
+    # Make sure the requested spikes all belong to the spike_waveforms object.
+    spike_ids_rel = _get_spike_ids_rel(spike_ids, spike_waveforms.spike_ids)
+    nsw = n_samples_waveforms
+    assert nsw > 0
+    nc = len(channel_ids)
+    assert nc > 0
+
+    out = _get_spike_waveforms_fast(
+        spike_ids_rel, channel_ids, spike_waveforms, nsw)
+    if out is not None:
+        return out
+    return _get_spike_waveforms_legacy(
+        spike_ids_rel, channel_ids, spike_waveforms, nsw)
 
 
 def _npy_header(shape, dtype, order='C'):  # pragma: no cover
