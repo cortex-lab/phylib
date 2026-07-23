@@ -360,9 +360,20 @@ def _spikes_per_cluster(spike_clusters, spike_ids=None):
     return spikes_in_clusters
 
 
-def _flatten_per_cluster(per_cluster):
+def _flatten_per_cluster(per_cluster, assume_disjoint=False):
     """Convert a dictionary {cluster: spikes} to a spikes array."""
-    return np.unique(np.concatenate(list(per_cluster.values()))).astype(np.int64)
+    arrays = list(per_cluster.values())
+    if len(arrays) == 1:
+        spikes = np.asarray(arrays[0])
+        if (
+                spikes.ndim == 1 and spikes.size and
+                np.issubdtype(spikes.dtype, np.integer) and
+                (spikes.size == 1 or np.all(spikes[1:] > spikes[:-1]))):
+            return spikes.astype(np.int64)
+    spikes = np.concatenate(arrays)
+    if assume_disjoint:
+        return np.sort(spikes).astype(np.int64)
+    return np.unique(spikes).astype(np.int64)
 
 
 def grouped_mean(arr, spike_clusters):
@@ -397,13 +408,40 @@ def _times_in_chunks(times, chunks_kept):
     return ind % 2 == 1
 
 
+def _sample_spikes(spike_ids, n_spikes):
+    """Randomly sample sorted spike IDs without work proportional to the full array."""
+    n_available = len(spike_ids)
+    if n_spikes * 4 > n_available:
+        return np.sort(np.random.choice(spike_ids, n_spikes, replace=False))
+
+    # np.random.choice(..., replace=False) creates a permutation proportional to
+    # n_available. Rejection sampling instead scales with the much smaller output
+    # size, which matters for large clusters and the capped view selections.
+    selected = []
+    seen = set()
+    while len(selected) < n_spikes:
+        n_remaining = n_spikes - len(selected)
+        candidates = np.random.randint(0, n_available, size=max(32, 2 * n_remaining))
+        for index in candidates:
+            index = int(index)
+            if index in seen:
+                continue
+            seen.add(index)
+            selected.append(index)
+            if len(selected) == n_spikes:
+                break
+    indices = np.asarray(selected, dtype=np.int64)
+    return np.sort(spike_ids[indices])
+
+
 class SpikeSelector(object):
     """Select a given number of spikes per cluster among a subset of the chunks."""
     def __init__(
             self, get_spikes_per_cluster=None, spike_times=None,
-            chunk_bounds=None, n_chunks_kept=None):
+            chunk_bounds=None, n_chunks_kept=None, spikes_are_disjoint=False):
         self.get_spikes_per_cluster = get_spikes_per_cluster
         self.spike_times = spike_times
+        self.spikes_are_disjoint = spikes_are_disjoint
         self.chunks_kept = []
         n_chunks = len(chunk_bounds) - 1
 
@@ -421,17 +459,16 @@ class SpikeSelector(object):
         for cluster in cluster_ids:
             # Get all spikes from that cluster.
             spike_ids = self.get_spikes_per_cluster(cluster)
-            # Get the spike times.
-            t = self.spike_times[spike_ids]
             # Keep the spikes belonging to the chunks.
             if subset_chunks:
+                t = self.spike_times[spike_ids]
                 spike_ids = spike_ids[_times_in_chunks(t, self.chunks_kept)]
             # Keep spikes from a given subset.
             if subset_spikes is not None:
                 spike_ids = np.intersect1d(spike_ids, subset_spikes)
             # Make a subselection if needed.
             if n_spk_clu is not None and n_spk_clu > 0 and len(spike_ids) > n_spk_clu:
-                spike_ids = np.random.choice(spike_ids, n_spk_clu, replace=False)
+                spike_ids = _sample_spikes(spike_ids, n_spk_clu)
             selection[cluster] = spike_ids
         # Return the concatenation of all spikes.
-        return _flatten_per_cluster(selection)
+        return _flatten_per_cluster(selection, assume_disjoint=self.spikes_are_disjoint)

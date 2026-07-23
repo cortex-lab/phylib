@@ -315,6 +315,75 @@ def test_flatten_per_cluster():
     ae(arr, [2, 3, 5, 7, 11])
 
 
+def test_flatten_per_cluster_characterization():
+    """The optimized implementation must retain the legacy unique/astype semantics."""
+    cases = (
+        {2: np.array([], dtype=np.int32)},
+        {2: np.array([], dtype=np.int16), 3: np.array([], dtype=np.int64)},
+        {2: np.array([2, 7, 11], dtype=np.int16)},
+        {2: np.array([11, 2, 7, 2], dtype=np.int32)},
+        {2: np.array([[11, 2], [7, 2]], dtype=np.int64)},
+        {2: np.array([2, 7, 11]), 3: np.array([3, 7, 5]), 5: []},
+        {5: [], 3: np.array([5, 3]), 2: np.array([11, 7, 2])},
+        {2: np.array([1.9, 2.1, 2.9])},
+    )
+    for per_cluster in cases:
+        expected = np.unique(np.concatenate(list(per_cluster.values()))).astype(np.int64)
+        actual = _flatten_per_cluster(per_cluster)
+        ae(actual, expected)
+        assert actual.dtype == np.int64
+        assert actual.ndim == 1
+    with raises(ValueError):
+        _flatten_per_cluster({})
+
+
+def test_flatten_per_cluster_fast_path(monkeypatch):
+    """A sorted unique integer array should not need NumPy's sorting operation."""
+    def _unexpected_unique(*args, **kwargs):
+        raise AssertionError("np.unique was called on the intended fast path")
+
+    monkeypatch.setattr(np, 'unique', _unexpected_unique)
+    actual = _flatten_per_cluster({7: np.array([2, 7, 11], dtype=np.int32)})
+    ae(actual, [2, 7, 11])
+    assert actual.dtype == np.int64
+
+
+def test_flatten_per_cluster_disjoint_fast_path(monkeypatch):
+    def _unexpected_unique(*args, **kwargs):
+        raise AssertionError("np.unique was called for known-disjoint clusters")
+
+    monkeypatch.setattr(np, 'unique', _unexpected_unique)
+    actual = _flatten_per_cluster(
+        {2: np.array([2, 7, 11]), 3: np.array([3, 5])},
+        assume_disjoint=True,
+    )
+    ae(actual, [2, 3, 5, 7, 11])
+    assert actual.dtype == np.int64
+
+
+def test_flatten_per_cluster_fallbacks(monkeypatch):
+    """Inputs outside the narrow fast-path contract continue to use np.unique."""
+    old_unique = np.unique
+    calls = []
+
+    def _recording_unique(*args, **kwargs):
+        calls.append(args[0])
+        return old_unique(*args, **kwargs)
+
+    monkeypatch.setattr(np, 'unique', _recording_unique)
+    cases = (
+        {1: np.array([], dtype=np.int64)},
+        {1: np.array([3, 2, 1], dtype=np.int64)},
+        {1: np.array([1, 1, 2], dtype=np.int64)},
+        {1: np.array([1., 2., 3.])},
+        {1: np.array([[1, 2], [3, 4]], dtype=np.int64)},
+        {1: np.array([1, 3]), 2: np.array([2, 4])},
+    )
+    for per_cluster in cases:
+        _flatten_per_cluster(per_cluster)
+    assert len(calls) == len(cases)
+
+
 def test_grouped_mean():
     spike_clusters = np.array([2, 3, 2, 2, 5])
     arr = [9, -3, 10, 11, -5]
@@ -382,3 +451,102 @@ def test_select_spikes_2():
     assert np.all(np.diff(sid) > 0)
     _check_chunks(sid)
     ae(np.bincount(spike_clusters[sid]), [10] * 10)
+
+
+def test_select_spikes_matches_legacy_reference():
+    """Cover capped/uncapped selectors, filtering, missing and repeated clusters."""
+    spike_times = np.arange(12, dtype=float) / 2
+    chunk_bounds = np.array([0., 2., 4., 6.])
+    per_cluster = {
+        1: np.array([9, 1, 7, 1, 4], dtype=np.int32),
+        2: np.array([2, 3, 5, 8, 10], dtype=np.int64),
+        3: np.array([3, 6, 9], dtype=np.int64),
+    }
+
+    def get_spikes(cluster):
+        return per_cluster.get(cluster, np.array([], dtype=np.int64))
+
+    selector = SpikeSelector(
+        get_spikes_per_cluster=get_spikes, spike_times=spike_times,
+        chunk_bounds=chunk_bounds, n_chunks_kept=2)
+
+    def legacy_select(n_spk_clu, cluster_ids, subset_chunks=False, subset_spikes=None):
+        if not len(cluster_ids):
+            return np.array([], dtype=np.int64)
+        selection = {}
+        for cluster in cluster_ids:
+            spike_ids = get_spikes(cluster)
+            times = spike_times[spike_ids]
+            if subset_chunks:
+                indices = np.searchsorted(selector.chunks_kept, times, side='right')
+                spike_ids = spike_ids[indices % 2 == 1]
+            if subset_spikes is not None:
+                spike_ids = np.intersect1d(spike_ids, subset_spikes)
+            if n_spk_clu is not None and n_spk_clu > 0 and len(spike_ids) > n_spk_clu:
+                spike_ids = np.random.choice(spike_ids, n_spk_clu, replace=False)
+            selection[cluster] = spike_ids
+        return np.unique(np.concatenate(list(selection.values()))).astype(np.int64)
+
+    cluster_sets = ([], [99], [2], [2, 1, 99], [3, 2, 1], [2, 2])
+    filters = (
+        (False, None),
+        (True, None),
+        (False, np.array([1, 2, 3, 7, 9, 10])),
+        (True, np.array([1, 2, 3, 7, 9, 10])),
+    )
+    for n_spk_clu in (None, -1, 0, 2):
+        for cluster_ids in cluster_sets:
+            for subset_chunks, subset_spikes in filters:
+                np.random.seed(17)
+                expected = legacy_select(
+                    n_spk_clu, cluster_ids, subset_chunks, subset_spikes)
+                expected_next_random = np.random.random()
+                np.random.seed(17)
+                actual = selector(n_spk_clu, cluster_ids, subset_chunks, subset_spikes)
+                actual_next_random = np.random.random()
+                ae(actual, expected)
+                assert actual_next_random == expected_next_random
+                assert actual.dtype == np.int64
+                assert actual.ndim == 1
+                assert np.all(np.diff(actual) > 0)
+
+
+def test_select_spikes_capped_single_cluster_fast_path(monkeypatch):
+    spike_ids = np.arange(100, dtype=np.int64)
+    selector = SpikeSelector(
+        get_spikes_per_cluster=lambda cluster: spike_ids,
+        spike_times=spike_ids.astype(float),
+        chunk_bounds=[0., 100.], n_chunks_kept=1)
+
+    def _unexpected_unique(*args, **kwargs):
+        raise AssertionError("np.unique was called on a capped single cluster")
+
+    monkeypatch.setattr(np, 'unique', _unexpected_unique)
+    np.random.seed(42)
+    actual = selector(10, [0])
+    assert len(actual) == 10
+    assert np.all(np.diff(actual) > 0)
+
+
+def test_select_spikes_sparse_sample_avoids_full_permutation(monkeypatch):
+    spike_ids = np.arange(1_000_000, dtype=np.int64)
+
+    class UnusedSpikeTimes:
+        def __getitem__(self, item):
+            raise AssertionError("spike times were loaded without subset_chunks")
+
+    selector = SpikeSelector(
+        get_spikes_per_cluster=lambda cluster: spike_ids,
+        spike_times=UnusedSpikeTimes(),
+        chunk_bounds=[0., 1_000_000.],
+        n_chunks_kept=1,
+    )
+
+    def _unexpected_choice(*args, **kwargs):
+        raise AssertionError("np.random.choice created a full-size permutation")
+
+    monkeypatch.setattr(np.random, 'choice', _unexpected_choice)
+    np.random.seed(42)
+    actual = selector(10_000, [0])
+    assert len(actual) == 10_000
+    assert np.all(np.diff(actual) > 0)
