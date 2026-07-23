@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Code of Conduct for project participation and incident reporting.
 
+### Fixed
+- Development checkouts now report a development version with a Git commit suffix.
+
 ## [2.7.0] 2025-12-10
 
 ### Added

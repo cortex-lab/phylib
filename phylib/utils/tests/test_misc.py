@@ -6,6 +6,8 @@
 # Imports
 #------------------------------------------------------------------------------
 
+import re
+
 import numpy as np
 from numpy.testing import assert_array_equal as ae
 from pytest import raises, mark
@@ -137,7 +139,7 @@ def test_write_tsv(tempdir):
 
 def test_git_version():
     v = _git_version()
-    assert v
+    assert re.match(r'^\+git\.[0-9a-f]{8}(?:\.dirty)?$', v)
 
 
 def _myfunction(x):
