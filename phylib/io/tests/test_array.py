@@ -16,7 +16,7 @@ from ..array import (
     _flatten_per_cluster, get_closest_clusters, _get_data_lim, _flatten, _clip,
     chunk_bounds, excerpts, data_chunk, grouped_mean, SpikeSelector,
     get_excerpts, _range_from_slice, _pad, _get_padded,
-    read_array, write_array, _intersect_sorted, _sample_spikes_evenly)
+    read_array, write_array, _intersect_sorted, _sample_spikes, _sample_spikes_evenly)
 from phylib.utils._types import _as_array
 from phylib.utils.testing import _assert_equal as ae
 from ..mock import artificial_spike_clusters, artificial_spike_samples
@@ -581,6 +581,18 @@ def test_select_spikes_sparse_sample_avoids_full_permutation(monkeypatch):
     actual = selector(10_000, [0])
     assert len(actual) == 10_000
     assert np.all(np.diff(actual) > 0)
+
+
+def test_select_spikes_sparse_sample_is_reproducible():
+    spike_ids = np.arange(1_000_000, dtype=np.int64)
+    np.random.seed(42)
+    first = _sample_spikes(spike_ids, 10_000)
+    first_next_random = np.random.random()
+    np.random.seed(42)
+    second = _sample_spikes(spike_ids, 10_000)
+    second_next_random = np.random.random()
+    ae(first, second)
+    assert first_next_random == second_next_random
 
 
 def test_intersect_sorted():

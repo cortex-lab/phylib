@@ -414,23 +414,14 @@ def _sample_spikes(spike_ids, n_spikes):
     if n_spikes * 4 > n_available:
         return np.sort(np.random.choice(spike_ids, n_spikes, replace=False))
 
-    # np.random.choice(..., replace=False) creates a permutation proportional to
-    # n_available. Rejection sampling instead scales with the much smaller output
-    # size, which matters for large clusters and the capped view selections.
-    selected = []
-    seen = set()
-    while len(selected) < n_spikes:
-        n_remaining = n_spikes - len(selected)
-        candidates = np.random.randint(0, n_available, size=max(32, 2 * n_remaining))
-        for index in candidates:
-            index = int(index)
-            if index in seen:
-                continue
-            seen.add(index)
-            selected.append(index)
-            if len(selected) == n_spikes:
-                break
-    indices = np.asarray(selected, dtype=np.int64)
+    # Legacy np.random.choice(..., replace=False) creates a permutation
+    # proportional to n_available. Generator.choice() uses a vectorized
+    # sublinear algorithm for sparse selections. Draw its seed from the legacy
+    # global generator so np.random.seed() still makes this path reproducible.
+    seed = np.random.randint(0, np.iinfo(np.uint32).max, dtype=np.uint32)
+    indices = np.random.default_rng(seed).choice(
+        n_available, size=n_spikes, replace=False, shuffle=False
+    )
     return np.sort(spike_ids[indices])
 
 
