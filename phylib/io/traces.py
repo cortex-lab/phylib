@@ -609,14 +609,27 @@ def _get_spike_waveforms_fast(
     valid &= unique_channels[positions] == selected_channels
     mapped_output_cols = output_cols[positions]
 
+    # A sparse waveform file is normally memory-mapped. Reading one source
+    # channel at a time turns a small display request into dozens of separate
+    # random file operations, so gather the requested rows once in that case.
+    selected_waveforms = (
+        np.asarray(waveforms[spike_ids_rel])
+        if isinstance(waveforms, np.memmap)
+        else None
+    )
+
     # This loop scales with sparse channel count, rather than spike count.
     # Left-to-right assignment also preserves last-stored-column semantics.
     for source_col in range(selected_channels.shape[1]):
         rows = np.flatnonzero(valid[:, source_col])
         if len(rows):
             cols = mapped_output_cols[rows, source_col]
-            source_rows = spike_ids_rel[rows]
-            out[rows, :, cols] = waveforms[source_rows, :, source_col]
+            source = (
+                selected_waveforms[rows, :, source_col]
+                if selected_waveforms is not None
+                else waveforms[spike_ids_rel[rows], :, source_col]
+            )
+            out[rows, :, cols] = source
     return out
 
 

@@ -317,11 +317,18 @@ def test_get_spike_waveforms_noncontiguous():
 
 
 def test_get_spike_waveforms_memmap(tempdir):
+    class CountingMemmap(np.memmap):
+        reads = 0
+
+        def __getitem__(self, item):
+            type(self).reads += 1
+            return super().__getitem__(item)
+
     rng = np.random.RandomState(1)
     waveforms = rng.randn(6, 5, 4).astype(np.float32)
     path = tempdir / 'sparse_waveforms.npy'
     np.save(path, waveforms)
-    mapped_waveforms = np.load(path, mmap_mode='r')
+    mapped_waveforms = np.load(path, mmap_mode='r').view(CountingMemmap)
     assert isinstance(mapped_waveforms, np.memmap)
 
     spike_waveforms = Bunch(
@@ -339,6 +346,11 @@ def test_get_spike_waveforms_memmap(tempdir):
     _assert_spike_waveforms_match_reference(
         [500_000, 0, 300_000, 500_000], [3, 8, 99, 3],
         spike_waveforms, 5)
+    CountingMemmap.reads = 0
+    get_spike_waveforms(
+        [500_000, 0, 300_000, 500_000], [3, 8, 99, 3],
+        spike_waveforms, 5)
+    assert CountingMemmap.reads == 1
 
 
 def test_get_spike_waveforms_randomized():
