@@ -434,6 +434,32 @@ def _sample_spikes(spike_ids, n_spikes):
     return np.sort(spike_ids[indices])
 
 
+def _sample_spikes_evenly(spike_ids, n_spikes):
+    """Evenly sample up to ``n_spikes`` sorted spike IDs for display.
+
+    The selection includes both endpoints when it is capped, so it represents
+    the complete range of an already sorted array.  It only creates an array
+    proportional to the requested sample size; this differs from the random
+    sampler above, whose selection semantics are intentionally unchanged.
+    """
+    n_available = len(spike_ids)
+    if n_spikes < 0:
+        raise ValueError("n_spikes must be non-negative")
+    if not n_available or not n_spikes:
+        return np.array([], dtype=np.int64)
+    if n_spikes >= n_available:
+        return np.asarray(spike_ids, dtype=np.int64)
+    if n_spikes == 1:
+        return np.asarray(spike_ids[[0]], dtype=np.int64)
+
+    # Integer arithmetic avoids float-rounding surprises for large arrays and
+    # yields strictly increasing indices because n_spikes <= n_available.
+    indices = np.arange(n_spikes, dtype=np.int64)
+    indices *= n_available - 1
+    indices //= n_spikes - 1
+    return np.asarray(spike_ids[indices], dtype=np.int64)
+
+
 class SpikeSelector(object):
     """Select a given number of spikes per cluster among a subset of the chunks."""
     def __init__(

@@ -16,7 +16,7 @@ from ..array import (
     _flatten_per_cluster, get_closest_clusters, _get_data_lim, _flatten, _clip,
     chunk_bounds, excerpts, data_chunk, grouped_mean, SpikeSelector,
     get_excerpts, _range_from_slice, _pad, _get_padded,
-    read_array, write_array)
+    read_array, write_array, _sample_spikes_evenly)
 from phylib.utils._types import _as_array
 from phylib.utils.testing import _assert_equal as ae
 from ..mock import artificial_spike_clusters, artificial_spike_samples
@@ -393,6 +393,37 @@ def test_grouped_mean():
 #------------------------------------------------------------------------------
 # Test spike selection
 #------------------------------------------------------------------------------
+
+def test_sample_spikes_evenly():
+    spike_ids = np.arange(100, 200, dtype=np.int32)
+    sampled = _sample_spikes_evenly(spike_ids, 6)
+    ae(sampled, [100, 119, 139, 159, 179, 199])
+    assert sampled.dtype == np.int64
+    assert np.all(np.diff(sampled) > 0)
+
+
+def test_sample_spikes_evenly_edge_cases():
+    spike_ids = np.array([3, 10, 20], dtype=np.int32)
+    ae(_sample_spikes_evenly(spike_ids, 0), [])
+    ae(_sample_spikes_evenly(np.array([], dtype=np.int32), 3), [])
+    ae(_sample_spikes_evenly(spike_ids, 1), [3])
+    ae(_sample_spikes_evenly(spike_ids, 3), spike_ids)
+    ae(_sample_spikes_evenly(spike_ids, 4), spike_ids)
+    with raises(ValueError):
+        _sample_spikes_evenly(spike_ids, -1)
+
+
+def test_sample_spikes_evenly_only_indexes_requested_points():
+    class SortedSpikeIDs:
+        def __len__(self):
+            return 1_000_000
+
+        def __getitem__(self, indices):
+            assert len(indices) == 10
+            return indices
+
+    sampled = _sample_spikes_evenly(SortedSpikeIDs(), 10)
+    ae(sampled, np.linspace(0, 999_999, 10, dtype=np.int64))
 
 def test_select_spikes_1():
     spike_times = np.array([0., 1., 2., 3.3, 4.4])
