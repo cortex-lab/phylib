@@ -354,19 +354,19 @@ def _load_from_fullname(name):
 
 
 def _git_version():
-    """Return the git version."""
-    curdir = os.getcwd()
-    os.chdir(str(Path(__file__).parent))
+    """Return a PEP 440-compatible local version derived from Git."""
+    cwd = str(Path(__file__).parent)
     try:
         with open(os.devnull, 'w') as fnull:
-            version = ('-git-' + subprocess.check_output(
-                       ['git', 'describe', '--abbrev=8', '--dirty', '--always', '--tags'],
-                       stderr=fnull).strip().decode('ascii'))
-            return version
+            revision = subprocess.check_output(
+                ['git', 'rev-parse', '--short=8', 'HEAD'],
+                cwd=cwd, stderr=fnull).strip().decode('ascii')
+            dirty = subprocess.call(
+                ['git', 'diff', '--quiet', 'HEAD', '--'],
+                cwd=cwd, stdout=fnull, stderr=fnull)
+            return '+git.' + revision + ('.dirty' if dirty else '')
     except (OSError, subprocess.CalledProcessError):  # pragma: no cover
         return ""
-    finally:
-        os.chdir(curdir)
 
 
 def phy_config_dir():

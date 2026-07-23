@@ -9,8 +9,13 @@ Electrophysiological data analysis library used by [phy](https://github.com/kwik
 
 - participation in phylib is governed by the project [Code of Conduct](CODE_OF_CONDUCT.md)
 - run all tests using pytest `pytest phylib`
-- PR to main
-- update `CHANGELOG.md` and version in `phylib\__init__.py`
+- PR to master
+- keep `phylib/__init__.py` on the next development version (for example,
+  `2.7.1.dev0`)
+- for a release, update `CHANGELOG.md`, remove the `.dev0` suffix, run the
+  tests, and tag the exact release commit
+- after publishing, immediately bump `phylib/__init__.py` to the next
+  `.dev0` version
 - publish to pypi:
 ```shell
 rm -R dist
