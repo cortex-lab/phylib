@@ -460,6 +460,25 @@ def _sample_spikes_evenly(spike_ids, n_spikes):
     return np.asarray(spike_ids[indices], dtype=np.int64)
 
 
+def _intersect_sorted(a, b):
+    """Intersect strictly increasing arrays without sorting or deduplicating them."""
+    a = np.asarray(a)
+    b = np.asarray(b)
+    if not len(a) or not len(b):
+        return np.array([], dtype=np.result_type(a.dtype, b.dtype))
+
+    # Probe the smaller array to keep the temporary search result bounded.
+    if len(a) <= len(b):
+        candidates, lookup = a, b
+    else:
+        candidates, lookup = b, a
+    positions = np.searchsorted(lookup, candidates)
+    valid = positions < len(lookup)
+    positions = np.minimum(positions, len(lookup) - 1)
+    valid &= lookup[positions] == candidates
+    return candidates[valid]
+
+
 class SpikeSelector(object):
     """Select a given number of spikes per cluster among a subset of the chunks."""
     def __init__(
@@ -475,9 +494,10 @@ class SpikeSelector(object):
             self.chunks_kept.extend(chunk_bounds[i:i + 2])
         self.chunks_kept = np.array(self.chunks_kept)
 
-    def __call__(self, n_spk_clu, cluster_ids, subset_chunks=False, subset_spikes=None):
-        """Select about n_spk_clu random spikes from each of the requested clusters, only
-        in the kept chunks."""
+    def __call__(
+            self, n_spk_clu, cluster_ids, subset_chunks=False, subset_spikes=None,
+            subset_spikes_are_sorted=False, sample_evenly=False):
+        """Select up to n_spk_clu spikes per cluster, optionally within a subset."""
         if not len(cluster_ids):
             return np.array([], dtype=np.int64)
         # Start with all spikes from each cluster.
@@ -491,10 +511,14 @@ class SpikeSelector(object):
                 spike_ids = spike_ids[_times_in_chunks(t, self.chunks_kept)]
             # Keep spikes from a given subset.
             if subset_spikes is not None:
-                spike_ids = np.intersect1d(spike_ids, subset_spikes)
+                if subset_spikes_are_sorted:
+                    spike_ids = _intersect_sorted(spike_ids, subset_spikes)
+                else:
+                    spike_ids = np.intersect1d(spike_ids, subset_spikes)
             # Make a subselection if needed.
             if n_spk_clu is not None and n_spk_clu > 0 and len(spike_ids) > n_spk_clu:
-                spike_ids = _sample_spikes(spike_ids, n_spk_clu)
+                sample = _sample_spikes_evenly if sample_evenly else _sample_spikes
+                spike_ids = sample(spike_ids, n_spk_clu)
             selection[cluster] = spike_ids
         # Return the concatenation of all spikes.
         return _flatten_per_cluster(selection, assume_disjoint=self.spikes_are_disjoint)

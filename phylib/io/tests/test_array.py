@@ -16,7 +16,7 @@ from ..array import (
     _flatten_per_cluster, get_closest_clusters, _get_data_lim, _flatten, _clip,
     chunk_bounds, excerpts, data_chunk, grouped_mean, SpikeSelector,
     get_excerpts, _range_from_slice, _pad, _get_padded,
-    read_array, write_array, _sample_spikes_evenly)
+    read_array, write_array, _intersect_sorted, _sample_spikes_evenly)
 from phylib.utils._types import _as_array
 from phylib.utils.testing import _assert_equal as ae
 from ..mock import artificial_spike_clusters, artificial_spike_samples
@@ -581,3 +581,32 @@ def test_select_spikes_sparse_sample_avoids_full_permutation(monkeypatch):
     actual = selector(10_000, [0])
     assert len(actual) == 10_000
     assert np.all(np.diff(actual) > 0)
+
+
+def test_intersect_sorted():
+    ae(_intersect_sorted([], []), [])
+    ae(_intersect_sorted([1, 3, 8], []), [])
+    ae(_intersect_sorted([1, 3, 8], [0, 1, 2, 3, 5, 8, 13]), [1, 3, 8])
+    ae(_intersect_sorted([0, 1, 2, 3, 5, 8, 13], [1, 3, 8]), [1, 3, 8])
+
+
+def test_select_spikes_sorted_subset_and_even_sample(monkeypatch):
+    spike_ids = np.arange(0, 1_000_000, 2, dtype=np.int64)
+    subset_spikes = np.arange(0, 1_000_000, 5, dtype=np.int64)
+    selector = SpikeSelector(
+        get_spikes_per_cluster=lambda cluster: spike_ids,
+        spike_times=spike_ids.astype(float),
+        chunk_bounds=[0., 1_000_000.],
+        n_chunks_kept=1,
+    )
+
+    def _unexpected_call(*args, **kwargs):
+        raise AssertionError("the sorted, even path used a legacy operation")
+
+    monkeypatch.setattr(np, 'intersect1d', _unexpected_call)
+    monkeypatch.setattr(np.random, 'choice', _unexpected_call)
+    monkeypatch.setattr(np.random, 'randint', _unexpected_call)
+    actual = selector(
+        10, [0], subset_spikes=subset_spikes,
+        subset_spikes_are_sorted=True, sample_evenly=True)
+    ae(actual, np.arange(10, dtype=np.int64) * 111110)
