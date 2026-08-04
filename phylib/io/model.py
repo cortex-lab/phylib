@@ -414,16 +414,16 @@ class TemplateModel(object):
             self.n_channels_loc = 0
 
         # Clusters waveforms
-        if not np.all(self.spike_clusters == self.spike_templates) and \
+        clusters_changed = not np.array_equal(self.spike_clusters, self.spike_templates)
+        if clusters_changed and self.sparse_templates is not None and \
                 self.sparse_templates.cols is None:
             self.merge_map, self.nan_idx = self.get_merge_map()
             self.sparse_clusters = self.cluster_waveforms()
-            self.n_clusters = self.spike_clusters.max() + 1
         else:
             self.merge_map = {}
             self.nan_idx = []
             self.sparse_clusters = self.sparse_templates
-            self.n_clusters = self.spike_templates.max() + 1
+        self.n_clusters = self.spike_clusters.max() + 1
 
         # Spike waveforms (optional, otherwise fetched from raw data as needed).
         self.spike_waveforms = self._load_spike_waveforms()

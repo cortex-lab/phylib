@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Development checkouts now report a development version with a Git commit suffix.
+- Template datasets without waveform templates can be reloaded after cluster assignments change.
 
 ## [2.7.0] 2025-12-10
 
