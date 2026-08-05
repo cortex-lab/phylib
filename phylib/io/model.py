@@ -13,6 +13,7 @@ import os.path as op
 from operator import itemgetter
 from pathlib import Path
 import shutil
+import tempfile
 
 import numpy as np
 # from numpy.lib.format import open_memmap
@@ -60,6 +61,36 @@ def read_array(path, mmap_mode=None):
 def write_array(name, arr):
     """Save an array to a binary file."""
     np.save(name, arr)
+
+
+def _save_npy_atomic(path, arr):
+    """Save an array to a npy file without ever truncating the existing file.
+
+    The array is written to a temporary file in the same directory as the destination, and only
+    then moved into place with `os.replace()`, which is atomic as long as both paths are on the
+    same filesystem. If anything goes wrong while writing, the temporary file is removed and the
+    existing file is left untouched.
+
+    """
+    path = Path(path)
+    # NOTE: the temporary file must not be named `*.npy`, otherwise a leftover file would be
+    # picked up by the `spike_*.npy` glob in `_load_spike_attributes()`.
+    tmp = tempfile.NamedTemporaryFile(
+        delete=False, dir=str(path.parent), prefix='.' + path.name + '.', suffix='.tmp')
+    try:
+        with tmp:
+            # NOTE: np.save() appends `.npy` to a file *name* that lacks it, but not to an
+            # already-open file object, which is what is passed here.
+            np.save(tmp, arr)
+            tmp.flush()
+            os.fsync(tmp.fileno())
+        os.replace(tmp.name, path)
+    except BaseException:
+        try:
+            os.remove(tmp.name)
+        except OSError:  # pragma: no cover
+            pass
+        raise
 
 
 def from_sparse(data, cols, channel_ids):
@@ -1357,7 +1388,7 @@ class TemplateModel(object):
         """Save the spike clusters."""
         path = self._find_path('spike_clusters.npy', 'spikes.clusters.npy', multiple_ok=False)
         logger.debug("Save spike clusters to `%s`.", path)
-        np.save(path, spike_clusters)
+        _save_npy_atomic(path, spike_clusters)
 
     def save_spikes_subset_waveforms(self, max_n_spikes_per_template=None, max_n_channels=None,
                                      sample2unit=1.):

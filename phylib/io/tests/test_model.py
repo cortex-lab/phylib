@@ -14,6 +14,7 @@ from pytest import raises
 
 # from phylib.utils import Bunch
 from phylib.utils.testing import captured_output
+from .. import model as model_module
 from ..model import from_sparse, load_model
 
 logger = logging.getLogger(__name__)
@@ -133,6 +134,45 @@ def test_model_save(template_model_full):
     m = template_model_full
     m.save_metadata('test', {1: 1})
     m.save_spike_clusters(m.spike_clusters)
+
+
+def test_model_save_spike_clusters_atomic(template_model, monkeypatch):
+    # Regression test for cortex-lab/phy#1249: a save that dies half-way through must not
+    # leave spike_clusters.npy truncated or empty.
+    m = template_model
+    path = m.dir_path / 'spike_clusters.npy'
+
+    # Happy path: a successful save round-trips and does not create `spike_clusters.npy.npy`.
+    original = m.spike_clusters.copy()
+    m.save_spike_clusters(original)
+    assert not (m.dir_path / 'spike_clusters.npy.npy').exists()
+    ae(np.load(path), original)
+
+    original_bytes = path.read_bytes()
+    assert original_bytes
+    files_before = sorted(p.name for p in m.dir_path.iterdir())
+
+    def _partial_save(file, arr, *args, **kwargs):
+        # Mimic np.save() dying half-way through: whatever it was given is opened for writing
+        # (which truncates it) and a few bytes are written before the failure.
+        if hasattr(file, 'write'):
+            file.write(b'\x93NUMPY')
+        else:
+            with open(str(file), 'wb') as f:
+                f.write(b'\x93NUMPY')
+        raise IOError("No space left on device")
+
+    monkeypatch.setattr(model_module.np, 'save', _partial_save)
+    with raises(IOError):
+        m.save_spike_clusters(original + 1)
+
+    # The original file must still be there, byte for byte.
+    assert path.exists()
+    assert path.read_bytes() == original_bytes
+    ae(np.load(path), original)
+
+    # No temporary file must be left behind.
+    assert sorted(p.name for p in m.dir_path.iterdir()) == files_before
 
 
 def test_model_reload_curated_dataset_without_templates(template_path):
