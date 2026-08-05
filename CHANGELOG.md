@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Development checkouts now report a development version with a Git commit suffix.
 - Template datasets without waveform templates can be reloaded after cluster assignments change,
   and stored spike-waveform subsets provide their waveform sample count.
+- TSV, JSON, text and `params.py` files are written atomically, so a crash during a save no longer
+  truncates the file it was replacing, for instance `cluster_group.tsv`.
 
 ## [2.7.0] 2025-12-10
 

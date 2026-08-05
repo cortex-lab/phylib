@@ -6,15 +6,19 @@
 # Imports
 #------------------------------------------------------------------------------
 
+import csv
+import json
+import os
 import re
+import stat
 
 import numpy as np
 from numpy.testing import assert_array_equal as ae
 from pytest import raises, mark
 
 from .._misc import (
-    _git_version, load_json, save_json, load_pickle, save_pickle, read_python, write_python,
-    read_text, write_text, _read_tsv_simple, _write_tsv_simple, read_tsv, write_tsv,
+    _atomic_open, _git_version, load_json, save_json, load_pickle, save_pickle, read_python,
+    write_python, read_text, write_text, _read_tsv_simple, _write_tsv_simple, read_tsv, write_tsv,
     _pretty_floats, _encode_qbytearray, _decode_qbytearray, _fullname, _load_from_fullname)
 
 
@@ -135,6 +139,91 @@ def test_write_tsv(tempdir):
     assert read_text(path)[0] == 'b'
     del data[2]['c']
     assert read_tsv(path) == data
+
+
+class _Boom(Exception):
+    pass
+
+
+def test_atomic_open(tempdir):
+    path = tempdir / 'test_dir/test.txt'
+
+    with _atomic_open(path) as f:
+        f.write('hello')
+    assert read_text(path) == 'hello'
+    # The temporary file must not be left behind.
+    assert sorted(p.name for p in path.parent.iterdir()) == ['test.txt']
+
+    # A new file gets the permissions open() would have given it, not the 0600 of a
+    # temporary file.
+    umask = os.umask(0)
+    os.umask(umask)
+    assert stat.S_IMODE(path.stat().st_mode) == 0o666 & ~umask
+
+    # The permissions of an existing file are preserved.
+    path.chmod(0o640)
+    with _atomic_open(path) as f:
+        f.write('world')
+    assert read_text(path) == 'world'
+    assert stat.S_IMODE(path.stat().st_mode) == 0o640
+
+    # A failure half-way through leaves the previous file untouched and no leftovers.
+    with raises(_Boom):
+        with _atomic_open(path) as f:
+            f.write('this should never be visible')
+            raise _Boom()
+    assert read_text(path) == 'world'
+    assert sorted(p.name for p in path.parent.iterdir()) == ['test.txt']
+
+
+@mark.parametrize('writer', ['write_tsv', '_write_tsv_simple'])
+def test_write_tsv_atomic(tempdir, monkeypatch, writer):
+    # Curation data such as cluster_group.tsv must survive a crash during a save.
+    path = tempdir / 'cluster_group.tsv'
+    if writer == 'write_tsv':
+        def _write(value):
+            write_tsv(path, [{'cluster_id': 2, 'group': value}], first_field='cluster_id')
+    else:
+        def _write(value):
+            _write_tsv_simple(path, 'group', {2: value})
+
+    _write('good')
+    before = path.read_bytes()
+    assert before
+    files_before = sorted(p.name for p in tempdir.iterdir())
+
+    real_writer = csv.writer
+
+    def _failing_writer(f, **kwargs):
+        # Mimic a crash after part of the file has been written.
+        real_writer(f, **kwargs).writerow(['cluster_id', 'group'])
+        raise _Boom()
+
+    monkeypatch.setattr(csv, 'writer', _failing_writer)
+    with raises(_Boom):
+        _write('mua')
+
+    assert path.read_bytes() == before
+    assert sorted(p.name for p in tempdir.iterdir()) == files_before
+
+
+def test_save_json_atomic(tempdir, monkeypatch):
+    path = tempdir / 'test.json'
+    save_json(path, {'a': 1})
+    before = path.read_bytes()
+    assert before
+    files_before = sorted(p.name for p in tempdir.iterdir())
+
+    def _failing_dump(data, f, **kwargs):
+        f.write('{"a":')
+        raise _Boom()
+
+    monkeypatch.setattr(json, 'dump', _failing_dump)
+    with raises(_Boom):
+        save_json(path, {'a': 2})
+
+    assert path.read_bytes() == before
+    assert sorted(p.name for p in tempdir.iterdir()) == files_before
 
 
 def test_git_version():
