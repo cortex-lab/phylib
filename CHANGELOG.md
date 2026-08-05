@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Development checkouts now report a development version with a Git commit suffix.
 - Template datasets without waveform templates can be reloaded after cluster assignments change,
   and stored spike-waveform subsets provide their waveform sample count.
+- #57 a blank `dat_path` in `params.py` is now read as "no raw data file" instead of resolving to
+  the dataset directory.
 
 ## [2.7.0] 2025-12-10
 
