@@ -7,6 +7,8 @@
 #------------------------------------------------------------------------------
 
 import logging
+import os
+import stat
 
 import numpy as np
 from numpy.testing import assert_equal as ae
@@ -15,7 +17,7 @@ from pytest import raises
 # from phylib.utils import Bunch
 from phylib.utils.testing import captured_output
 from .. import model as model_module
-from ..model import from_sparse, load_model
+from ..model import from_sparse, get_template_params, load_model
 
 logger = logging.getLogger(__name__)
 
@@ -144,9 +146,14 @@ def test_model_save_spike_clusters_atomic(template_model, monkeypatch):
 
     # Happy path: a successful save round-trips and does not create `spike_clusters.npy.npy`.
     original = m.spike_clusters.copy()
+    if os.name != 'nt':
+        path.chmod(0o640)
     m.save_spike_clusters(original)
     assert not (m.dir_path / 'spike_clusters.npy.npy').exists()
     ae(np.load(path), original)
+    if os.name != 'nt':
+        # Shared lab datasets must not become private to the user who saved them.
+        assert stat.S_IMODE(path.stat().st_mode) == 0o640
 
     original_bytes = path.read_bytes()
     assert original_bytes
@@ -173,6 +180,46 @@ def test_model_save_spike_clusters_atomic(template_model, monkeypatch):
 
     # No temporary file must be left behind.
     assert sorted(p.name for p in m.dir_path.iterdir()) == files_before
+
+
+def _set_dat_path(params_path, value):
+    """Replace the `dat_path` assignment of a `params.py` file by a literal value."""
+    lines = params_path.read_text().splitlines()
+    lines = [
+        'dat_path = %s' % value if line.startswith('dat_path') else line for line in lines]
+    params_path.write_text('\n'.join(lines) + '\n')
+
+
+def test_model_blank_dat_path(template_path):
+    # Regression test for #57: a dataset with no raw data file on disk has a blank `dat_path`
+    # in params.py. `Path('')` is `Path('.')`, so a blank entry used to resolve to the dataset
+    # directory instead of being dropped.
+    _set_dat_path(template_path, "''")
+    assert get_template_params(template_path)['dat_path'] == []
+
+    model = load_model(template_path)
+    try:
+        assert model.dat_path == []
+        assert model.traces is None
+        with captured_output() as (stdout, stderr):
+            model.describe()
+        assert stdout.getvalue().splitlines()[0].strip() == 'Data files'
+    finally:
+        model.close()
+
+
+def test_model_blank_dat_path_in_list(template_path):
+    # Blank entries are dropped from a list too, and the real file is kept.
+    _set_dat_path(template_path, "['', 'sim_binary.dat']")
+    dat_path = get_template_params(template_path)['dat_path']
+    assert [p.name for p in dat_path] == ['sim_binary.dat']
+
+    model = load_model(template_path)
+    try:
+        assert [p.name for p in model.dat_path] == ['sim_binary.dat']
+        assert model.traces is not None
+    finally:
+        model.close()
 
 
 def test_model_reload_curated_dataset_without_templates(template_path):

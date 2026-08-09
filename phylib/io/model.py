@@ -13,7 +13,6 @@ import os.path as op
 from operator import itemgetter
 from pathlib import Path
 import shutil
-import tempfile
 
 import numpy as np
 # from numpy.lib.format import open_memmap
@@ -25,7 +24,7 @@ from .traces import (
     get_ephys_reader, RandomEphysReader, extract_waveforms,
     get_spike_waveforms, export_waveforms)
 from phylib.utils import Bunch
-from phylib.utils._misc import _write_tsv_simple, read_tsv, read_python
+from phylib.utils._misc import _atomic_open, _write_tsv_simple, read_tsv, read_python
 from phylib.utils.geometry import linear_positions
 
 logger = logging.getLogger(__name__)
@@ -72,25 +71,11 @@ def _save_npy_atomic(path, arr):
     existing file is left untouched.
 
     """
-    path = Path(path)
-    # NOTE: the temporary file must not be named `*.npy`, otherwise a leftover file would be
-    # picked up by the `spike_*.npy` glob in `_load_spike_attributes()`.
-    tmp = tempfile.NamedTemporaryFile(
-        delete=False, dir=str(path.parent), prefix='.' + path.name + '.', suffix='.tmp')
-    try:
-        with tmp:
-            # NOTE: np.save() appends `.npy` to a file *name* that lacks it, but not to an
-            # already-open file object, which is what is passed here.
-            np.save(tmp, arr)
-            tmp.flush()
-            os.fsync(tmp.fileno())
-        os.replace(tmp.name, path)
-    except BaseException:
-        try:
-            os.remove(tmp.name)
-        except OSError:  # pragma: no cover
-            pass
-        raise
+    # NOTE: np.save() appends `.npy` to a file *name* that lacks it, but not to an already-open
+    # file object. The shared writer also preserves existing permissions and removes its hidden
+    # sibling temporary file if np.save() raises.
+    with _atomic_open(path, mode='wb') as f:
+        np.save(f, arr)
 
 
 def from_sparse(data, cols, channel_ids):
@@ -353,13 +338,10 @@ class TemplateModel(object):
         assert isinstance(self.dir_path, Path)
         assert self.dir_path.exists()
 
-        # Set dat_path.
-        if not self.dat_path:  # pragma: no cover
-            self.dat_path = []
-        elif not isinstance(self.dat_path, (list, tuple)):
-            self.dat_path = [self.dat_path]
-        assert isinstance(self.dat_path, (list, tuple))
-        self.dat_path = [Path(p).resolve() if not Path(p).is_symlink() else p for p in self.dat_path]
+        # Set dat_path. Blank entries mean "no raw data file", see _clean_dat_path().
+        self.dat_path = [
+            Path(p).resolve() if not Path(p).is_symlink() else p
+            for p in _clean_dat_path(self.dat_path)]
 
         self.dtype = getattr(self, 'dtype', np.int16)
         if not self.sample_rate:  # pragma: no cover
@@ -1447,6 +1429,23 @@ class TemplateModel(object):
             _close_memmap(k, v)
 
 
+def _clean_dat_path(dat_path):
+    """Normalize a raw data path specification into a list of non-empty paths.
+
+    A blank `dat_path` means the dataset has no raw data file at all. Some sorters write
+    `dat_path = ''` in `params.py` when the recording has no file on disk, for instance
+    SpikeInterface with a simulated or in-memory recording. Such entries have to be dropped
+    rather than resolved, because `Path('')` is `Path('.')`, which would silently turn the
+    missing raw data file into the dataset directory itself.
+
+    """
+    if not dat_path:
+        return []
+    if not isinstance(dat_path, (list, tuple)):
+        dat_path = [dat_path]
+    return [p for p in dat_path if str(p).strip()]
+
+
 def _make_abs_path(p, dir_path):
     p = Path(p)
     if not op.isabs(p):
@@ -1469,9 +1468,8 @@ def get_template_params(params_path):
     assert params['dir_path'].is_dir()
     assert params['dir_path'].exists()
 
-    if isinstance(params['dat_path'], str):
-        params['dat_path'] = [params['dat_path']]
-    params['dat_path'] = [_make_abs_path(_, params['dir_path']) for _ in params['dat_path']]
+    params['dat_path'] = [
+        _make_abs_path(_, params['dir_path']) for _ in _clean_dat_path(params['dat_path'])]
     return params
 
 

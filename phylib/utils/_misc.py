@@ -8,12 +8,15 @@
 #------------------------------------------------------------------------------
 
 import base64
+from contextlib import contextmanager
 import csv
 from importlib import import_module
 import json
 import logging
 import os
 from pathlib import Path
+import secrets
+import stat
 import subprocess
 from textwrap import dedent
 
@@ -22,6 +25,62 @@ import numpy as np
 from ._types import _is_integer
 
 logger = logging.getLogger(__name__)
+
+
+#------------------------------------------------------------------------------
+# Atomic file writing
+#------------------------------------------------------------------------------
+
+def _copy_file_mode(src, dst):
+    """Give `src` the permissions of `dst` when `dst` exists."""
+    try:
+        mode = stat.S_IMODE(os.stat(dst).st_mode)
+    except FileNotFoundError:
+        # The exclusive open used for a new temporary file already applied the process umask.
+        return
+    os.chmod(src, mode)
+
+
+@contextmanager
+def _atomic_open(path, mode='w', **kwargs):
+    """Open a file for writing without ever truncating the file it replaces.
+
+    The contents are written to a temporary file in the same directory as the destination, and
+    that file is moved into place with `os.replace()` once the `with` block completes, which is
+    atomic as long as both paths are on the same filesystem. A reader therefore sees either the
+    old file or the new one, never a half-written one. If the block raises, the temporary file
+    is removed and any existing file is left untouched.
+
+    """
+    path = Path(path)
+    ensure_dir_exists(path.parent)
+    if not mode.startswith('w'):
+        raise ValueError("_atomic_open() only supports write modes")
+    exclusive_mode = 'x' + mode[1:]
+    # NOTE: the temporary file is hidden and does not end in a data file extension, so that a
+    # file left behind by a hard kill is not picked up by the globs used to discover datasets.
+    # Opening it with `x` both prevents a name collision and lets the OS apply the current umask,
+    # without temporarily changing that process-global setting.
+    while True:
+        tmp = path.parent / ('.%s.%s.tmp' % (path.name, secrets.token_hex(16)))
+        try:
+            f = open(tmp, exclusive_mode, **kwargs)
+            break
+        except FileExistsError:  # pragma: no cover - cryptographically unlikely
+            continue
+    try:
+        with f:
+            yield f
+            f.flush()
+            os.fsync(f.fileno())
+        _copy_file_mode(tmp, path)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.remove(tmp)
+        except OSError:  # pragma: no cover
+            pass
+        raise
 
 
 #------------------------------------------------------------------------------
@@ -128,9 +187,7 @@ def save_json(path, data):
     """
     assert isinstance(data, dict)
     data = _stringify_keys(data)
-    path = Path(path)
-    ensure_dir_exists(path.parent)
-    with path.open('w') as f:
+    with _atomic_open(path) as f:
         json.dump(data, f, cls=_CustomEncoder, indent=2, sort_keys=True)
 
 
@@ -190,7 +247,7 @@ def write_python(path, data):
     -------
 
     """
-    with open(path, 'w') as f:
+    with _atomic_open(path) as f:
         for k, v in data.items():
             if isinstance(v, str):
                 v = '"%s"' % v
@@ -206,9 +263,8 @@ def read_text(path):
 def write_text(path, contents):
     """Write a text file."""
     contents = dedent(contents)
-    path = Path(path)
-    ensure_dir_exists(path.parent)
-    path.write_text(contents)
+    with _atomic_open(path) as f:
+        f.write(contents)
 
 
 def _try_make_number(value):
@@ -266,9 +322,8 @@ def write_tsv(path, data, first_field=None, exclude_fields=(), n_significant_fig
 
     """
     path = Path(path)
-    ensure_dir_exists(path.parent)
     delimiter = '\t' if path.suffix == '.tsv' else ','
-    with path.open('w', newline='') as f:
+    with _atomic_open(path, newline='') as f:
         if not data:
             logger.info("Data was empty when writing %s.", path)
             return
@@ -327,9 +382,8 @@ def _write_tsv_simple(path, field_name, data):
 
     """
     path = Path(path)
-    ensure_dir_exists(path.parent)
     delimiter = '\t' if path.suffix == '.tsv' else ','
-    with path.open('w', newline='') as f:
+    with _atomic_open(path, newline='') as f:
         writer = csv.writer(f, delimiter=delimiter)
         writer.writerow(['cluster_id', field_name])
         writer.writerows([(cluster_id, data[cluster_id]) for cluster_id in sorted(data)])

@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Template datasets without waveform templates can be reloaded after cluster assignments change,
   and stored spike-waveform subsets provide their waveform sample count.
 - Cluster assignments are written atomically, so a crash during a save no longer truncates `spike_clusters.npy`.
+- TSV, JSON, text and `params.py` files are written atomically, so a crash during a save no longer
+  truncates the file it was replacing, for instance `cluster_group.tsv`.
+- #57 a blank `dat_path` in `params.py` is now read as "no raw data file" instead of resolving to
+  the dataset directory.
 
 ## [2.7.0] 2025-12-10
 
