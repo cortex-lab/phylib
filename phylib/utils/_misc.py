@@ -15,8 +15,9 @@ import json
 import logging
 import os
 from pathlib import Path
+import secrets
+import stat
 import subprocess
-import tempfile
 from textwrap import dedent
 
 import numpy as np
@@ -31,15 +32,12 @@ logger = logging.getLogger(__name__)
 #------------------------------------------------------------------------------
 
 def _copy_file_mode(src, dst):
-    """Give `src` the permissions `dst` has, or the permissions a new file would get."""
+    """Give `src` the permissions of `dst` when `dst` exists."""
     try:
-        mode = os.stat(dst).st_mode & 0o777
-    except OSError:
-        # The destination does not exist yet: reproduce what open() would have done, since
-        # tempfile creates its files with 0600 and saving must not make the file private.
-        umask = os.umask(0)
-        os.umask(umask)
-        mode = 0o666 & ~umask
+        mode = stat.S_IMODE(os.stat(dst).st_mode)
+    except FileNotFoundError:
+        # The exclusive open used for a new temporary file already applied the process umask.
+        return
     os.chmod(src, mode)
 
 
@@ -56,11 +54,22 @@ def _atomic_open(path, mode='w', **kwargs):
     """
     path = Path(path)
     ensure_dir_exists(path.parent)
+    if not mode.startswith('w'):
+        raise ValueError("_atomic_open() only supports write modes")
+    exclusive_mode = 'x' + mode[1:]
     # NOTE: the temporary file is hidden and does not end in a data file extension, so that a
     # file left behind by a hard kill is not picked up by the globs used to discover datasets.
-    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix='.' + path.name + '.', suffix='.tmp')
+    # Opening it with `x` both prevents a name collision and lets the OS apply the current umask,
+    # without temporarily changing that process-global setting.
+    while True:
+        tmp = path.parent / ('.%s.%s.tmp' % (path.name, secrets.token_hex(16)))
+        try:
+            f = open(tmp, exclusive_mode, **kwargs)
+            break
+        except FileExistsError:  # pragma: no cover - cryptographically unlikely
+            continue
     try:
-        with os.fdopen(fd, mode, **kwargs) as f:
+        with f:
             yield f
             f.flush()
             os.fsync(f.fileno())

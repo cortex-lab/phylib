@@ -154,18 +154,22 @@ def test_atomic_open(tempdir):
     # The temporary file must not be left behind.
     assert sorted(p.name for p in path.parent.iterdir()) == ['test.txt']
 
-    # A new file gets the permissions open() would have given it, not the 0600 of a
-    # temporary file.
-    umask = os.umask(0)
-    os.umask(umask)
-    assert stat.S_IMODE(path.stat().st_mode) == 0o666 & ~umask
+    # A new file gets the permissions open() would have given it, without reading or changing
+    # the process-global umask. Compare it with an ordinary file created in the same directory.
+    control = path.parent / 'control.txt'
+    control.write_text('control')
+    assert stat.S_IMODE(path.stat().st_mode) == stat.S_IMODE(control.stat().st_mode)
+    control.unlink()
 
     # The permissions of an existing file are preserved.
-    path.chmod(0o640)
+    expected_mode = stat.S_IMODE(path.stat().st_mode)
+    if os.name != 'nt':
+        path.chmod(0o640)
+        expected_mode = 0o640
     with _atomic_open(path) as f:
         f.write('world')
     assert read_text(path) == 'world'
-    assert stat.S_IMODE(path.stat().st_mode) == 0o640
+    assert stat.S_IMODE(path.stat().st_mode) == expected_mode
 
     # A failure half-way through leaves the previous file untouched and no leftovers.
     with raises(_Boom):
@@ -174,6 +178,11 @@ def test_atomic_open(tempdir):
             raise _Boom()
     assert read_text(path) == 'world'
     assert sorted(p.name for p in path.parent.iterdir()) == ['test.txt']
+
+    # Binary writes use the same atomic and cleanup path, ready for numpy saves.
+    with _atomic_open(path, mode='wb') as f:
+        f.write(b'bytes')
+    assert path.read_bytes() == b'bytes'
 
 
 @mark.parametrize('writer', ['write_tsv', '_write_tsv_simple'])

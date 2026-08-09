@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and stored spike-waveform subsets provide their waveform sample count.
 - TSV, JSON, text and `params.py` files are written atomically, so a crash during a save no longer
   truncates the file it was replacing, for instance `cluster_group.tsv`.
+- #57 a blank `dat_path` in `params.py` is now read as "no raw data file" instead of resolving to
+  the dataset directory.
 
 ## [2.7.0] 2025-12-10
 
