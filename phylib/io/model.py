@@ -24,7 +24,7 @@ from .traces import (
     get_ephys_reader, RandomEphysReader, extract_waveforms,
     get_spike_waveforms, export_waveforms)
 from phylib.utils import Bunch
-from phylib.utils._misc import _write_tsv_simple, read_tsv, read_python
+from phylib.utils._misc import _atomic_open, _write_tsv_simple, read_tsv, read_python
 from phylib.utils.geometry import linear_positions
 
 logger = logging.getLogger(__name__)
@@ -60,6 +60,22 @@ def read_array(path, mmap_mode=None):
 def write_array(name, arr):
     """Save an array to a binary file."""
     np.save(name, arr)
+
+
+def _save_npy_atomic(path, arr):
+    """Save an array to a npy file without ever truncating the existing file.
+
+    The array is written to a temporary file in the same directory as the destination, and only
+    then moved into place with `os.replace()`, which is atomic as long as both paths are on the
+    same filesystem. If anything goes wrong while writing, the temporary file is removed and the
+    existing file is left untouched.
+
+    """
+    # NOTE: np.save() appends `.npy` to a file *name* that lacks it, but not to an already-open
+    # file object. The shared writer also preserves existing permissions and removes its hidden
+    # sibling temporary file if np.save() raises.
+    with _atomic_open(path, mode='wb') as f:
+        np.save(f, arr)
 
 
 def from_sparse(data, cols, channel_ids):
@@ -1354,7 +1370,7 @@ class TemplateModel(object):
         """Save the spike clusters."""
         path = self._find_path('spike_clusters.npy', 'spikes.clusters.npy', multiple_ok=False)
         logger.debug("Save spike clusters to `%s`.", path)
-        np.save(path, spike_clusters)
+        _save_npy_atomic(path, spike_clusters)
 
     def save_spikes_subset_waveforms(self, max_n_spikes_per_template=None, max_n_channels=None,
                                      sample2unit=1.):
