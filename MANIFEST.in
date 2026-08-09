@@ -1,5 +1,6 @@
-include LICENSE
+include LICENSE.md
 include README.md
+include requirements.txt
 
 recursive-include tests *
 recursive-include phylib/electrode/probes *.prb
