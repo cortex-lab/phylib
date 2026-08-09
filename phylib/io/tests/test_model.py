@@ -136,10 +136,17 @@ def test_model_save(template_model_full):
 
 
 def test_model_reload_curated_dataset_without_templates(template_path):
+    model = load_model(template_path)
+    model.save_spikes_subset_waveforms(10, 16)
+    expected_n_samples_waveforms = model.n_samples_waveforms
+    model.close()
+
     (template_path.parent / 'templates.npy').unlink()
 
     model = load_model(template_path)
     assert model.sparse_templates is None
+    assert model.spike_waveforms is not None
+    assert model.n_samples_waveforms == expected_n_samples_waveforms
     spike_clusters = model.spike_clusters.copy()
     spike_clusters[spike_clusters == spike_clusters[0]] = spike_clusters.max() + 1
     model.save_spike_clusters(spike_clusters)
@@ -151,6 +158,11 @@ def test_model_reload_curated_dataset_without_templates(template_path):
         assert model.sparse_templates is None
         assert model.sparse_clusters is None
         assert model.n_clusters == spike_clusters.max() + 1
+        assert model.n_samples_waveforms == expected_n_samples_waveforms
+        spike_ids = model.spike_waveforms.spike_ids[:3]
+        channel_ids = model.spike_waveforms.spike_channels[0, :2]
+        waveforms = model.get_waveforms(spike_ids, channel_ids)
+        assert waveforms.shape == (3, expected_n_samples_waveforms, 2)
     finally:
         model.close()
 

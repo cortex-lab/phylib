@@ -427,6 +427,14 @@ class TemplateModel(object):
 
         # Spike waveforms (optional, otherwise fetched from raw data as needed).
         self.spike_waveforms = self._load_spike_waveforms()
+        if self.n_samples_waveforms == 0 and self.spike_waveforms is not None:
+            waveforms = self.spike_waveforms.waveforms
+            if waveforms.ndim != 3:
+                raise ValueError(
+                    "Stored spike waveforms must have shape "
+                    "(n_spikes_subset, n_samples_waveforms, n_channels_loc)."
+                )
+            self.n_samples_waveforms = waveforms.shape[1]
 
         # Whitening.
         try:
