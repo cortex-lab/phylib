@@ -8,6 +8,7 @@
 
 import logging
 import shutil
+import stat
 
 import numpy as np
 from pytest import fixture
@@ -72,6 +73,7 @@ def _make_dataset(tempdir, param='dense', has_spike_attributes=True):
             continue
         logger.debug("Copying file to %s.", to_path)
         shutil.copy(path, to_path)
+        to_path.chmod(to_path.stat().st_mode | stat.S_IWRITE)
 
     # Some changes to files if 'misc' fixture parameter.
     if param == 'misc':
