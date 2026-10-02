@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.7.1] 2026-09-09
+## [2.7.1] - Unreleased
 
 ### Added
 - Added a Code of Conduct for project participation and incident reporting.
@@ -26,6 +26,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   directory (#57).
 - Made cluster-assignment, TSV, JSON, text, and `params.py` writes atomic to prevent
   truncation if saving is interrupted.
+- Corrected wheel metadata to advertise Python 3 only.
+- Included the changelog and test dependency list in source distributions.
+
+### Development
+- Enforced flake8 checks in CI and fixed existing lint violations.
+- Made copied test datasets writable when the source cache is read-only, supporting
+  sandboxed distribution builds (#66).
 
 ## [2.7.0] 2025-12-10
 
