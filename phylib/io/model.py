@@ -994,14 +994,14 @@ class TemplateModel(object):
             # Load from precomputed spikes.
             try:
                 return get_spike_waveforms(
-                spike_ids, channel_ids, spike_waveforms=self.spike_waveforms,
-                n_samples_waveforms=nsw)
+                    spike_ids, channel_ids, spike_waveforms=self.spike_waveforms,
+                    n_samples_waveforms=nsw)
             except AssertionError:
-              logger.warning(
-                  "Error when loading waveforms from precomputed waveforms, trying to load the raw data.")
-              spike_samples = self.spike_samples[spike_ids]
-              return extract_waveforms(
-                  self.traces, spike_samples, channel_ids, n_samples_waveforms=nsw)
+                logger.warning(
+                    "Error when loading precomputed waveforms; trying the raw data instead.")
+                spike_samples = self.spike_samples[spike_ids]
+                return extract_waveforms(
+                    self.traces, spike_samples, channel_ids, n_samples_waveforms=nsw)
         else:
             # Or load directly from raw data (slower).
             spike_samples = self.spike_samples[spike_ids]

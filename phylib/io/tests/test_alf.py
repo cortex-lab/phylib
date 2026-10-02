@@ -41,7 +41,8 @@ class Dataset(object):
         np.save(p / 'amplitudes.npy', nr.uniform(low=0.5, high=1.5, size=self.ns))
         np.save(p / 'channel_positions.npy', np.c_[np.arange(self.nc), np.zeros(self.nc)])
         templates = np.random.normal(size=(self.nt, 50, self.nc))
-        templates = templates / (np.sum(np.sum(templates ** 2, axis=1), axis=1) ** .5)[:, np.newaxis, np.newaxis]
+        template_norms = np.sum(np.sum(templates ** 2, axis=1), axis=1) ** .5
+        templates = templates / template_norms[:, np.newaxis, np.newaxis]
         np.save(p / 'templates.npy', templates)
         np.save(p / 'similar_templates.npy', np.tile(np.arange(self.nt), (self.nt, 1)))
         np.save(p / 'channel_map.npy', np.c_[np.arange(self.nc)])
