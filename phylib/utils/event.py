@@ -69,9 +69,9 @@ class EventEmitter(object):
         """Prevent all callbacks to be called if events are raised
         in the context manager.
         """
-        self.is_silent = not(self.is_silent)
+        self.is_silent = not self.is_silent
         yield
-        self.is_silent = not(self.is_silent)
+        self.is_silent = not self.is_silent
 
     def connect(self, func=None, event=None, sender=None, **kwargs):
         """Register a callback function to a given event.

@@ -425,6 +425,7 @@ def test_sample_spikes_evenly_only_indexes_requested_points():
     sampled = _sample_spikes_evenly(SortedSpikeIDs(), 10)
     ae(sampled, np.linspace(0, 999_999, 10, dtype=np.int64))
 
+
 def test_select_spikes_1():
     spike_times = np.array([0., 1., 2., 3.3, 4.4])
     spike_clusters = np.array([1, 2, 1, 2, 4])
