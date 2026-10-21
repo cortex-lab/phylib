@@ -67,4 +67,5 @@ setup(
         'Programming Language :: Python :: 3.7',
     ],
     install_requires=require,
+    extras_require={'spikeinterface': ['spikeinterface>=0.100']},
 )
