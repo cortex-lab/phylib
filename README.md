@@ -12,9 +12,8 @@ With `pip install phylib[spikeinterface]`, `dat_path` in `params.py` can name a
 binary file: a provenance `.json` (from `recording.dump_to_json()`) or a `.zarr` folder (from
 `recording.save(format='zarr')`). The recording's preprocessing chain is computed lazily, so
 remote data is read without being downloaded or exported. Traces are raw and unscaled, in the
-recording's dtype; set `hp_filtered = True` when the chain already filters. The recording sets
-the sample rate and channel count, so keep `sample_rate` and `n_channels_dat` in `params.py`
-consistent with it.
+recording's dtype. The recording sets the sample rate and channel count, so keep `sample_rate`
+and `n_channels_dat` in `params.py` consistent with it.
 
 ## Contribution
 
