@@ -5,6 +5,17 @@
 Electrophysiological data analysis library used by [phy](https://github.com/kwikteam/phy/), a spike sorting visualization software, and [ibllib](https://github.com/int-brain-lab/ibllib/).
 
 
+## Raw data through SpikeInterface
+
+With `pip install phylib[spikeinterface]`, `dat_path` in `params.py` can name a
+[SpikeInterface](https://github.com/SpikeInterface/spikeinterface) recording instead of a flat
+binary file: a provenance `.json` (from `recording.dump_to_json()`) or a `.zarr` folder (from
+`recording.save(format='zarr')`). The recording's preprocessing chain is computed lazily, so
+remote data is read without being downloaded or exported. Traces are raw and unscaled, in the
+recording's dtype; set `hp_filtered = True` when the chain already filters. The recording sets
+the sample rate and channel count, so keep `sample_rate` and `n_channels_dat` in `params.py`
+consistent with it.
+
 ## Contribution
 
 - participation in phylib is governed by the project [Code of Conduct](CODE_OF_CONDUCT.md)
