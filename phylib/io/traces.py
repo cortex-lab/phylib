@@ -10,7 +10,8 @@
 import copy
 import logging
 from collections import OrderedDict
-from functools import reduce
+from concurrent.futures import ThreadPoolExecutor
+from functools import partial, reduce
 from math import ceil
 import multiprocessing as mp
 from operator import mul
@@ -457,11 +458,18 @@ class SpikeInterfaceEphysReader(BaseEphysReader):
     They are computed in blocks of `block_duration` seconds, and the most recently used blocks
     are cached, up to `cache_size` bytes, since computing a block can be slow.
 
+    With `prefetch`, a read that continues the previous one, as scrolling does, also starts
+    computing the next block in the direction of travel on a background thread. Other reads
+    never prefetch and cancel pending prefetches, and a requested block is computed in the
+    calling thread rather than queued behind prefetches.
+
     The recording sets the sample rate, channel count and dtype. Values passed from params.py
     are only checked against it, since phy computes trace windows with its own.
     """
 
-    def __init__(self, recording, block_duration=0.5, cache_size=256 * 1024 ** 2, **kwargs):
+    def __init__(
+            self, recording, block_duration=0.5, cache_size=256 * 1024 ** 2, prefetch=True,
+            **kwargs):
         super(SpikeInterfaceEphysReader, self).__init__()
         if isinstance(recording, (tuple, list)):
             if len(recording) != 1:
@@ -489,9 +497,13 @@ class SpikeInterfaceEphysReader(BaseEphysReader):
         self._block_size = max(1, int(round(block_duration * self.sample_rate)))
         block_bytes = self._block_size * max(1, self.n_channels) * self.dtype.itemsize
         self._n_cached_blocks = max(1, cache_size // block_bytes)
+        self._n_blocks = int(ceil(n_samples / self._block_size))
         # Shared by the clones that lazy operations make, so they share one cache.
         self._cache = OrderedDict()  # block index => traces of the block
+        self._pending = {}  # block index => Future of a prefetch
+        self._state = {'last_read': None, 'closed': False}
         self._lock = threading.Lock()
+        self._pool = ThreadPoolExecutor(max_workers=1) if prefetch else None
 
     def _check_params(self, kwargs):
         n_channels = kwargs.get('n_channels', kwargs.get('n_channels_dat'))
@@ -511,26 +523,74 @@ class SpikeInterfaceEphysReader(BaseEphysReader):
         if kwargs.get('offset'):
             logger.warning("The params offset is ignored for a SpikeInterface recording.")
 
+    def _compute(self, i):
+        start = i * self._block_size
+        stop = min(start + self._block_size, self.part_bounds[-1])
+        return self.recording.get_traces(start_frame=start, end_frame=stop, segment_index=0)
+
+    def _store(self, i, block):
+        with self._lock:
+            self._cache[i] = block
+            while len(self._cache) > self._n_cached_blocks:
+                self._cache.popitem(last=False)
+
     def _block(self, i):
         with self._lock:
             block = self._cache.get(i)
             if block is not None:
                 self._cache.move_to_end(i)
                 return block
-        start = i * self._block_size
-        stop = min(start + self._block_size, self.part_bounds[-1])
-        block = self.recording.get_traces(start_frame=start, end_frame=stop, segment_index=0)
-        with self._lock:
-            self._cache[i] = block
-            while len(self._cache) > self._n_cached_blocks:
-                self._cache.popitem(last=False)
+            future = self._pending.get(i)
+        # A prefetch that has started is nearer done than a new computation would be.
+        if future is not None and not future.cancel():
+            try:
+                return future.result()
+            except Exception:  # computed again below, so one failure does not stick
+                pass
+        block = self._compute(i)
+        self._store(i, block)
         return block
+
+    def _prefetched(self, i, future):
+        with self._lock:
+            if self._pending.get(i) is future:
+                del self._pending[i]
+        # A failed prefetch is dropped, so the next read of the block computes it again.
+        if not self._state['closed'] and not future.cancelled() and future.exception() is None:
+            self._store(i, future.result())
+
+    def _prefetch(self, i):
+        if self._pool is None or self._state['closed'] or not 0 <= i < self._n_blocks:
+            return
+        with self._lock:
+            if i in self._cache or i in self._pending:
+                return
+            future = self._pool.submit(self._compute, i)
+            self._pending[i] = future
+        # Outside the lock: the callback takes it, and runs here if the future is already done.
+        future.add_done_callback(partial(self._prefetched, i))
+
+    def _cancel_prefetches(self):
+        with self._lock:
+            futures = list(self._pending.values())
+        for future in futures:
+            future.cancel()
 
     def _read(self, start, stop):
         if stop <= start:
             return np.zeros((0, self.n_channels), dtype=self.dtype)
         bs = self._block_size
         b0, b1 = start // bs, (stop - 1) // bs
+        last = self._state['last_read']
+        self._state['last_read'] = (start, stop)
+        # Continues the previous read when it overlaps it or lies within a block of it.
+        if last is not None and start <= last[1] + bs and stop >= last[0] - bs:
+            if start >= last[0]:
+                self._prefetch(b1 + 1)
+            if start <= last[0]:
+                self._prefetch(b0 - 1)
+        else:
+            self._cancel_prefetches()
         out = np.concatenate([self._block(i) for i in range(b0, b1 + 1)], axis=0)
         return out[start - b0 * bs:stop - b0 * bs]
 
@@ -548,8 +608,12 @@ class SpikeInterfaceEphysReader(BaseEphysReader):
         return out
 
     def close(self):
-        """Drop the cached blocks."""
+        """Stop prefetching and drop the cached blocks; later reads are computed directly."""
+        self._state['closed'] = True
+        if self._pool is not None:
+            self._pool.shutdown(wait=False, cancel_futures=True)
         with self._lock:
+            self._pending.clear()
             self._cache.clear()
 
 

@@ -7,6 +7,7 @@
 #------------------------------------------------------------------------------
 
 import logging
+import time
 
 import numpy as np
 from numpy.testing import assert_equal as ae
@@ -591,7 +592,8 @@ def test_spikeinterface_reader_multi_segment():
 def test_spikeinterface_reader_cache(si_recording):
     recording, arr = si_recording
     block_bytes = 300 * arr.shape[1] * arr.itemsize
-    traces = get_ephys_reader(recording, block_duration=.3, cache_size=2 * block_bytes)
+    traces = get_ephys_reader(
+        recording, block_duration=.3, cache_size=2 * block_bytes, prefetch=False)
     ae(traces[:], arr)
     assert list(traces._cache) == [6, 7]
     ae(traces[:10], arr[:10])
@@ -623,3 +625,93 @@ def test_spikeinterface_reader_params_mismatch(si_recording, caplog):
     assert all(name in messages for name in ('sample_rate', 'n_channels', 'dtype'))
     # The recording still sets the values.
     assert (traces.sample_rate, traces.n_channels, traces.dtype) == (1000., 7, np.int16)
+
+
+class _SlowRecording(object):
+    """Stands in for a recording whose get_traces blocks, fails or counts calls."""
+
+    def __init__(self, recording, gate=None, fail=()):
+        self.recording = recording
+        self.gate = gate
+        self.fail = set(fail)
+        self.calls = []
+
+    def get_traces(self, start_frame=None, end_frame=None, segment_index=0):
+        self.calls.append(start_frame)
+        if self.gate is not None and start_frame in self.gate:
+            self.gate[start_frame].wait(5)
+        if start_frame in self.fail:
+            self.fail.discard(start_frame)
+            raise OSError("transient")
+        return self.recording.get_traces(
+            start_frame=start_frame, end_frame=end_frame, segment_index=segment_index)
+
+
+def _wait_prefetches(traces):
+    with traces._lock:
+        futures = list(traces._pending.values())
+    for future in futures:
+        try:
+            future.result(5)
+        except Exception:
+            pass
+    # Callbacks may still be moving results into the cache.
+    for _ in range(100):
+        if not traces._pending:
+            break
+        time.sleep(.01)
+
+
+def test_spikeinterface_reader_prefetch(si_recording):
+    recording, arr = si_recording
+    traces = get_ephys_reader(recording, block_duration=.3)
+    traces.recording = slow = _SlowRecording(recording)
+
+    # A first read, or a jump, prefetches nothing.
+    ae(traces[1000:1100], arr[1000:1100])
+    _wait_prefetches(traces)
+    assert slow.calls == [900]
+
+    # Scrolling right prefetches the next block, scrolling left the previous one.
+    ae(traces[1050:1150], arr[1050:1150])
+    _wait_prefetches(traces)
+    assert sorted(traces._cache) == [3, 4]
+    ae(traces[950:1050], arr[950:1050])
+    _wait_prefetches(traces)
+    assert sorted(traces._cache) == [2, 3, 4]
+    # Block 4 comes from the cache, and the read continues to the right.
+    ae(traces[1200:1300], arr[1200:1300])
+    _wait_prefetches(traces)
+    assert slow.calls == [900, 1200, 600, 1500]
+    traces.close()
+
+
+def test_spikeinterface_reader_prefetch_failure(si_recording):
+    recording, arr = si_recording
+    traces = get_ephys_reader(recording, block_duration=.3)
+    traces.recording = _SlowRecording(recording, fail={1200})
+    traces[1000:1100]
+    traces[1050:1150]  # prefetches block 4, which fails
+    _wait_prefetches(traces)
+    assert 4 not in traces._cache
+    ae(traces[1200:1300], arr[1200:1300])
+    traces.close()
+
+
+def test_spikeinterface_reader_demand_not_queued(si_recording):
+    import threading
+    recording, arr = si_recording
+    traces = get_ephys_reader(recording, block_duration=.3)
+    gate = {1200: threading.Event()}
+    traces.recording = _SlowRecording(recording, gate=gate)
+    traces[1000:1100]
+    traces[1050:1150]  # the prefetch of block 4 holds the only worker
+    # A jump is computed in this thread, not behind the prefetch.
+    ae(traces[2000:2100], arr[2000:2100])
+    assert 4 in traces._pending
+    gate[1200].set()
+    _wait_prefetches(traces)
+    traces.close()
+    assert traces._pool._shutdown
+    # Reads after close are computed directly.
+    ae(traces[0:10], arr[0:10])
