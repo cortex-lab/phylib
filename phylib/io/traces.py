@@ -9,11 +9,14 @@
 
 import copy
 import logging
+from collections import OrderedDict
 from functools import reduce
 from math import ceil
 import multiprocessing as mp
 from operator import mul
 from pathlib import Path
+import sys
+import threading
 
 import numpy as np
 from numpy.lib.format import (write_array_header_1_0, dtype_to_descr)
@@ -30,6 +33,7 @@ DEFAULT_CHUNK_DURATION = 600.0  # seconds
 
 
 EPHYS_RAW_EXTENSIONS = ('.dat', '.bin', '.raw', '.mda')
+SPIKEINTERFACE_EXTENSIONS = ('.json', '.zarr')
 
 
 #------------------------------------------------------------------------------
@@ -425,6 +429,130 @@ class NpyEphysReader(ArrayEphysReader):
         super(NpyEphysReader, self).__init__(self._arr, **kwargs)
 
 
+def _is_spikeinterface_recording(obj):
+    """Whether obj is a SpikeInterface recording, without importing SpikeInterface."""
+    core = sys.modules.get('spikeinterface.core')
+    return core is not None and isinstance(obj, core.BaseRecording)
+
+
+def _load_spikeinterface(path):
+    try:
+        from spikeinterface import load
+    except ImportError:  # spikeinterface < 0.102
+        from spikeinterface import load_extractor as load
+    if str(path).endswith('.json'):
+        # Resolves the JSON's relative paths against its own folder; a zarr rejects base_folder.
+        return load(path, base_folder=True)
+    return load(path)
+
+
+class SpikeInterfaceEphysReader(BaseEphysReader):
+    """Read traces from a single-segment SpikeInterface recording, lazily.
+
+    Accepts a recording, or a path that SpikeInterface loads: a provenance `.json` (paths in it
+    may be relative to it) or a saved `.zarr` folder. A preprocessing chain over remote data is
+    thus read without being exported; to use one from params.py, set `dat_path` to its JSON.
+
+    Traces are raw: unscaled, in the recording's dtype, as a flat binary file would give them.
+    They are computed in blocks of `block_duration` seconds, and the most recently used blocks
+    are cached, up to `cache_size` bytes, since computing a block can be slow.
+
+    The recording sets the sample rate, channel count and dtype. Values passed from params.py
+    are only checked against it, since phy computes trace windows with its own.
+    """
+
+    def __init__(self, recording, block_duration=0.5, cache_size=256 * 1024 ** 2, **kwargs):
+        super(SpikeInterfaceEphysReader, self).__init__()
+        if isinstance(recording, (tuple, list)):
+            if len(recording) != 1:
+                raise ValueError("There should be exactly one SpikeInterface recording.")
+            recording = recording[0]
+        if isinstance(recording, (str, Path)):
+            self.name = Path(recording).stem
+            self.dir_path = Path(recording).parent
+            # The original string, as Path() would turn a URL such as s3://... into s3:/...
+            recording = _load_spikeinterface(recording)
+        if not _is_spikeinterface_recording(recording):
+            raise TypeError(
+                "Expected a SpikeInterface recording, got %s." % type(recording).__name__)
+        if recording.get_num_segments() != 1:
+            raise ValueError("Only single-segment SpikeInterface recordings are supported.")
+        self.recording = recording
+        self.sample_rate = recording.sampling_frequency
+        self.dtype = np.dtype(recording.get_dtype())
+        self.n_channels = recording.get_num_channels()
+        self._check_params(kwargs)
+        n_samples = recording.get_num_samples(segment_index=0)
+        self.part_bounds = [0, n_samples]
+        chunk_size = int(round(DEFAULT_CHUNK_DURATION * self.sample_rate))
+        self.chunk_bounds = _get_chunk_bounds([n_samples], chunk_size=chunk_size)
+        self._block_size = max(1, int(round(block_duration * self.sample_rate)))
+        block_bytes = self._block_size * max(1, self.n_channels) * self.dtype.itemsize
+        self._n_cached_blocks = max(1, cache_size // block_bytes)
+        # Shared by the clones that lazy operations make, so they share one cache.
+        self._cache = OrderedDict()  # block index => traces of the block
+        self._lock = threading.Lock()
+
+    def _check_params(self, kwargs):
+        n_channels = kwargs.get('n_channels', kwargs.get('n_channels_dat'))
+        given = {
+            'sample_rate': (kwargs.get('sample_rate'), self.sample_rate),
+            'n_channels': (n_channels, self.n_channels),
+            'dtype': (kwargs.get('dtype'), self.dtype),
+        }
+        for name, (value, actual) in given.items():
+            if value is None:
+                continue
+            same = np.dtype(value) == actual if name == 'dtype' else value == actual
+            if not same:
+                logger.warning(
+                    "The params %s %s differs from the SpikeInterface recording's %s.",
+                    name, value, actual)
+        if kwargs.get('offset'):
+            logger.warning("The params offset is ignored for a SpikeInterface recording.")
+
+    def _block(self, i):
+        with self._lock:
+            block = self._cache.get(i)
+            if block is not None:
+                self._cache.move_to_end(i)
+                return block
+        start = i * self._block_size
+        stop = min(start + self._block_size, self.part_bounds[-1])
+        block = self.recording.get_traces(start_frame=start, end_frame=stop, segment_index=0)
+        with self._lock:
+            self._cache[i] = block
+            while len(self._cache) > self._n_cached_blocks:
+                self._cache.popitem(last=False)
+        return block
+
+    def _read(self, start, stop):
+        if stop <= start:
+            return np.zeros((0, self.n_channels), dtype=self.dtype)
+        bs = self._block_size
+        b0, b1 = start // bs, (stop - 1) // bs
+        out = np.concatenate([self._block(i) for i in range(b0, b1 + 1)], axis=0)
+        return out[start - b0 * bs:stop - b0 * bs]
+
+    def _get_part(self, part_idx, subitem):
+        assert part_idx == 0
+        if isinstance(subitem, slice):
+            return self._read(subitem.start, subitem.stop)
+        # Read each block an index falls in, not every block between the first and last index.
+        idx = np.atleast_1d(np.asarray(subitem, dtype=np.int64))
+        blocks = idx // self._block_size
+        out = np.empty((idx.size, self.n_channels), dtype=self.dtype)
+        for i in np.unique(blocks):
+            in_block = blocks == i
+            out[in_block] = self._block(int(i))[idx[in_block] - i * self._block_size]
+        return out
+
+    def close(self):
+        """Drop the cached blocks."""
+        with self._lock:
+            self._cache.clear()
+
+
 class RandomEphysReader(BaseEphysReader):
     name = 'random'
 
@@ -472,6 +600,8 @@ def _get_ephys_constructor(obj, **kwargs):
             return (FlatEphysReader, path, kwargs)
         elif ext == '.npy':
             return (NpyEphysReader, obj, kwargs)
+        elif ext in SPIKEINTERFACE_EXTENSIONS:
+            return (SpikeInterfaceEphysReader, obj, kwargs)
             # TODO: other standard binary formats
         else:  # pragma: no cover
             logger.warning("Unknown file extension: `%s`, of type `%s`", path, ext)
@@ -482,6 +612,8 @@ def _get_ephys_constructor(obj, **kwargs):
             klass, arg, kwargs = _get_ephys_constructor(obj[0], **kwargs)
             arg = [_get_ephys_constructor(o)[1] for o in obj]
             return (klass, arg, kwargs)
+    elif _is_spikeinterface_recording(obj):
+        return (SpikeInterfaceEphysReader, obj, kwargs)
     else:
         return (ArrayEphysReader, obj, kwargs)
 

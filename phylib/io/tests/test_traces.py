@@ -12,7 +12,7 @@ import numpy as np
 from numpy.testing import assert_equal as ae
 from numpy.testing import assert_allclose as ac
 import mtscomp
-from pytest import raises, fixture, mark
+from pytest import raises, fixture, mark, importorskip
 
 from phylib.utils import Bunch
 from ..array import _index_of
@@ -499,3 +499,127 @@ def test_waveform_extractor(tempdir, arr, traces, sample_rate, do_export, do_cac
 
     assert np.all(w[4, -5:, :] == 0)
     ac(w[4, :-5, :], data[-15:, [1, 3, 5]])
+
+
+#------------------------------------------------------------------------------
+# Test SpikeInterface reader
+#------------------------------------------------------------------------------
+
+@fixture
+def si_recording(tempdir):
+    si = importorskip('spikeinterface')
+    arr = np.random.randint(-1000, 1000, size=(2345, 7)).astype(np.int16)
+    arr.tofile(tempdir / 'traces.raw')
+    recording = si.read_binary(
+        tempdir / 'traces.raw', sampling_frequency=1000., dtype=arr.dtype,
+        num_channels=arr.shape[1])
+    return recording, arr
+
+
+def _check_si_traces(traces, arr):
+    assert traces.shape == arr.shape
+    assert traces.dtype == arr.dtype
+    assert traces.sample_rate == 1000.
+    ae(traces[:], arr)
+    ae(traces[290:910], arr[290:910])
+    ae(traces[2300:], arr[2300:])
+    ae(traces[[5, 299, 300, 2344]], arr[[5, 299, 300, 2344]])
+    ae(traces[[2344, 5, 17]], arr[[2344, 5, 17]])
+    ae(traces[17], arr[17:18])
+    ae(traces[100:700, [6, 0, 3]], arr[100:700][:, [6, 0, 3]])
+    ae((traces * 2)[:50], arr[:50] * 2)
+
+
+def test_spikeinterface_reader(tempdir, si_recording):
+    from ..traces import SpikeInterfaceEphysReader
+    recording, arr = si_recording
+    path = tempdir / 'recording.json'
+    recording.dump_to_json(path)
+
+    # 300-sample blocks, so reads span several blocks and the last one is partial.
+    for obj in (recording, path, [path]):
+        traces = get_ephys_reader(obj, block_duration=.3)
+        assert isinstance(traces, SpikeInterfaceEphysReader)
+        _check_si_traces(traces, arr)
+        traces.close()
+        assert not traces._cache
+
+
+def test_spikeinterface_reader_relative_json(tempdir, si_recording):
+    recording, arr = si_recording
+    path = tempdir / 'recording.json'
+    recording.dump_to_json(path, relative_to=tempdir)
+    _check_si_traces(get_ephys_reader(path, block_duration=.3), arr)
+
+
+def test_spikeinterface_reader_zarr(tempdir, si_recording):
+    importorskip('zarr')
+    recording, arr = si_recording
+    recording.save(folder=tempdir / 'recording.zarr', format='zarr')
+    _check_si_traces(get_ephys_reader(tempdir / 'recording.zarr', block_duration=.3), arr)
+
+
+def test_spikeinterface_reader_not_recording(tempdir, si_recording):
+    import spikeinterface as si
+    from probeinterface import generate_linear_probe
+    from ..traces import SpikeInterfaceEphysReader, ArrayEphysReader, _get_ephys_constructor
+    recording, _ = si_recording
+    probe = generate_linear_probe(num_elec=recording.get_num_channels())
+    probe.set_device_channel_indices(np.arange(recording.get_num_channels()))
+    recording.set_probe(probe, in_place=True)
+    sorting = si.NumpySorting.from_unit_dict({0: np.array([10, 20])}, sampling_frequency=1000.)
+    with raises(TypeError):
+        SpikeInterfaceEphysReader(sorting)
+    if hasattr(si, 'create_sorting_analyzer'):  # spikeinterface >= 0.101
+        analyzer = si.create_sorting_analyzer(
+            sorting, recording, format='zarr', folder=tempdir / 'analyzer.zarr', sparse=False)
+        # SpikeInterface < 0.102 loads only extractors, so it fails on an analyzer itself.
+        with raises((TypeError, ValueError)):
+            get_ephys_reader(analyzer.folder)
+    # Only recordings are dispatched to the SpikeInterface reader.
+    assert _get_ephys_constructor(sorting)[0] is ArrayEphysReader
+
+
+def test_spikeinterface_reader_multi_segment():
+    si = importorskip('spikeinterface')
+    arr = np.zeros((10, 2), dtype=np.int16)
+    recording = si.NumpyRecording([arr, arr], sampling_frequency=1000.)
+    with raises(ValueError):
+        get_ephys_reader(recording)
+
+
+def test_spikeinterface_reader_cache(si_recording):
+    recording, arr = si_recording
+    block_bytes = 300 * arr.shape[1] * arr.itemsize
+    traces = get_ephys_reader(recording, block_duration=.3, cache_size=2 * block_bytes)
+    ae(traces[:], arr)
+    assert list(traces._cache) == [6, 7]
+    ae(traces[:10], arr[:10])
+    assert list(traces._cache) == [7, 0]
+
+    # Clones made by lazy operations share the cache.
+    clone = traces[:, [1, 2]]
+    ae(clone[650:660], arr[650:660, [1, 2]])
+    assert clone._cache is traces._cache
+    assert list(traces._cache) == [0, 2]
+
+
+def test_spikeinterface_reader_sparse_index(si_recording):
+    recording, arr = si_recording
+    traces = get_ephys_reader(recording, block_duration=.3)
+    ae(traces[[5, 2344]], arr[[5, 2344]])
+    assert sorted(traces._cache) == [0, 7]
+
+
+def test_spikeinterface_reader_params_mismatch(si_recording, caplog):
+    recording, arr = si_recording
+    with caplog.at_level(logging.WARNING, logger='phylib.io.traces'):
+        get_ephys_reader(recording, sample_rate=1000., n_channels_dat=7, dtype='int16', offset=0)
+    assert not caplog.records
+    with caplog.at_level(logging.WARNING, logger='phylib.io.traces'):
+        traces = get_ephys_reader(
+            recording, sample_rate=30000., n_channels_dat=384, dtype=np.float32, offset=0)
+    messages = ' '.join(r.getMessage() for r in caplog.records)
+    assert all(name in messages for name in ('sample_rate', 'n_channels', 'dtype'))
+    # The recording still sets the values.
+    assert (traces.sample_rate, traces.n_channels, traces.dtype) == (1000., 7, np.int16)
