@@ -12,7 +12,7 @@ import stat
 
 import numpy as np
 from numpy.testing import assert_equal as ae
-from pytest import raises
+from pytest import importorskip, raises
 
 # from phylib.utils import Bunch
 from phylib.utils.testing import captured_output
@@ -46,6 +46,48 @@ def test_from_sparse():
 
     with raises(NotImplementedError):
         _test([19, 19], [[0, 0], [4, 4]])
+
+
+def test_model_spikeinterface_relative_json(tmp_path, monkeypatch):
+    si = importorskip('spikeinterface')
+    from spikeinterface.preprocessing import astype, common_reference
+
+    raw = np.random.default_rng(0).integers(-1000, 1000, (2345, 7), dtype=np.int16)
+    source = tmp_path / 'source'
+    source.mkdir()
+    raw.tofile(source / 'traces.raw')
+    recording = si.read_binary(
+        source / 'traces.raw', sampling_frequency=1000., dtype='int16', num_channels=7)
+    recording = common_reference(astype(recording, 'float32'), reference='global')
+    recording.dump_to_json(source / 'recording.json', relative_to=source)
+    params = tmp_path / 'params.py'
+    params.write_text(
+        "dat_path = 'source/recording.json'\n"
+        "sample_rate = 1000.\nn_channels_dat = 7\ndtype = 'float32'\noffset = 0\n")
+    mapping = np.array([6, 0, 3])
+    samples = np.array([2, 499, 1000, 2343])
+    np.save(tmp_path / 'channel_map.npy', mapping)
+    np.save(tmp_path / 'channel_positions.npy', [[0, 0], [0, 20], [0, 40]])
+    np.save(tmp_path / 'spike_times.npy', samples)
+    np.save(tmp_path / 'spike_templates.npy', np.array([0, 1, 0, 1], dtype=np.int32))
+    np.save(tmp_path / 'templates.npy', np.zeros((2, 82, mapping.size), dtype=np.float32))
+    # Neither params.py nor the provenance JSON should resolve paths against the cwd.
+    elsewhere = tmp_path / 'elsewhere'
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+    model = load_model(params)
+    try:
+        expected = recording.get_traces()[:, mapping]
+        assert model.traces[:].shape == expected.shape
+        assert model.traces.dtype == expected.dtype
+        ae(model.channel_mapping, mapping)
+        ae(model.traces[480:530], expected[480:530])
+        channels = np.array([2, 0])
+        padded = np.pad(expected[:, channels], ((41, 41), (0, 0)))
+        waveforms = np.stack([padded[s:s + 82] for s in samples])
+        ae(model.get_waveforms(np.arange(samples.size), channels), waveforms)
+    finally:
+        model.close()
 
 
 def test_model_1(template_model_full):

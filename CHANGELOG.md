@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2.7.2.dev0
 
+### Added
+- Raw data can be read through SpikeInterface: set `dat_path` in `params.py` to a recording's
+  provenance `.json` or a saved `.zarr` folder, or pass a recording object. A preprocessing
+  chain over remote data is read lazily, without exporting it. Install with
+  `pip install phylib[spikeinterface]`.
+
 ## [2.7.1] - 2026-10-08
 
 ### Added
