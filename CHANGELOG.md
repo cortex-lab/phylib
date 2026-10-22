@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   provenance `.json` or a saved `.zarr` folder, or pass a recording object. A preprocessing
   chain over remote data is read lazily, without exporting it. Install with
   `pip install phylib[spikeinterface]`.
+- SpikeInterface readers accept explicit `prefetch(sample)` navigation hints, with
+  bounded background work and serialized backend access. Ordinary reads remain demand driven,
+  and closing a model shuts down its reader without retaining late prefetch results.
 
 ## [2.7.1] - 2026-10-08
 

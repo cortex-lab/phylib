@@ -2,12 +2,13 @@
 
 Run from the repository root, with spikeinterface installed, with::
 
-    python benchmarks/benchmark_spikeinterface_reader.py
+    uv run python benchmarks/benchmark_spikeinterface_reader.py
 
 A stand-in recording sleeps for a fixed latency plus a cost per second of data, as a remote
 preprocessed recording would. Two access patterns are timed with and without prefetching:
 scrolling, which steps a trace window by 10% and pauses as a GUI would to draw it, and
-waveform snippets at random times. The benchmark has no timing assertions.
+waveform snippets at random times and clustered nearby snippets. Only navigation sends
+explicit lookahead hints. The benchmark has no timing assertions.
 """
 
 import argparse
@@ -45,7 +46,8 @@ def _reader(args, prefetch):
     recording = si.generate_recording(
         num_channels=args.n_channels, sampling_frequency=args.sample_rate,
         durations=[args.duration])
-    traces = SpikeInterfaceEphysReader(recording, prefetch=prefetch)
+    traces = SpikeInterfaceEphysReader(recording)
+    traces.navigation_prefetch = prefetch
     traces.recording = _SlowRecording(
         args.n_channels, args.sample_rate, args.latency, args.cost_per_second)
     return traces
@@ -59,6 +61,9 @@ def _scroll(traces, args):
         t0 = perf_counter()
         traces[start:start + window]
         latencies.append(perf_counter() - t0)
+        if traces.navigation_prefetch:
+            # Navigation chooses how far ahead to look; a cached target does no work.
+            traces.prefetch(start + window + int(args.lookahead * args.sample_rate))
         sleep(args.pause)
         start += window // 10
     return latencies
@@ -76,6 +81,17 @@ def _snippets(traces, args):
     return latencies
 
 
+def _clustered(traces, args):
+    start = int(args.duration * args.sample_rate) // 3
+    latencies = []
+    for i in range(args.n_snippets):
+        sample = start + (i % 2) * 100
+        t0 = perf_counter()
+        traces[sample:sample + 82]
+        latencies.append(perf_counter() - t0)
+    return latencies
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--n-channels', type=int, default=384)
@@ -86,11 +102,12 @@ def main():
         '--cost-per-second', type=float, default=.5, help="seconds per second of data read")
     parser.add_argument('--steps', type=int, default=100, help="scroll steps")
     parser.add_argument('--pause', type=float, default=.1, help="seconds between scroll steps")
+    parser.add_argument('--lookahead', type=float, default=.5, help="seconds beyond the window")
     parser.add_argument('--n-snippets', type=int, default=100)
     args = parser.parse_args()
 
     print("pattern    prefetch  total     mean read  reads > 0.1 s  get_traces  data computed")
-    for name, run in (('scroll', _scroll), ('snippets', _snippets)):
+    for name, run in (('scroll', _scroll), ('snippets', _snippets), ('clustered', _clustered)):
         for prefetch in (False, True):
             traces = _reader(args, prefetch)
             t0 = perf_counter()

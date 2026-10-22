@@ -89,6 +89,31 @@ def test_model_spikeinterface_relative_json(tmp_path, monkeypatch):
     finally:
         model.close()
 
+    # The mapped reader owns the same worker and cache as its underlying recording view.
+    model = load_model(params)
+    import threading
+    started, release = threading.Event(), threading.Event()
+    get_traces = model.traces.recording.get_traces
+
+    def blocked_get_traces(**kwargs):
+        started.set()
+        assert release.wait(5)
+        return get_traces(**kwargs)
+
+    monkeypatch.setattr(model.traces.recording, 'get_traces', blocked_get_traces)
+    model.traces.prefetch(500)
+    assert started.wait(5)
+    worker = model.traces._blocks._worker
+    try:
+        model.close()
+        assert model.traces._blocks._closed
+    finally:
+        release.set()
+        worker.join(5)
+    assert not worker.is_alive()
+    assert not model.traces._cache
+    assert model.traces._blocks._hint is None
+
 
 def test_model_1(template_model_full):
     with captured_output() as (stdout, stderr):

@@ -10,11 +10,10 @@
 import copy
 import logging
 from collections import OrderedDict
-from concurrent.futures import ThreadPoolExecutor
-from functools import partial, reduce
+from functools import reduce
 from math import ceil
 import multiprocessing as mp
-from operator import mul
+from operator import index, mul
 from pathlib import Path
 import sys
 import threading
@@ -215,6 +214,14 @@ class BaseEphysReader(object):
     def _get_part(self, part_idx, subitem):
         """Return the requested item[] of a part of the data. To be overriden."""
         raise NotImplementedError()
+
+    def prefetch(self, sample):
+        """Suggest a sample to prepare for navigation; readers may ignore this hint."""
+        pass
+
+    def cancel_prefetch(self):
+        """Withdraw a navigation hint; readers without lookahead have no work to cancel."""
+        pass
 
     def __getitem__(self, item):
         if isinstance(item, tuple):
@@ -447,6 +454,127 @@ def _load_spikeinterface(path):
     return load(path)
 
 
+class _SpikeInterfaceBlocks:
+    """Shared LRU cache and one serialized backend lane for a reader and its views.
+
+    The condition protects all mutable state. Backend computation happens outside it,
+    with ``_busy`` reserving the lane. Demand waiters take priority over the single hint.
+    There are no queued tasks or completion callbacks: the worker consumes the latest hint
+    only when the lane is free. Closing atomically disables storage and clears the hint.
+    """
+
+    def __init__(self, compute, capacity):
+        self._compute = compute
+        self._capacity = capacity
+        self.cache = OrderedDict()
+        self._condition = threading.Condition()
+        self._worker = None
+        self._hint = None
+        self._active = None
+        self._busy = False
+        self._demands = {}
+        self._closed = False
+
+    def _cached(self, i):
+        block = self.cache.get(i)
+        if block is not None:
+            self.cache.move_to_end(i)
+        return block
+
+    def _store(self, i, block):
+        if self._closed or block is None:
+            return
+        self.cache[i] = block
+        self.cache.move_to_end(i)
+        while len(self.cache) > self._capacity:
+            self.cache.popitem(last=False)
+
+    def get(self, i):
+        with self._condition:
+            if self._closed:
+                raise RuntimeError("The SpikeInterface reader is closed.")
+            block = self._cached(i)
+            if block is not None:
+                return block
+            self._demands[i] = self._demands.get(i, 0) + 1
+            self._condition.notify_all()
+        try:
+            with self._condition:
+                self._condition.wait_for(lambda: self._closed or not self._busy)
+                if self._closed:
+                    raise RuntimeError("The SpikeInterface reader is closed.")
+                # Another demand, or a running prefetch, may have filled this block.
+                block = self._cached(i)
+                if block is not None:
+                    return block
+                self._busy = True
+            block = None
+            try:
+                block = self._compute(i)
+                return block
+            finally:
+                with self._condition:
+                    self._store(i, block)
+                    self._busy = False
+                    self._condition.notify_all()
+        finally:
+            with self._condition:
+                self._demands[i] -= 1
+                if not self._demands[i]:
+                    del self._demands[i]
+                self._condition.notify_all()
+
+    def prefetch(self, i):
+        with self._condition:
+            if self._closed:
+                return
+            self._hint = i if i not in self.cache else None
+            if self._hint is not None and self._worker is None:
+                self._worker = threading.Thread(
+                    target=self._run, name='phylib-si-prefetch', daemon=True)
+                self._worker.start()
+            self._condition.notify_all()
+
+    def _run(self):
+        while True:
+            with self._condition:
+                self._condition.wait_for(lambda: self._closed or (
+                    self._hint is not None and not self._busy and not self._demands))
+                if self._closed:
+                    return
+                i = self._hint
+                # Demand may have filled a hinted block while the worker was waiting.
+                if i in self.cache:
+                    self._hint = None
+                    self._condition.notify_all()
+                    continue
+                self._active = i
+                self._busy = True
+            block = None
+            try:
+                block = self._compute(i)
+            except Exception:
+                logger.debug("SpikeInterface prefetch failed for block %d.", i, exc_info=True)
+            finally:
+                with self._condition:
+                    relevant = self._hint == i
+                    if relevant:
+                        self._hint = None
+                    # Demand can reuse a running block even if navigation withdrew its hint.
+                    if relevant or i in self._demands:
+                        self._store(i, block)
+                    self._active = None
+                    self._busy = False
+                    self._condition.notify_all()
+
+    def close(self):
+        with self._condition:
+            self._closed = True
+            self._hint = None
+            self.cache.clear()
+            self._condition.notify_all()
+
+
 class SpikeInterfaceEphysReader(BaseEphysReader):
     """Read traces from a single-segment SpikeInterface recording, lazily.
 
@@ -458,17 +586,21 @@ class SpikeInterfaceEphysReader(BaseEphysReader):
     They are computed in blocks of `block_duration` seconds, and the most recently used blocks
     are cached, up to `cache_size` bytes, since computing a block can be slow.
 
-    With `prefetch`, a read that continues the previous one, as scrolling does, also starts
-    computing the next block in the direction of travel on a background thread. Other reads
-    never prefetch and cancel pending prefetches, and a requested block is computed in the
-    calling thread rather than queued behind prefetches.
+    Ordinary reads compute only requested blocks. Navigation callers can explicitly call
+    `prefetch(sample)` to warm the block containing a sample beyond the visible window.
+    There is at most one running prefetch and one replaceable hint; obsolete results are
+    discarded. Lazy channel views share the cache, hints, and lifecycle.
+
+    All calls to the recording are serialized, so backends need not support concurrent
+    get_traces calls. A demand read can wait for the single running prefetch, but never for
+    a queue of speculative reads. The recording must permit access from a worker thread.
 
     The recording sets the sample rate, channel count and dtype. Values passed from params.py
     are only checked against it, since phy computes trace windows with its own.
     """
 
     def __init__(
-            self, recording, block_duration=0.5, cache_size=256 * 1024 ** 2, prefetch=True,
+            self, recording, block_duration=0.5, cache_size=256 * 1024 ** 2,
             **kwargs):
         super(SpikeInterfaceEphysReader, self).__init__()
         if isinstance(recording, (tuple, list)):
@@ -497,13 +629,9 @@ class SpikeInterfaceEphysReader(BaseEphysReader):
         self._block_size = max(1, int(round(block_duration * self.sample_rate)))
         block_bytes = self._block_size * max(1, self.n_channels) * self.dtype.itemsize
         self._n_cached_blocks = max(1, cache_size // block_bytes)
-        self._n_blocks = int(ceil(n_samples / self._block_size))
         # Shared by the clones that lazy operations make, so they share one cache.
-        self._cache = OrderedDict()  # block index => traces of the block
-        self._pending = {}  # block index => Future of a prefetch
-        self._state = {'last_read': None, 'closed': False}
-        self._lock = threading.Lock()
-        self._pool = ThreadPoolExecutor(max_workers=1) if prefetch else None
+        self._blocks = _SpikeInterfaceBlocks(self._compute, self._n_cached_blocks)
+        self._cache = self._blocks.cache
 
     def _check_params(self, kwargs):
         n_channels = kwargs.get('n_channels', kwargs.get('n_channels_dat'))
@@ -528,69 +656,31 @@ class SpikeInterfaceEphysReader(BaseEphysReader):
         stop = min(start + self._block_size, self.part_bounds[-1])
         return self.recording.get_traces(start_frame=start, end_frame=stop, segment_index=0)
 
-    def _store(self, i, block):
-        with self._lock:
-            self._cache[i] = block
-            while len(self._cache) > self._n_cached_blocks:
-                self._cache.popitem(last=False)
-
     def _block(self, i):
-        with self._lock:
-            block = self._cache.get(i)
-            if block is not None:
-                self._cache.move_to_end(i)
-                return block
-            future = self._pending.get(i)
-        # A prefetch that has started is nearer done than a new computation would be.
-        if future is not None and not future.cancel():
-            try:
-                return future.result()
-            except Exception:  # computed again below, so one failure does not stick
-                pass
-        block = self._compute(i)
-        self._store(i, block)
-        return block
+        return self._blocks.get(i)
 
-    def _prefetched(self, i, future):
-        with self._lock:
-            if self._pending.get(i) is future:
-                del self._pending[i]
-        # A failed prefetch is dropped, so the next read of the block computes it again.
-        if not self._state['closed'] and not future.cancelled() and future.exception() is None:
-            self._store(i, future.result())
+    def prefetch(self, sample):
+        """Warm the block containing an integer sample index; return immediately.
 
-    def _prefetch(self, i):
-        if self._pool is None or self._state['closed'] or not 0 <= i < self._n_blocks:
-            return
-        with self._lock:
-            if i in self._cache or i in self._pending:
-                return
-            future = self._pool.submit(self._compute, i)
-            self._pending[i] = future
-        # Outside the lock: the callback takes it, and runs here if the future is already done.
-        future.add_done_callback(partial(self._prefetched, i))
+        Each call replaces the previous hint. Out-of-range samples cancel the hint.
+        Only this explicit call opts into worker-thread access to the recording.
+        Running calls finish, but obsolete results are cached only if a demand needs them.
+        Failures are logged at debug level; a later demand retries the block normally.
+        Hints after close are ignored.
+        """
+        sample = index(sample)
+        i = sample // self._block_size if 0 <= sample < self.n_samples else None
+        self._blocks.prefetch(i)
 
-    def _cancel_prefetches(self):
-        with self._lock:
-            futures = list(self._pending.values())
-        for future in futures:
-            future.cancel()
+    def cancel_prefetch(self):
+        """Withdraw the hint without interrupting a running backend call or clearing the cache."""
+        self._blocks.prefetch(None)
 
     def _read(self, start, stop):
         if stop <= start:
             return np.zeros((0, self.n_channels), dtype=self.dtype)
         bs = self._block_size
         b0, b1 = start // bs, (stop - 1) // bs
-        last = self._state['last_read']
-        self._state['last_read'] = (start, stop)
-        # Continues the previous read when it overlaps it or lies within a block of it.
-        if last is not None and start <= last[1] + bs and stop >= last[0] - bs:
-            if start >= last[0]:
-                self._prefetch(b1 + 1)
-            if start <= last[0]:
-                self._prefetch(b0 - 1)
-        else:
-            self._cancel_prefetches()
         out = np.concatenate([self._block(i) for i in range(b0, b1 + 1)], axis=0)
         return out[start - b0 * bs:stop - b0 * bs]
 
@@ -608,13 +698,12 @@ class SpikeInterfaceEphysReader(BaseEphysReader):
         return out
 
     def close(self):
-        """Stop prefetching and drop the cached blocks; later reads are computed directly."""
-        self._state['closed'] = True
-        if self._pool is not None:
-            self._pool.shutdown(wait=False, cancel_futures=True)
-        with self._lock:
-            self._pending.clear()
-            self._cache.clear()
+        """Close all shared views, rejecting new reads and dropping the cache and hint.
+
+        Idempotent and nonblocking: an active backend call finishes without caching its result,
+        then the worker exits. Waiting demand reads fail immediately.
+        """
+        self._blocks.close()
 
 
 class RandomEphysReader(BaseEphysReader):
