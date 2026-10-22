@@ -15,6 +15,30 @@ remote data is read without being downloaded or exported. Traces are raw and uns
 recording's dtype. The recording sets the sample rate and channel count, so keep `sample_rate`
 and `n_channels_dat` in `params.py` consistent with it.
 
+Reads compute only the requested blocks and share a bounded cache. Navigation code can opt
+into background lookahead by calling `traces.prefetch(sample)` with a sample beyond the visible
+window, for example half a second ahead when moving forward or behind when moving backward.
+Each hint warms the block containing that sample; a newer hint replaces obsolete lookahead,
+and `traces.cancel_prefetch()` withdraws the hint. Out-of-range samples also withdraw the hint.
+Waveform extraction does not generate hints. This API requires navigation callers (such as
+phy) to supply hints before scrolling benefits from prefetching.
+
+The reader serializes demand and prefetch calls to the recording, so the backend need not
+support concurrent reads, but it must permit reads from a worker thread when hints are used.
+A demand read may wait for one running prefetch; new prefetch work waits for demand reads.
+`TemplateModel.close()` closes the reader. A running backend call finishes in the background
+and cannot refill the cache after close. Closing is terminal for all shared views: new reads
+raise `RuntimeError` and later hints are ignored. Other reader types accept navigation hints
+as no-ops, so callers can use the same API.
+
+```python
+visible = traces[start:stop]
+lookahead = int(0.5 * traces.sample_rate)
+traces.prefetch(stop + lookahead)  # Forward navigation; does not wait.
+# On a jump or when navigation stops:
+traces.cancel_prefetch()
+```
+
 ## Contribution
 
 - participation in phylib is governed by the project [Code of Conduct](CODE_OF_CONDUCT.md)

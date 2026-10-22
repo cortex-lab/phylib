@@ -1424,7 +1424,10 @@ class TemplateModel(object):
         self.spike_waveforms = self._load_spike_waveforms()
 
     def close(self):
-        """Close all memmapped files."""
+        """Close the trace reader and all memmapped files."""
+        close = getattr(self.traces, 'close', None)
+        if close is not None:
+            close()
         for k, v in sorted(self.__dict__.items(), key=itemgetter(0)):
             _close_memmap(k, v)
 

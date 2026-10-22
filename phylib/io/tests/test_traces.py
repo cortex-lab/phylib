@@ -159,6 +159,8 @@ def test_ephys_reader_1(tempdir, arr, traces, sample_rate):
     assert len(traces.part_bounds) == traces.n_parts + 1
     assert len(traces.chunk_bounds) == traces.n_chunks + 1
 
+    traces.prefetch(0)
+    traces.cancel_prefetch()
     ac(traces[:], arr)
 
     def _a(f):
@@ -591,7 +593,8 @@ def test_spikeinterface_reader_multi_segment():
 def test_spikeinterface_reader_cache(si_recording):
     recording, arr = si_recording
     block_bytes = 300 * arr.shape[1] * arr.itemsize
-    traces = get_ephys_reader(recording, block_duration=.3, cache_size=2 * block_bytes)
+    traces = get_ephys_reader(
+        recording, block_duration=.3, cache_size=2 * block_bytes)
     ae(traces[:], arr)
     assert list(traces._cache) == [6, 7]
     ae(traces[:10], arr[:10])
@@ -623,3 +626,315 @@ def test_spikeinterface_reader_params_mismatch(si_recording, caplog):
     assert all(name in messages for name in ('sample_rate', 'n_channels', 'dtype'))
     # The recording still sets the values.
     assert (traces.sample_rate, traces.n_channels, traces.dtype) == (1000., 7, np.int16)
+
+
+class _SlowRecording(object):
+    """Stands in for a recording whose get_traces blocks, fails or counts calls."""
+
+    def __init__(self, recording, gate=None, fail=()):
+        import threading
+        self.recording = recording
+        self.gate = gate
+        self.fail = set(fail)
+        self.calls = []
+        self.started = threading.Event()
+
+    def get_traces(self, start_frame=None, end_frame=None, segment_index=0):
+        self.calls.append(start_frame)
+        self.started.set()
+        if self.gate is not None and start_frame in self.gate:
+            assert self.gate[start_frame].wait(5), "Timed out waiting for test gate"
+        if start_frame in self.fail:
+            self.fail.discard(start_frame)
+            raise OSError("transient")
+        return self.recording.get_traces(
+            start_frame=start_frame, end_frame=end_frame, segment_index=segment_index)
+
+
+def _wait_prefetches(traces):
+    blocks = traces._blocks
+    with blocks._condition:
+        assert blocks._condition.wait_for(
+            lambda: blocks._hint is None and blocks._active is None, timeout=5)
+
+
+def test_spikeinterface_reader_prefetch(si_recording):
+    recording, arr = si_recording
+    traces = get_ephys_reader(recording, block_duration=.3)
+    traces.recording = slow = _SlowRecording(recording)
+
+    # Ordinary reads do not start a worker or speculate.
+    ae(traces[1000:1100], arr[1000:1100])
+    _wait_prefetches(traces)
+    assert slow.calls == [900]
+    assert traces._blocks._worker is None
+
+    # Navigation explicitly hints the next window, through a shared channel view.
+    ae(traces[1050:1150], arr[1050:1150])
+    traces[:, [1, 2]].prefetch(1200)
+    _wait_prefetches(traces)
+    assert sorted(traces._cache) == [3, 4]
+    ae(traces[950:1050], arr[950:1050])
+    traces.prefetch(850)
+    _wait_prefetches(traces)
+    assert sorted(traces._cache) == [2, 3, 4]
+    # Block 4 comes from the cache, and the read continues to the right.
+    ae(traces[1200:1300], arr[1200:1300])
+    traces.prefetch(1500)
+    _wait_prefetches(traces)
+    assert slow.calls == [900, 1200, 600, 1500]
+    traces.close()
+
+
+def test_spikeinterface_reader_prefetch_failure(si_recording):
+    recording, arr = si_recording
+    traces = get_ephys_reader(recording, block_duration=.3)
+    traces.recording = _SlowRecording(recording, fail={1200})
+    traces[1000:1100]
+    traces.prefetch(1200)  # block 4 fails
+    _wait_prefetches(traces)
+    assert 4 not in traces._cache
+    ae(traces[1200:1300], arr[1200:1300])
+    traces.close()
+
+
+def test_spikeinterface_reader_bounded_prefetch(si_recording):
+    import threading
+    recording, arr = si_recording
+    traces = get_ephys_reader(recording, block_duration=.1, cache_size=1)
+    gate = {100: threading.Event()}
+    traces.recording = slow = _SlowRecording(recording, gate=gate)
+    ae(traces[:100], arr[:100])
+    slow.started.clear()
+    traces.prefetch(100)
+    assert slow.started.wait(5)
+    try:
+        # Repeated forward hints and a direction change replace a single desired block.
+        for start in range(300, 2000, 200):
+            traces.prefetch(start)
+            assert traces._blocks._active == 1
+            assert traces._blocks._hint == start // 100
+        traces.prefetch(0)
+        assert traces._blocks._hint is None  # already cached
+        traces.prefetch(200)
+    finally:
+        gate[100].set()
+    _wait_prefetches(traces)
+    ae(traces[200:300], arr[200:300])
+    assert slow.calls == [0, 100, 200]
+    assert list(traces._cache) == [2]
+    traces.close()
+
+
+def test_spikeinterface_reader_snippets(si_recording):
+    recording, arr = si_recording
+    traces = get_ephys_reader(recording, block_duration=.3)
+    traces.recording = slow = _SlowRecording(recording)
+    for start in [1000, 1100] * 10:
+        ae(traces[start:start + 82], arr[start:start + 82])
+    assert slow.calls == [900]
+    for start in [0, 2200, 400, 1600]:
+        ae(traces[start:start + 82], arr[start:start + 82])
+    assert slow.calls == [900, 0, 2100, 300, 1500]
+    assert traces._blocks._worker is None
+    assert traces._blocks._hint is None
+
+
+def test_spikeinterface_reader_cancel_queued(si_recording):
+    from concurrent.futures import ThreadPoolExecutor
+    import threading
+    recording, _ = si_recording
+    traces = get_ephys_reader(recording, block_duration=.1)
+    release = threading.Event()
+    traces.recording = slow = _SlowRecording(recording, gate={0: release})
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        demand = pool.submit(lambda: traces[:100])
+        assert slow.started.wait(5)
+        try:
+            traces.prefetch(100)
+            traces.prefetch(200)
+            assert traces._blocks._hint == 2
+            traces.cancel_prefetch()
+            assert traces._blocks._hint is None
+        finally:
+            release.set()
+        demand.result(5)
+    _wait_prefetches(traces)
+    assert slow.calls == [0]
+    traces.close()
+
+
+@mark.parametrize('cancel', [True, False])
+def test_spikeinterface_reader_replace_running_hint(si_recording, cancel):
+    import threading
+    recording, _ = si_recording
+    traces = get_ephys_reader(recording, block_duration=.1)
+    release = threading.Event()
+    traces.recording = slow = _SlowRecording(recording, gate={100: release})
+    traces.prefetch(np.int64(100))
+    assert slow.started.wait(5)
+    try:
+        traces.prefetch(200)
+        # Returning to the running block should reuse it, without a second computation.
+        traces.prefetch(150)
+        traces.prefetch(100)
+        if cancel:
+            traces.cancel_prefetch()
+    finally:
+        release.set()
+    _wait_prefetches(traces)
+    assert slow.calls == [100]
+    assert list(traces._cache) == ([] if cancel else [1])
+    traces.close()
+
+
+def test_spikeinterface_reader_hint_bounds(si_recording):
+    recording, _ = si_recording
+    traces = get_ephys_reader(recording, block_duration=.1)
+    for sample in [-1, traces.n_samples, traces.n_samples + 100]:
+        traces.prefetch(sample)
+    with raises(TypeError):
+        traces.prefetch(1.5)
+    assert traces._blocks._worker is None
+    assert traces._blocks._hint is None
+    # The last, partial block is still a valid hint.
+    traces.prefetch(traces.n_samples - 1)
+    _wait_prefetches(traces)
+    assert list(traces._cache) == [23]
+    assert traces._cache[23].shape[0] == 45
+    traces.close()
+
+
+@mark.parametrize('fail', [True, False])
+def test_spikeinterface_reader_demand_reuses_running(si_recording, fail):
+    from concurrent.futures import ThreadPoolExecutor
+    import threading
+    recording, arr = si_recording
+    traces = get_ephys_reader(recording, block_duration=.1)
+    release = threading.Event()
+    traces.recording = slow = _SlowRecording(
+        recording, gate={100: release}, fail={100} if fail else ())
+    traces.prefetch(100)
+    assert slow.started.wait(5)
+    traces.prefetch(200)  # Navigation no longer needs the running block, but demand does.
+    blocks = traces._blocks
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        reads = [pool.submit(lambda: traces[100:182]) for _ in range(3)]
+        try:
+            with blocks._condition:
+                assert blocks._condition.wait_for(
+                    lambda: blocks._demands.get(1) == 3, timeout=5)
+        finally:
+            release.set()
+        for read in reads:
+            ae(read.result(5), arr[100:182])
+    _wait_prefetches(traces)
+    assert slow.calls == ([100, 100, 200] if fail else [100, 200])
+    traces.close()
+
+
+def test_spikeinterface_reader_demand_failure(si_recording):
+    recording, arr = si_recording
+    traces = get_ephys_reader(recording, block_duration=.1)
+    traces.recording = slow = _SlowRecording(recording, fail={100})
+    with raises(OSError, match='transient'):
+        traces[100:200]
+    ae(traces[200:300], arr[200:300])
+    ae(traces[100:200], arr[100:200])
+    assert slow.calls == [100, 200, 100]
+    assert traces._blocks._worker is None
+
+
+def test_spikeinterface_reader_serial_backend(si_recording):
+    from concurrent.futures import ThreadPoolExecutor
+    import threading
+    recording, arr = si_recording
+    traces = get_ephys_reader(recording, block_duration=.1)
+    release = threading.Event()
+    traces.recording = slow = _SlowRecording(recording, gate={100: release})
+    traces.prefetch(100)
+    assert slow.started.wait(5)
+    traces.prefetch(200)
+
+    def demand():
+        return traces[500:600]
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(demand)
+        try:
+            blocks = traces._blocks
+            with blocks._condition:
+                assert blocks._condition.wait_for(lambda: 5 in blocks._demands, timeout=5)
+                assert slow.calls == [100]
+        finally:
+            release.set()
+        ae(future.result(5), arr[500:600])
+    _wait_prefetches(traces)
+    assert slow.calls == [100, 500, 200]
+    traces.close()
+
+
+def test_spikeinterface_reader_close_running(si_recording):
+    from concurrent.futures import ThreadPoolExecutor
+    import threading
+    recording, arr = si_recording
+    traces = get_ephys_reader(recording, block_duration=.1)
+    release = threading.Event()
+    traces.recording = slow = _SlowRecording(recording, gate={100: release})
+    traces.prefetch(100)
+    assert slow.started.wait(5)
+    traces.prefetch(200)
+    worker = traces._blocks._worker
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        demand = pool.submit(lambda: traces[500:600])
+        try:
+            blocks = traces._blocks
+            with blocks._condition:
+                assert blocks._condition.wait_for(lambda: 5 in blocks._demands, timeout=5)
+            traces[:, [1, 2]].close()
+            traces.close()  # idempotent across clones
+            # Closing wakes waiting reads without waiting for the running backend call.
+            with raises(RuntimeError, match='closed'):
+                demand.result(5)
+        finally:
+            release.set()
+            worker.join(5)
+    assert not worker.is_alive()
+    assert not traces._cache
+    assert traces._blocks._hint is None
+    assert slow.calls == [100]
+    traces.prefetch(300)
+    with raises(RuntimeError, match='closed'):
+        traces[:10]
+    assert slow.calls == [100]
+    assert not traces._cache
+
+
+def test_spikeinterface_reader_close_completing(si_recording):
+    import threading
+    recording, _ = si_recording
+    traces = get_ephys_reader(recording, block_duration=.1)
+    entered, release = threading.Event(), threading.Event()
+    store = traces._blocks._store
+
+    def gated_store(i, block):
+        entered.set()
+        assert release.wait(5)
+        store(i, block)
+
+    traces._blocks._store = gated_store
+    # Hold the backend until prefetch() has returned, then close as storage completes.
+    backend = threading.Event()
+    traces.recording = slow = _SlowRecording(recording, gate={100: backend})
+    traces.prefetch(100)
+    assert slow.started.wait(5)
+    backend.set()
+    assert entered.wait(5)
+    closer = threading.Thread(target=traces.close)
+    closer.start()
+    release.set()
+    closer.join(5)
+    traces._blocks._worker.join(5)
+    assert not closer.is_alive()
+    assert not traces._cache
+    assert traces._blocks._hint is None
