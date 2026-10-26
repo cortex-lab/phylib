@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bounded background work and serialized backend access. Ordinary reads remain demand driven,
   and closing a model shuts down its reader without retaining late prefetch results.
 
+### Fixed
+- Feature requests with no matching stored waveforms return zero-filled features instead of
+  attempting PCA on an empty array. Empty spike or channel selections also retain their
+  expected output shape.
+
 ## [2.7.1] - 2026-10-08
 
 ### Added
