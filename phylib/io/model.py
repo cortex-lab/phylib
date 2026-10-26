@@ -1017,6 +1017,10 @@ class TemplateModel(object):
             n_pcs = 3
             features = np.zeros((ns, nc, n_pcs), dtype=np.float32)
             spike_ids_exist = np.intersect1d(spike_ids, self.spike_waveforms.spike_ids)
+            # Missing waveform rows already have zero-filled features. PCA needs
+            # at least one waveform and channel, including for empty requests.
+            if not len(spike_ids_exist) or not nc:
+                return features
             # Compute PCs from the waveforms for the spikes that are in spike_waveforms.spike_ids.
             waveforms = self.get_waveforms(spike_ids_exist, channel_ids)
             features_existing = compute_features(waveforms)
