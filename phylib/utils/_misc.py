@@ -208,7 +208,8 @@ def save_pickle(path, data):
     return dump(data, path)
 
 
-_SAFE_CALLS = {'list': list, 'tuple': tuple, 'set': set, 'range': range, 'int': int, 'float': float}
+_SAFE_CALLS = {
+    'list': list, 'tuple': tuple, 'set': set, 'range': range, 'int': int, 'float': float}
 _SAFE_BINOPS = {
     ast.Add: lambda a, b: a + b, ast.Sub: lambda a, b: a - b,
     ast.Mult: lambda a, b: a * b, ast.Div: lambda a, b: a / b}
@@ -232,8 +233,8 @@ def _safe_eval(node):
         return {_safe_eval(k): _safe_eval(v) for k, v in zip(node.keys, node.values)}
     if isinstance(node, ast.BinOp) and type(node.op) in _SAFE_BINOPS:
         return _SAFE_BINOPS[type(node.op)](_safe_eval(node.left), _safe_eval(node.right))
-    if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-            and node.func.id in _SAFE_CALLS and not node.keywords):
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
+            and node.func.id in _SAFE_CALLS and not node.keywords:
         return _SAFE_CALLS[node.func.id](*(_safe_eval(a) for a in node.args))
     raise ValueError(f"Unsupported expression: {ast.dump(node)}")
 

@@ -124,7 +124,8 @@ def test_read_python_safe_eval(tempdir, caplog):
         "Multi = {\n  0: list(range(3)),  # comment\n  1: (1, 2),\n}\n"
         "rate = 2 * 15000.\n"
         "x = y = 1\n")
-    assert read_python(path) == {'multi': {0: [0, 1, 2], 1: (1, 2)}, 'rate': 30000.0, 'x': 1, 'y': 1}
+    assert read_python(path) == {
+        'multi': {0: [0, 1, 2], 1: (1, 2)}, 'rate': 30000.0, 'x': 1, 'y': 1}
 
     # nothing is executed: unsupported statements / expressions are skipped with a warning
     marker = tempdir.joinpath('pwned')
