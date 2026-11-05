@@ -98,6 +98,46 @@ def test_read_python(tempdir):
     assert read_python(path) == {'a': {'b': 1}}
 
 
+def test_read_python_params(tempdir):
+    """Typical phy / IBL spike sorting `params.py` file."""
+    path = tempdir.joinpath('params.py')
+    path.write_text(
+        "dat_path = '_iblrig_ephysData_g0_t0.imec.ap.bin'\n"
+        "n_channels_dat = 385\n"
+        "dtype = 'int16'\n"
+        "offset = 0\n"
+        "sample_rate = 30000.\n"
+        "hp_filtered = False\n")
+    assert read_python(path) == {
+        'dat_path': '_iblrig_ephysData_g0_t0.imec.ap.bin',
+        'n_channels_dat': 385,
+        'dtype': 'int16',
+        'offset': 0,
+        'sample_rate': 30000.0,
+        'hp_filtered': False,
+    }
+
+
+def test_read_python_safe_eval(tempdir, caplog):
+    path = tempdir.joinpath('mock.py')
+    path.write_text(
+        "Multi = {\n  0: list(range(3)),  # comment\n  1: (1, 2),\n}\n"
+        "rate = 2 * 15000.\n"
+        "x = y = 1\n")
+    assert read_python(path) == {'multi': {0: [0, 1, 2], 1: (1, 2)}, 'rate': 30000.0, 'x': 1, 'y': 1}
+
+    # nothing is executed: unsupported statements / expressions are skipped with a warning
+    marker = tempdir.joinpath('pwned')
+    path.write_text(
+        f"import os\n"
+        f"a = __import__('pathlib').Path({str(marker)!r}).write_text('x')\n"
+        f"b = open({str(marker)!r}, 'w')\n"
+        f"c = 1\n")
+    assert read_python(path) == {'c': 1}
+    assert not marker.exists()
+    assert caplog.text.count('Skipping') == 3
+
+
 def test_write_python(tempdir):
     data = {'a': 1, 'b': 'hello', 'c': [1, 2, 3]}
     path = tempdir / 'mock.py'
