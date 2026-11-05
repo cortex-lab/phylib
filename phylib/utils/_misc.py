@@ -16,6 +16,7 @@ import json
 import logging
 import os
 from pathlib import Path
+import pickle
 import secrets
 import stat
 import subprocess
@@ -196,10 +197,37 @@ def save_json(path, data):
 # Other read/write functions
 #------------------------------------------------------------------------------
 
+# Globals that `load_pickle()` is allowed to instantiate: joblib's array wrapper, numpy arrays,
+# dtypes and scalars, and a few builtin containers. Anything else is refused.
+_PICKLE_ALLOWED = {
+    ('builtins', n) for n in (
+        'set', 'frozenset', 'slice', 'range', 'complex', 'bytearray')
+} | {
+    ('collections', 'OrderedDict'),
+    ('joblib.numpy_pickle', 'NumpyArrayWrapper'),
+    ('numpy', 'dtype'), ('numpy', 'ndarray'),
+    ('numpy.core.multiarray', 'scalar'), ('numpy._core.multiarray', 'scalar'),
+}
+
+
 def load_pickle(path):
-    """Load a pickle file using joblib."""
-    from joblib import load
-    return load(path)
+    """Load a pickle file saved with `save_pickle()`, refusing to run arbitrary code.
+
+    Only plain Python containers and numeric data (numpy arrays and scalars) can be loaded.
+    A pickle referencing any other object raises `pickle.UnpicklingError`, instead of being
+    executed. Compressed or memory-mapped files are not supported.
+    """
+    from joblib.numpy_pickle import NumpyUnpickler
+
+    class _RestrictedUnpickler(NumpyUnpickler):
+        def find_class(self, module, name):
+            if (module, name) not in _PICKLE_ALLOWED:
+                raise pickle.UnpicklingError(f"Loading {module}.{name} is forbidden.")
+            return super().find_class(module, name)
+
+    path = Path(path)
+    with open(path, 'rb') as f:
+        return _RestrictedUnpickler(str(path), f, True).load()
 
 
 def save_pickle(path, data):
