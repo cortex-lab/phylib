@@ -10,6 +10,7 @@ import ast
 import csv
 import json
 import os
+import pickle
 import re
 import stat
 
@@ -90,6 +91,29 @@ def test_json_numpy(tempdir, kind):
 
     ae(d['b'], d_bis['b'])
     ae(d['c'], d_bis['c'])
+
+
+def test_load_pickle_restricted(tempdir):
+    marker = tempdir.joinpath('pwned')
+
+    class Evil:
+        def __reduce__(self):
+            return (open, (str(marker), 'w'))
+
+    # plain containers and numpy data round-trip
+    data = {'a': np.arange(3), 'b': [1, 2.5, 'x', None, (1, 2)], 'c': {1, 2}, 'd': np.float32(1)}
+    path = tempdir.joinpath('ok.pkl')
+    save_pickle(path, data)
+    out = load_pickle(path)
+    ae(out['a'], data['a'])
+    assert out['b'] == data['b'] and out['c'] == data['c']
+
+    # arbitrary callables are refused, directly or hidden in an object array
+    for obj in (Evil(), {'x': Evil()}, np.array([Evil()], dtype=object)):
+        save_pickle(path, obj)
+        with raises(pickle.UnpicklingError):
+            load_pickle(path)
+        assert not marker.exists()
 
 
 def test_read_python(tempdir):
