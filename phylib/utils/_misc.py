@@ -7,6 +7,7 @@
 # Imports
 #------------------------------------------------------------------------------
 
+import ast
 import base64
 from contextlib import contextmanager
 import csv
@@ -207,6 +208,36 @@ def save_pickle(path, data):
     return dump(data, path)
 
 
+_SAFE_CALLS = {'list': list, 'tuple': tuple, 'set': set, 'range': range, 'int': int, 'float': float}
+_SAFE_BINOPS = {
+    ast.Add: lambda a, b: a + b, ast.Sub: lambda a, b: a - b,
+    ast.Mult: lambda a, b: a * b, ast.Div: lambda a, b: a / b}
+
+
+def _safe_eval(node):
+    """Safely evaluate an AST expression node, without executing arbitrary code.
+
+    Supports Python literals, plus (possibly nested) containers, the arithmetic operators
+    `+ - * /` and calls to `list`, `tuple`, `set`, `range`, `int` and `float`.
+    Raises `ValueError` for anything else.
+    """
+    try:
+        return ast.literal_eval(node)
+    except ValueError:
+        pass
+    if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+        container = {ast.List: list, ast.Tuple: tuple, ast.Set: set}[type(node)]
+        return container(_safe_eval(e) for e in node.elts)
+    if isinstance(node, ast.Dict):
+        return {_safe_eval(k): _safe_eval(v) for k, v in zip(node.keys, node.values)}
+    if isinstance(node, ast.BinOp) and type(node.op) in _SAFE_BINOPS:
+        return _SAFE_BINOPS[type(node.op)](_safe_eval(node.left), _safe_eval(node.right))
+    if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+            and node.func.id in _SAFE_CALLS and not node.keywords):
+        return _SAFE_CALLS[node.func.id](*(_safe_eval(a) for a in node.args))
+    raise ValueError(f"Unsupported expression: {ast.dump(node)}")
+
+
 def read_python(path):
     """Read a Python file.
 
@@ -219,15 +250,29 @@ def read_python(path):
     -------
 
     metadata : dict
-        A dictionary containing all variables defined in the Python file (with `exec()`).
+        A dictionary containing all top-level `name = literal` assignments of the Python file,
+        with lower-cased keys. Values are parsed safely (no `exec()`): Python literals, simple
+        arithmetic and `list/tuple/set/range/int/float` calls are supported. Any other
+        statement or expression is skipped with a warning.
 
     """
     path = Path(path)
     if not path.exists():  # pragma: no cover
-        raise IOError("Path %s does not exist.", path)
-    contents = path.read_text()
+        raise IOError(f"Path {path} does not exist.")
     metadata = {}
-    exec(contents, {}, metadata)
+    # parsing the whole file (rather than line by line) supports multi-line values
+    for node in ast.parse(path.read_text(), filename=str(path)).body:
+        if not isinstance(node, ast.Assign):
+            logger.warning(f"Skipping unsupported statement at line {node.lineno} in {path}.")
+            continue
+        try:
+            value = _safe_eval(node.value)
+        except ValueError:
+            logger.warning(f"Skipping non-literal value at line {node.lineno} in {path}.")
+            continue
+        for target in node.targets:
+            if isinstance(target, ast.Name):
+                metadata[target.id] = value
     metadata = {k.lower(): v for (k, v) in metadata.items()}
     return metadata
 
