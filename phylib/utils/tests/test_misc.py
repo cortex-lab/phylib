@@ -6,6 +6,7 @@
 # Imports
 #------------------------------------------------------------------------------
 
+import ast
 import csv
 import json
 import os
@@ -19,7 +20,8 @@ from pytest import raises, mark
 from .._misc import (
     _atomic_open, _git_version, load_json, save_json, load_pickle, save_pickle, read_python,
     write_python, read_text, write_text, _read_tsv_simple, _write_tsv_simple, read_tsv, write_tsv,
-    _pretty_floats, _encode_qbytearray, _decode_qbytearray, _fullname, _load_from_fullname)
+    _pretty_floats, _encode_qbytearray, _decode_qbytearray, _fullname, _load_from_fullname,
+    _safe_eval)
 
 
 #------------------------------------------------------------------------------
@@ -137,6 +139,52 @@ def test_read_python_safe_eval(tempdir, caplog):
     assert read_python(path) == {'c': 1}
     assert not marker.exists()
     assert caplog.text.count('Skipping') == 3
+
+
+@mark.parametrize('namespace', ['np', 'numpy'])
+@mark.parametrize('name, literal', [
+    ('bool', 'True'), ('bool_', 'False'),
+    *[(name, '-3') for name in ('int8', 'int16', 'int32', 'int64')],
+    *[(name, '3') for name in ('uint8', 'uint16', 'uint32', 'uint64')],
+    *[(name, '-1.5') for name in ('float16', 'float32', 'float64')],
+])
+def test_read_python_numpy_scalar(tempdir, namespace, name, literal):
+    path = tempdir / 'numpy.py'
+    path.write_text(f'values = {{0: [({namespace}.{name}({literal}),)]}}\n')
+    value = read_python(path)['values'][0][0][0]
+    expected = ast.literal_eval(literal)
+    assert value == expected
+    assert type(value) is type(expected)
+
+
+@mark.parametrize('namespace', ['np', 'numpy'])
+@mark.parametrize('literal', ['True', 'False'])
+def test_read_python_numpy_boolean(tempdir, namespace, literal):
+    path = tempdir / 'numpy.py'
+    path.write_text(f'value = {namespace}.{literal}_\n')
+    assert read_python(path)['value'] is ast.literal_eval(literal)
+
+
+@mark.parametrize('expression', [
+    'np.array([1, 2])', 'np.load("data.npy")', 'other.int64(1)',
+    'np.core.int64(1)', 'np.int64()', 'np.int64(1, 2)', 'np.int64(value=1)',
+    'np.int64(*[1])', 'np.int64(1 + 2)', 'np.int64("1")', 'np.int64(1.5)',
+    'np.int64(True)', 'np.float64([1])', 'np.float64("nan")', 'np.bool_(1)',
+    'np.int64(open("marker", "w"))', 'other.True_', 'np.nan', 'np.int64',
+])
+def test_safe_eval_numpy_rejects_unsupported(expression, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    with raises(ValueError):
+        _safe_eval(ast.parse(expression, mode='eval').body)
+    assert not (tmp_path / 'marker').exists()
+
+
+def test_write_python_numpy_scalars(tempdir):
+    # Exercises NumPy 2 scalar reprs when installed, and NumPy 1 compatibility.
+    data = {'values': {0: [np.int64(385), np.float64(1.5), np.bool_(True)]}}
+    path = tempdir / 'numpy.py'
+    write_python(path, data)
+    assert read_python(path) == data
 
 
 def test_write_python(tempdir):
