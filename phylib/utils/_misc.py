@@ -7,6 +7,7 @@
 # Imports
 #------------------------------------------------------------------------------
 
+import ast
 import base64
 from contextlib import contextmanager
 import csv
@@ -207,6 +208,59 @@ def save_pickle(path, data):
     return dump(data, path)
 
 
+_SAFE_CALLS = {
+    'list': list, 'tuple': tuple, 'set': set, 'range': range, 'int': int, 'float': float}
+_SAFE_BINOPS = {
+    ast.Add: lambda a, b: a + b, ast.Sub: lambda a, b: a - b,
+    ast.Mult: lambda a, b: a * b, ast.Div: lambda a, b: a / b}
+_NUMPY_SCALAR_LITERALS = {
+    'bool': (bool,), 'bool_': (bool,),
+    **{name: (int,) for name in (
+        'int8', 'int16', 'int32', 'int64', 'uint8', 'uint16', 'uint32', 'uint64')},
+    **{name: (int, float) for name in ('float16', 'float32', 'float64')},
+}
+
+
+def _safe_eval(node):
+    """Safely evaluate an AST expression node, without executing arbitrary code.
+
+    Supports Python literals, plus (possibly nested) containers, the arithmetic operators
+    `+ - * /` and calls to `list`, `tuple`, `set`, `range`, `int` and `float`.
+    NumPy scalar reprs using `np` or `numpy` are unwrapped to Python literals:
+    bool/bool_, int8/16/32/64, uint8/16/32/64 and float16/32/64. They must have
+    exactly one literal argument of the matching type and no keywords. No NumPy
+    call is executed; arrays, non-finite values and other constructors are unsupported.
+    The boolean reprs `np.True_` and `np.False_` (also under `numpy`) are supported.
+    Raises `ValueError` for anything else.
+    """
+    try:
+        return ast.literal_eval(node)
+    except ValueError:
+        pass
+    if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) \
+            and node.value.id in ('np', 'numpy') and node.attr in ('True_', 'False_'):
+        return node.attr == 'True_'
+    if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+        container = {ast.List: list, ast.Tuple: tuple, ast.Set: set}[type(node)]
+        return container(_safe_eval(e) for e in node.elts)
+    if isinstance(node, ast.Dict):
+        return {_safe_eval(k): _safe_eval(v) for k, v in zip(node.keys, node.values)}
+    if isinstance(node, ast.BinOp) and type(node.op) in _SAFE_BINOPS:
+        return _SAFE_BINOPS[type(node.op)](_safe_eval(node.left), _safe_eval(node.right))
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
+            and node.func.id in _SAFE_CALLS and not node.keywords:
+        return _SAFE_CALLS[node.func.id](*(_safe_eval(a) for a in node.args))
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
+            and isinstance(node.func.value, ast.Name) \
+            and node.func.value.id in ('np', 'numpy') \
+            and node.func.attr in _NUMPY_SCALAR_LITERALS \
+            and len(node.args) == 1 and not node.keywords:
+        value = ast.literal_eval(node.args[0])
+        if type(value) in _NUMPY_SCALAR_LITERALS[node.func.attr]:
+            return value
+    raise ValueError(f"Unsupported expression: {ast.dump(node)}")
+
+
 def read_python(path):
     """Read a Python file.
 
@@ -219,15 +273,30 @@ def read_python(path):
     -------
 
     metadata : dict
-        A dictionary containing all variables defined in the Python file (with `exec()`).
+        A dictionary containing all top-level `name = literal` assignments of the Python file,
+        with lower-cased keys. Values are parsed safely (no `exec()`): Python literals, simple
+        arithmetic, `list/tuple/set/range/int/float` calls and the NumPy scalar reprs
+        documented in `_safe_eval` are supported. Any other
+        statement or expression is skipped with a warning.
 
     """
     path = Path(path)
     if not path.exists():  # pragma: no cover
-        raise IOError("Path %s does not exist.", path)
-    contents = path.read_text()
+        raise IOError(f"Path {path} does not exist.")
     metadata = {}
-    exec(contents, {}, metadata)
+    # parsing the whole file (rather than line by line) supports multi-line values
+    for node in ast.parse(path.read_text(), filename=str(path)).body:
+        if not isinstance(node, ast.Assign):
+            logger.warning(f"Skipping unsupported statement at line {node.lineno} in {path}.")
+            continue
+        try:
+            value = _safe_eval(node.value)
+        except ValueError:
+            logger.warning(f"Skipping non-literal value at line {node.lineno} in {path}.")
+            continue
+        for target in node.targets:
+            if isinstance(target, ast.Name):
+                metadata[target.id] = value
     metadata = {k.lower(): v for (k, v) in metadata.items()}
     return metadata
 
