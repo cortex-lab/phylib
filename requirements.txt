@@ -5,5 +5,5 @@ requests
 responses
 tqdm
 toolz
-joblib
+joblib>=1.6
 mtscomp

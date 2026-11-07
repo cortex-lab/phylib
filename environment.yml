@@ -8,4 +8,4 @@ dependencies:
   - pip:
     - requests
     - tqdm
-    - joblib
+    - joblib>=1.6
