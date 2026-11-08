@@ -16,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bounded background work and serialized backend access. Ordinary reads remain demand driven,
   and closing a model shuts down its reader without retaining late prefetch results.
 
+### Changed
+- Packaging moved from `setup.py` and `requirements*.txt` to `pyproject.toml`; development
+  dependencies are installed with `pip install -e ".[dev]"` or `uv sync --extra dev`.
+- Python 3.10 or later is now required.
+
+### Removed
+- Unused `dask` and `toolz` dependencies.
+
 ## [2.7.1] - 2026-10-08
 
 ### Added
