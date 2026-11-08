@@ -17,8 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and closing a model shuts down its reader without retaining late prefetch results.
 
 ### Changed
-- Packaging moved from `setup.py` and `requirements*.txt` to `pyproject.toml`; development
-  dependencies are installed with `pip install -e ".[dev]"` or `uv sync --extra dev`.
+- Packaging moved from `setup.py` and `requirements*.txt` to `pyproject.toml` with the
+  hatchling build backend. Development dependencies are installed with
+  `pip install -e ".[dev]"` or `uv sync --extra dev`.
 - Python 3.10 or later is now required.
 
 ### Removed

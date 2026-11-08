@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=77"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
 
 [project]
 name = "phylib"
@@ -51,14 +51,11 @@ dev = [
   "spikeinterface>=0.100",
 ]
 
-[tool.setuptools.dynamic]
-version = {attr = "phylib.__version__"}
+[tool.hatch.version]
+path = "phylib/__init__.py"
 
-[tool.setuptools.packages.find]
-include = ["phylib", "phylib.*"]
-
-[tool.setuptools.package-data]
-"phylib.electrode" = ["probes/*.prb"]
+[tool.hatch.build.targets.sdist]
+include = ["phylib", "CHANGELOG.md"]
 
 [tool.pytest.ini_options]
 norecursedirs = [

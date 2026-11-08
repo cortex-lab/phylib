@@ -1,7 +1,0 @@
-include LICENSE.md
-include README.md
-include CHANGELOG.md
-
-recursive-include phylib/electrode/probes *.prb
-recursive-exclude * __pycache__
-recursive-exclude * *.py[co]
