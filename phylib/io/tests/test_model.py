@@ -12,7 +12,7 @@ import stat
 
 import numpy as np
 from numpy.testing import assert_equal as ae
-from pytest import importorskip, raises
+from pytest import fixture, importorskip, mark, raises
 
 # from phylib.utils import Bunch
 from phylib.utils.testing import captured_output
@@ -20,6 +20,34 @@ from .. import model as model_module
 from ..model import from_sparse, get_template_params, load_model
 
 logger = logging.getLogger(__name__)
+
+
+@fixture
+def stored_waveform_model(tmp_path):
+    """A sorting with four spikes, two stored waveforms and no saved PCs."""
+    rng = np.random.default_rng(12)
+    arrays = {
+        'spike_times.npy': np.array([10, 20, 30, 40], dtype=np.int64),
+        'spike_templates.npy': np.array([0, 1, 0, 1], dtype=np.int32),
+        'templates.npy': rng.normal(size=(2, 8, 2)).astype(np.float32),
+        'channel_map.npy': np.array([0, 1], dtype=np.int32),
+        'channel_positions.npy': np.array([[0., 0.], [0., 20.]]),
+        '_phy_spikes_subset.spikes.npy': np.array([0, 2], dtype=np.int64),
+        '_phy_spikes_subset.channels.npy': np.array([[0, 1], [0, 1]], dtype=np.int32),
+        '_phy_spikes_subset.waveforms.npy': rng.normal(size=(2, 8, 2)).astype(np.float32),
+    }
+    for name, values in arrays.items():
+        np.save(tmp_path / name, values)
+    params = tmp_path / 'params.py'
+    params.write_text(
+        "sample_rate = 1000.\nn_channels_dat = 2\ndtype = 'int16'\ndat_path = None\n")
+    model = load_model(params)
+    try:
+        assert model.sparse_features is None
+        assert model.spike_waveforms is not None
+        yield model
+    finally:
+        model.close()
 
 
 #------------------------------------------------------------------------------
@@ -46,6 +74,30 @@ def test_from_sparse():
 
     with raises(NotImplementedError):
         _test([19, 19], [[0, 0], [4, 4]])
+
+
+@mark.parametrize('spike_ids,channel_ids', [([], [0, 1]), ([1, 3], [0, 1]), ([0, 2], [])])
+def test_model_features_without_available_waveforms(stored_waveform_model, spike_ids, channel_ids):
+    model = stored_waveform_model
+    features = model.get_features(
+        np.asarray(spike_ids, dtype=np.int64), np.asarray(channel_ids, dtype=np.int64))
+    assert features.shape == (len(spike_ids), len(channel_ids), 3)
+    assert features.dtype == np.float32
+    ae(features, np.zeros(features.shape, dtype=np.float32))
+
+
+@mark.parametrize('spike_ids', [[0, 2], [3, 2, 1, 0]])
+def test_model_features_stored_waveform_coverage(stored_waveform_model, spike_ids):
+    model = stored_waveform_model
+    channels = np.array([1, 0])
+    features = model.get_features(np.asarray(spike_ids, dtype=np.int64), channels)
+    waveforms = np.load(model.dir_path / '_phy_spikes_subset.waveforms.npy')[:, :, channels]
+    projected = model_module.compute_features(waveforms)
+    expected = np.zeros((len(spike_ids), 2, 3), dtype=np.float32)
+    for index, spike in enumerate(spike_ids):
+        if spike in (0, 2):
+            expected[index] = projected[spike // 2]
+    ae(features, expected)
 
 
 def test_model_spikeinterface_relative_json(tmp_path, monkeypatch):
