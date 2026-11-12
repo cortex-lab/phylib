@@ -108,12 +108,18 @@ def test_load_pickle_restricted(tempdir):
     ae(out['a'], data['a'])
     assert out['b'] == data['b'] and out['c'] == data['c']
 
-    # arbitrary callables are refused, directly or hidden in an object array
-    for obj in (Evil(), {'x': Evil()}, np.array([Evil()], dtype=object)):
+    # arbitrary callables are refused, directly or nested, and so are (even harmless) object arrays
+    for obj in (Evil(), {'x': Evil()}, np.array([1, 'a'], dtype=object)):
         save_pickle(path, obj)
         with raises(pickle.UnpicklingError):
             load_pickle(path)
         assert not marker.exists()
+
+    # compressed files are refused with a clear error
+    path = tempdir.joinpath('ok.pkl.gz')
+    save_pickle(path, data)
+    with raises(ValueError, match='compression'):
+        load_pickle(path)
 
 
 def test_read_python(tempdir):
