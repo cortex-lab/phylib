@@ -21,7 +21,7 @@ from .._misc import (
     _atomic_open, _git_version, load_json, save_json, load_pickle, save_pickle, read_python,
     write_python, read_text, write_text, _read_tsv_simple, _write_tsv_simple, read_tsv, write_tsv,
     _pretty_floats, _encode_qbytearray, _decode_qbytearray, _fullname, _load_from_fullname,
-    _safe_eval)
+    _SafeEvaluator)
 
 
 #------------------------------------------------------------------------------
@@ -120,7 +120,7 @@ def test_read_python_params(tempdir):
     }
 
 
-def test_read_python_safe_eval(tempdir, caplog):
+def test_read_python_safe_eval(tempdir):
     path = tempdir.joinpath('mock.py')
     path.write_text(
         "Multi = {\n  0: list(range(3)),  # comment\n  1: (1, 2),\n}\n"
@@ -129,16 +129,79 @@ def test_read_python_safe_eval(tempdir, caplog):
     assert read_python(path) == {
         'multi': {0: [0, 1, 2], 1: (1, 2)}, 'rate': 30000.0, 'x': 1, 'y': 1}
 
-    # nothing is executed: unsupported statements / expressions are skipped with a warning
-    marker = tempdir.joinpath('pwned')
+
+def test_read_python_probe_template(tempdir):
+    """Dictionary comprehension, variable references, indexing (N-Form.prb style)."""
+    path = tempdir.joinpath('probe.prb')
     path.write_text(
-        f"import os\n"
-        f"a = __import__('pathlib').Path({str(marker)!r}).write_text('x')\n"
-        f"b = open({str(marker)!r}, 'w')\n"
-        f"c = 1\n")
-    assert read_python(path) == {'c': 1}
-    assert not marker.exists()
-    assert caplog.text.count('Skipping') == 3
+        '"""A probe."""\n'
+        "n = 4\n"
+        "channels = list(range(n))\n"
+        "pos = {i: (0., 20. * i) for i in channels if i % 2 == 0}\n"
+        "last = channels[-1]\n"
+        "evens = channels[::2]\n"
+        "pairs = [(a, b) for a in range(2) for b in range(2)]\n"
+        "ok = 1 if len(pos) == 2 and last in channels else 0\n")
+    out = read_python(path)
+    assert out['pos'] == {0: (0., 0.), 2: (0., 40.)}
+    assert out['last'] == 3 and out['evens'] == [0, 2] and out['ok'] == 1
+    assert out['pairs'] == [(0, 0), (0, 1), (1, 0), (1, 1)]
+
+
+@mark.parametrize('code', [
+    "import os",
+    "a = __import__('os')",
+    "a = open('x', 'w')",
+    "a = (1).__class__",
+    "a = [].append",
+    "a = undefined",
+    "a = lambda: 1",
+    "a = 1\na += 1",
+    "a = 1\nprint(a)",
+    "a = 2 ** 3",
+    "a = range",
+    "a = f'{1}'",
+])
+def test_read_python_rejects(tempdir, code):
+    path = tempdir.joinpath('bad.py')
+    path.write_text(code)
+    with raises(ValueError, match=r'bad\.py:\d+'):
+        read_python(path)
+
+
+def test_read_python_reassignment_not_skipped(tempdir):
+    path = tempdir.joinpath('bad.py')
+    path.write_text("sample_rate = 30000.\nsample_rate = os.environ['X']\n")
+    with raises(ValueError, match=r'bad\.py:2'):
+        read_python(path)
+
+
+@mark.parametrize('code', [
+    "a = [0] * 10000000",
+    "a = list(range(10000000))",
+    "a = 'x' * 100000000",
+    "a = [i for i in range(1000) for j in range(1000) for k in range(2)]",
+    "a = [[0] * 1000] * 1000\nb = [x for x in a for _ in range(2)] * 1000",
+])
+def test_read_python_limits(tempdir, code):
+    path = tempdir.joinpath('big.py')
+    path.write_text(code)
+    with raises(ValueError, match='limit|iterations'):
+        read_python(path)
+
+
+def test_read_python_allow_execution(tempdir, caplog):
+    marker = tempdir.joinpath('ran')
+    path = tempdir.joinpath('legacy.py')
+    path.write_text(f"import pathlib\nX = pathlib.Path({str(marker)!r}).write_text('x')\n")
+    with raises(ValueError):
+        read_python(path)
+    assert not marker.exists()  # no automatic fallback
+    assert read_python(path, allow_python_execution=True)['x'] == 1
+    assert marker.exists()
+    assert 'arbitrary Python' in caplog.text
+    with raises(TypeError):
+        read_python(path, True)  # keyword-only
 
 
 @mark.parametrize('namespace', ['np', 'numpy'])
@@ -175,7 +238,7 @@ def test_read_python_numpy_boolean(tempdir, namespace, literal):
 def test_safe_eval_numpy_rejects_unsupported(expression, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     with raises(ValueError):
-        _safe_eval(ast.parse(expression, mode='eval').body)
+        _SafeEvaluator().eval(ast.parse(expression, mode='eval').body)
     assert not (tmp_path / 'marker').exists()
 
 
