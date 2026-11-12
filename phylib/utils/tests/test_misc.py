@@ -6,6 +6,7 @@
 # Imports
 #------------------------------------------------------------------------------
 
+import ast
 import csv
 import json
 import os
@@ -19,7 +20,8 @@ from pytest import raises, mark
 from .._misc import (
     _atomic_open, _git_version, load_json, save_json, load_pickle, save_pickle, read_python,
     write_python, read_text, write_text, _read_tsv_simple, _write_tsv_simple, read_tsv, write_tsv,
-    _pretty_floats, _encode_qbytearray, _decode_qbytearray, _fullname, _load_from_fullname)
+    _pretty_floats, _encode_qbytearray, _decode_qbytearray, _fullname, _load_from_fullname,
+    _SafeEvaluator)
 
 
 #------------------------------------------------------------------------------
@@ -96,6 +98,156 @@ def test_read_python(tempdir):
         f.write("""a = {'b': 1}""")
 
     assert read_python(path) == {'a': {'b': 1}}
+
+
+def test_read_python_params(tempdir):
+    """Typical phy / IBL spike sorting `params.py` file."""
+    path = tempdir.joinpath('params.py')
+    path.write_text(
+        "dat_path = '_iblrig_ephysData_g0_t0.imec.ap.bin'\n"
+        "n_channels_dat = 385\n"
+        "dtype = 'int16'\n"
+        "offset = 0\n"
+        "sample_rate = 30000.\n"
+        "hp_filtered = False\n")
+    assert read_python(path) == {
+        'dat_path': '_iblrig_ephysData_g0_t0.imec.ap.bin',
+        'n_channels_dat': 385,
+        'dtype': 'int16',
+        'offset': 0,
+        'sample_rate': 30000.0,
+        'hp_filtered': False,
+    }
+
+
+def test_read_python_safe_eval(tempdir):
+    path = tempdir.joinpath('mock.py')
+    path.write_text(
+        "Multi = {\n  0: list(range(3)),  # comment\n  1: (1, 2),\n}\n"
+        "rate = 2 * 15000.\n"
+        "x = y = 1\n")
+    assert read_python(path) == {
+        'multi': {0: [0, 1, 2], 1: (1, 2)}, 'rate': 30000.0, 'x': 1, 'y': 1}
+
+
+def test_read_python_probe_template(tempdir):
+    """Dictionary comprehension, variable references, indexing (N-Form.prb style)."""
+    path = tempdir.joinpath('probe.prb')
+    path.write_text(
+        '"""A probe."""\n'
+        "n = 4\n"
+        "channels = list(range(n))\n"
+        "pos = {i: (0., 20. * i) for i in channels if i % 2 == 0}\n"
+        "last = channels[-1]\n"
+        "evens = channels[::2]\n"
+        "pairs = [(a, b) for a in range(2) for b in range(2)]\n"
+        "ok = 1 if len(pos) == 2 and last in channels else 0\n")
+    out = read_python(path)
+    assert out['pos'] == {0: (0., 0.), 2: (0., 40.)}
+    assert out['last'] == 3 and out['evens'] == [0, 2] and out['ok'] == 1
+    assert out['pairs'] == [(0, 0), (0, 1), (1, 0), (1, 1)]
+
+
+@mark.parametrize('code', [
+    "import os",
+    "a = __import__('os')",
+    "a = open('x', 'w')",
+    "a = (1).__class__",
+    "a = [].append",
+    "a = undefined",
+    "a = lambda: 1",
+    "a = 1\na += 1",
+    "a = 1\nprint(a)",
+    "a = 2 ** 3",
+    "a = range",
+    "a = f'{1}'",
+])
+def test_read_python_rejects(tempdir, code):
+    path = tempdir.joinpath('bad.py')
+    path.write_text(code)
+    with raises(ValueError, match=r'bad\.py:\d+'):
+        read_python(path)
+
+
+def test_read_python_reassignment_not_skipped(tempdir):
+    path = tempdir.joinpath('bad.py')
+    path.write_text("sample_rate = 30000.\nsample_rate = os.environ['X']\n")
+    with raises(ValueError, match=r'bad\.py:2'):
+        read_python(path)
+
+
+@mark.parametrize('code', [
+    "a = [0] * 10000000",
+    "a = list(range(10000000))",
+    "a = 'x' * 100000000",
+    "a = [i for i in range(1000) for j in range(1000) for k in range(2)]",
+    "a = [[0] * 1000] * 1000\nb = [x for x in a for _ in range(2)] * 1000",
+])
+def test_read_python_limits(tempdir, code):
+    path = tempdir.joinpath('big.py')
+    path.write_text(code)
+    with raises(ValueError, match='limit|iterations'):
+        read_python(path)
+
+
+def test_read_python_allow_execution(tempdir, caplog):
+    marker = tempdir.joinpath('ran')
+    path = tempdir.joinpath('legacy.py')
+    path.write_text(f"import pathlib\nX = pathlib.Path({str(marker)!r}).write_text('x')\n")
+    with raises(ValueError):
+        read_python(path)
+    assert not marker.exists()  # no automatic fallback
+    assert read_python(path, allow_python_execution=True)['x'] == 1
+    assert marker.exists()
+    assert 'arbitrary Python' in caplog.text
+    with raises(TypeError):
+        read_python(path, True)  # keyword-only
+
+
+@mark.parametrize('namespace', ['np', 'numpy'])
+@mark.parametrize('name, literal', [
+    ('bool', 'True'), ('bool_', 'False'),
+    *[(name, '-3') for name in ('int8', 'int16', 'int32', 'int64')],
+    *[(name, '3') for name in ('uint8', 'uint16', 'uint32', 'uint64')],
+    *[(name, '-1.5') for name in ('float16', 'float32', 'float64')],
+])
+def test_read_python_numpy_scalar(tempdir, namespace, name, literal):
+    path = tempdir / 'numpy.py'
+    path.write_text(f'values = {{0: [({namespace}.{name}({literal}),)]}}\n')
+    value = read_python(path)['values'][0][0][0]
+    expected = ast.literal_eval(literal)
+    assert value == expected
+    assert type(value) is type(expected)
+
+
+@mark.parametrize('namespace', ['np', 'numpy'])
+@mark.parametrize('literal', ['True', 'False'])
+def test_read_python_numpy_boolean(tempdir, namespace, literal):
+    path = tempdir / 'numpy.py'
+    path.write_text(f'value = {namespace}.{literal}_\n')
+    assert read_python(path)['value'] is ast.literal_eval(literal)
+
+
+@mark.parametrize('expression', [
+    'np.array([1, 2])', 'np.load("data.npy")', 'other.int64(1)',
+    'np.core.int64(1)', 'np.int64()', 'np.int64(1, 2)', 'np.int64(value=1)',
+    'np.int64(*[1])', 'np.int64(1 + 2)', 'np.int64("1")', 'np.int64(1.5)',
+    'np.int64(True)', 'np.float64([1])', 'np.float64("nan")', 'np.bool_(1)',
+    'np.int64(open("marker", "w"))', 'other.True_', 'np.nan', 'np.int64',
+])
+def test_safe_eval_numpy_rejects_unsupported(expression, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    with raises(ValueError):
+        _SafeEvaluator().eval(ast.parse(expression, mode='eval').body)
+    assert not (tmp_path / 'marker').exists()
+
+
+def test_write_python_numpy_scalars(tempdir):
+    # Exercises NumPy 2 scalar reprs when installed, and NumPy 1 compatibility.
+    data = {'values': {0: [np.int64(385), np.float64(1.5), np.bool_(True)]}}
+    path = tempdir / 'numpy.py'
+    write_python(path, data)
+    assert read_python(path) == data
 
 
 def test_write_python(tempdir):

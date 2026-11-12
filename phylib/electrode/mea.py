@@ -80,7 +80,7 @@ def _channels_per_group(probe):
             for group in groups}
 
 
-def load_probe(name_or_path):
+def load_probe(name_or_path, *, allow_python_execution=False):
     """Load one of the built-in probes."""
     path = Path(name_or_path)
     # The argument can be either a path to a PRB file or the name of a built-in probe..
@@ -88,7 +88,7 @@ def load_probe(name_or_path):
         path = Path(__file__).parent / ('probes/%s.prb' % name_or_path)
     if not path.exists():
         raise IOError("The probe `{}` cannot be found.".format(name_or_path))
-    return MEA(probe=read_python(path))
+    return MEA(probe=read_python(path, allow_python_execution=allow_python_execution))
 
 
 def list_probes():

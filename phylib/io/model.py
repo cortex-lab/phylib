@@ -1458,11 +1458,14 @@ def _make_abs_path(p, dir_path):
     return p
 
 
-def get_template_params(params_path):
-    """Get a dictionary of parameters from a `params.py` file."""
+def get_template_params(params_path, *, allow_python_execution=False):
+    """Get a dictionary of parameters from a `params.py` file.
+
+    Set `allow_python_execution=True` only for trusted legacy files (see `read_python()`).
+    """
     params_path = Path(params_path)
 
-    params = read_python(params_path)
+    params = read_python(params_path, allow_python_execution=allow_python_execution)
     params['dtype'] = np.dtype(params['dtype'])
 
     if 'dir_path' not in params:
@@ -1476,6 +1479,7 @@ def get_template_params(params_path):
     return params
 
 
-def load_model(params_path):
+def load_model(params_path, *, allow_python_execution=False):
     """Return a TemplateModel instance from a path to a `params.py` file."""
-    return TemplateModel(**get_template_params(params_path))
+    return TemplateModel(**get_template_params(
+        params_path, allow_python_execution=allow_python_execution))
