@@ -110,8 +110,12 @@ class EphysAlfCreator(object):
         self.spc = _spikes_per_cluster(model.spike_clusters)
         self.cluster_ids = _unique(self.model.spike_clusters)
 
-    def convert(self, out_path, force=False, label='', ampfactor=1):
-        """Convert from KS/phy format to ALF."""
+    def convert(self, out_path, force=False, label='', ampfactor=1, *,
+                allow_python_execution=False):
+        """Convert from KS/phy format to ALF.
+
+        `allow_python_execution` is passed to `load_model()`, only for trusted legacy files.
+        """
         logger.info("Converting dataset to ALF.")
         self.out_path = Path(out_path)
         self.label = label
@@ -145,7 +149,7 @@ class EphysAlfCreator(object):
         # Return the TemplateModel of the converted ALF dataset if the params.py file exists.
         params_path = self.out_path / 'params.py'
         if params_path.exists():
-            return load_model(params_path)
+            return load_model(params_path, allow_python_execution=allow_python_execution)
 
     def copy_files(self, force=False):
         for fn0, fn1, squeeze in _FILE_RENAMES:
