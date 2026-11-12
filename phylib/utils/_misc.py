@@ -216,18 +216,32 @@ def load_pickle(path):
 
     Only plain Python containers and numeric data (numpy arrays and scalars) can be loaded.
     A pickle referencing any other object raises `pickle.UnpicklingError`, instead of being
-    executed. Compressed or memory-mapped files are not supported.
+    executed. Object-dtype arrays are refused before being read, as they could hold arbitrary
+    objects. Compressed files (written by `save_pickle()` when the path ends with `.z`, `.gz`,
+    `.bz2`, `.xz`, `.lzma` or `.lz4`) are not supported and raise a `ValueError`.
     """
-    from joblib.numpy_pickle import NumpyUnpickler
+    from joblib.numpy_pickle import NumpyArrayWrapper, NumpyUnpickler
+    from joblib.numpy_pickle_utils import _detect_compressor
+
+    class _ArrayWrapper(NumpyArrayWrapper):
+        def read(self, *args, **kwargs):
+            if self.dtype.hasobject:
+                raise pickle.UnpicklingError("Loading object arrays is forbidden.")
+            return super().read(*args, **kwargs)
 
     class _RestrictedUnpickler(NumpyUnpickler):
         def find_class(self, module, name):
             if (module, name) not in _PICKLE_ALLOWED:
                 raise pickle.UnpicklingError(f"Loading {module}.{name} is forbidden.")
+            if name == 'NumpyArrayWrapper':
+                return _ArrayWrapper
             return super().find_class(module, name)
 
     path = Path(path)
     with open(path, 'rb') as f:
+        compressor = _detect_compressor(f)
+        if compressor != 'not-compressed':
+            raise ValueError(f"Cannot load {path}: {compressor} compression is not supported.")
         return _RestrictedUnpickler(str(path), f, True).load()
 
 
