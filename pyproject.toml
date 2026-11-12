@@ -55,7 +55,7 @@ dev = [
 path = "phylib/__init__.py"
 
 [tool.hatch.build.targets.sdist]
-include = ["phylib", "CHANGELOG.md"]
+include = ["phylib", "CHANGELOG.md", "setup.cfg"]
 
 [tool.pytest.ini_options]
 norecursedirs = [
