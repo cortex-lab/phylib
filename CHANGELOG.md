@@ -16,6 +16,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bounded background work and serialized backend access. Ordinary reads remain demand driven,
   and closing a model shuts down its reader without retaining late prefetch results.
 
+### Changed
+- Packaging moved from `setup.py` and `requirements*.txt` to `pyproject.toml` with the
+  hatchling build backend. Development dependencies are installed with
+  `pip install -e ".[dev]"` or `uv sync --extra dev`.
+- Python 3.10 or later is now required.
+
+### Removed
+- Unused `dask` and `toolz` dependencies.
+
 ### Fixed
 - Feature requests with no matching stored waveforms return zero-filled features instead of
   attempting PCA on an empty array. Empty spike or channel selections also retain their

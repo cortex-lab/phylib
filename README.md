@@ -42,7 +42,8 @@ traces.cancel_prefetch()
 ## Contribution
 
 - participation in phylib is governed by the project [Code of Conduct](CODE_OF_CONDUCT.md)
-- run all tests using pytest `pytest phylib`
+- create a local environment with `uv sync --extra dev`
+- run all tests using `uv run pytest phylib`
 - PR to master
 - keep `phylib/__init__.py` on the next development version (for example,
   `2.7.1.dev0`)
@@ -61,7 +62,7 @@ Validate the final release checkout in a dedicated environment:
 
 ```shell
 uv venv --python 3.12 .venv-release
-uv pip install --python .venv-release -r requirements-dev.txt -e . setuptools build twine
+uv pip install --python .venv-release -e ".[dev]" build twine
 .venv-release/bin/python -m flake8 phylib
 .venv-release/bin/python -m pytest phylib
 ```

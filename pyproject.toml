@@ -1,0 +1,72 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "phylib"
+dynamic = ["version"]
+description = "Ephys data analysis for thousands of channels"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "BSD-3-Clause"
+license-files = ["LICENSE.md"]
+authors = [
+  {name = "Cyrille Rossant", email = "cyrille.rossant@gmail.com"},
+]
+keywords = ["phy", "data analysis", "electrophysiology", "neuroscience"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Natural Language :: English",
+  "Framework :: IPython",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+]
+dependencies = [
+  "joblib",
+  "mtscomp",
+  "numpy",
+  "requests",
+  "scipy",
+  "tqdm",
+]
+
+[project.urls]
+Homepage = "https://github.com/cortex-lab/phylib"
+
+[project.optional-dependencies]
+spikeinterface = [
+  "spikeinterface>=0.100",
+]
+dev = [
+  "coverage",
+  "coveralls",
+  "flake8",
+  "pytest",
+  "pytest-cov",
+  "responses",
+  "spikeinterface>=0.100",
+]
+
+[tool.hatch.version]
+path = "phylib/__init__.py"
+
+[tool.hatch.build.targets.sdist]
+include = ["phylib", "CHANGELOG.md", "setup.cfg"]
+
+[tool.pytest.ini_options]
+norecursedirs = [
+  ".git",
+  ".venv",
+  ".uv-cache",
+  "build",
+  "dist",
+]
+filterwarnings = [
+  "default",
+  "ignore::DeprecationWarning:responses|cookies|socks|matplotlib",
+  "ignore:numpy.ufunc",
+]
