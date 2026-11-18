@@ -210,7 +210,8 @@ def save_pickle(path, data):
 
 
 MAX_ITERATIONS = 1_000_000  # total loop iterations allowed in comprehensions / helpers
-MAX_SIZE = 1_000_000  # maximum number of elements of any container created
+MAX_SIZE = 1_000_000  # maximum number of elements of any container created (bits of an int)
+_SIZED = (str, bytes, list, tuple, set, frozenset, dict, range)
 
 _SAFE_CALLS = {
     'range': range, 'list': list, 'tuple': tuple, 'set': set, 'dict': dict, 'len': len,
@@ -238,11 +239,14 @@ class _SafeEvaluator:
 
     Supported: literals, list/tuple/set/dict displays, references to previously assigned
     variables, `+ - * / // %` and unary `+ - not`, comparisons, `and`/`or`, `a if c else b`,
-    indexing and slicing, list/set/dict comprehensions and generator expressions (with nested
-    `for` and `if` clauses), and calls to the helpers in `_SAFE_CALLS`.
+    indexing and slicing, list/set/dict comprehensions (with nested `for` and `if` clauses),
+    and calls to the helpers in `_SAFE_CALLS` (`str()` of scalars only, numeric `sum()` only).
+    Generator expressions and `%` string formatting are not supported.
     NumPy scalar reprs (`np.int64(3)`, `np.True_`, also under `numpy`) are unwrapped to their
     literal argument, of the matching type, without calling NumPy (see `_NUMPY_SCALAR_LITERALS`).
-    Total iterations and container sizes are bounded by `MAX_ITERATIONS` and `MAX_SIZE`.
+    Total iterations and container sizes are bounded by `MAX_ITERATIONS` and `MAX_SIZE`; the
+    elements traversed by helpers, comparisons, slicing and container operations count as
+    iterations.
     Anything else raises a `ValueError`.
     """
 
@@ -251,8 +255,7 @@ class _SafeEvaluator:
         self.iterations = 0
 
     def _check_size(self, value):
-        if isinstance(value, (str, bytes, list, tuple, set, frozenset, dict, range)) \
-                and len(value) > MAX_SIZE:
+        if isinstance(value, _SIZED) and len(value) > MAX_SIZE:
             raise ValueError(f"Object larger than the {MAX_SIZE} elements limit.")
         return value
 
@@ -260,6 +263,10 @@ class _SafeEvaluator:
         self.iterations += n
         if self.iterations > MAX_ITERATIONS:
             raise ValueError(f"More than {MAX_ITERATIONS} iterations.")
+
+    def _tick_sizes(self, *values):
+        # Builtin operations traverse their sized operands: count their elements as iterations.
+        self._tick(sum(len(v) for v in values if isinstance(v, _SIZED)))
 
     def _iter(self, iterable):
         # Bound iteration over lazy objects (range, zip...) as well as sequences.
@@ -271,6 +278,7 @@ class _SafeEvaluator:
         if isinstance(target, ast.Name):
             env[target.id] = value
         elif isinstance(target, (ast.Tuple, ast.List)):
+            self._tick_sizes(value)
             value = list(value)
             if len(value) != len(target.elts):
                 raise ValueError("Cannot unpack: wrong number of values.")
@@ -318,13 +326,24 @@ class _SafeEvaluator:
             return {ev(k): ev(v) for k, v in zip(node.keys, node.values)}
         if isinstance(node, ast.BinOp) and type(node.op) in _BINOPS:
             a, b = ev(node.left), ev(node.right)
-            # Check sizes *before* repeating, to avoid allocating huge sequences.
+            # Check sizes *before* repeating or formatting, to avoid allocating huge objects.
+            if isinstance(node.op, ast.Mod) and isinstance(a, (str, bytes)):
+                raise ValueError("String formatting with `%` is not supported.")
             if isinstance(node.op, ast.Mult):
                 for seq, n in ((a, b), (b, a)):
-                    if isinstance(seq, (str, bytes, list, tuple)) and isinstance(n, int) \
-                            and len(seq) * n > MAX_SIZE:
+                    if not isinstance(n, int):
+                        continue
+                    if isinstance(seq, (str, bytes, list, tuple)):
+                        size = len(seq) * n
+                    elif isinstance(seq, int):  # product of large ints: bound its bit length
+                        size = seq.bit_length() + n.bit_length()
+                    else:
+                        continue
+                    if size > MAX_SIZE:
                         raise ValueError(f"Object larger than the {MAX_SIZE} elements limit.")
-            return self._check_size(_BINOPS[type(node.op)](a, b))
+            out = self._check_size(_BINOPS[type(node.op)](a, b))
+            self._tick_sizes(out)
+            return out
         if isinstance(node, ast.UnaryOp) and type(node.op) in _UNARYOPS:
             return _UNARYOPS[type(node.op)](ev(node.operand))
         if isinstance(node, ast.BoolOp):
@@ -337,6 +356,7 @@ class _SafeEvaluator:
             left = ev(node.left)
             for op, comp in zip(node.ops, node.comparators):
                 right = ev(comp)
+                self._tick_sizes(left, right)
                 if not _CMPOPS[type(op)](left, right):
                     return False
                 left = right
@@ -344,11 +364,14 @@ class _SafeEvaluator:
         if isinstance(node, ast.IfExp):
             return ev(node.body) if ev(node.test) else ev(node.orelse)
         if isinstance(node, ast.Subscript):
-            return ev(node.value)[ev(node.slice)]
+            out = ev(node.value)[ev(node.slice)]
+            if isinstance(node.slice, ast.Slice):
+                self._tick_sizes(out)
+            return out
         if isinstance(node, ast.Slice):
             return slice(*(ev(x) if x is not None else None
                            for x in (node.lower, node.upper, node.step)))
-        if isinstance(node, (ast.ListComp, ast.SetComp, ast.GeneratorExp)):
+        if isinstance(node, (ast.ListComp, ast.SetComp)):
             out = set() if isinstance(node, ast.SetComp) else []
             add = out.add if isinstance(out, set) else out.append
             for e in self._comprehension(node, env):
@@ -365,10 +388,16 @@ class _SafeEvaluator:
                 and node.func.id in _SAFE_CALLS and node.func.id not in env \
                 and not node.keywords \
                 and not any(isinstance(a, ast.Starred) for a in node.args):
-            args = [ev(a) for a in node.args]
-            if node.func.id == 'range':
+            name, args = node.func.id, [ev(a) for a in node.args]
+            if name == 'str' and not isinstance(args[0] if args else '', (str, int, float)):
+                raise ValueError("`str()` only accepts str, int or float.")
+            if name == 'sum' and len(args) > 1 and not isinstance(args[1], (int, float)):
+                raise ValueError("`sum()` only accepts a numeric start value.")
+            if name == 'range':
                 self._tick(len(range(*args)))  # also validates the arguments
-            return self._check_size(_SAFE_CALLS[node.func.id](*args))
+            elif name != 'len':
+                self._tick_sizes(*args)
+            return self._check_size(_SAFE_CALLS[name](*args))
         func = node.func if isinstance(node, ast.Call) else node
         if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name) \
                 and func.value.id in ('np', 'numpy'):
@@ -393,9 +422,11 @@ def read_python(path, *, allow_python_execution=False):
         `name = expression` assignments (and docstrings) are accepted, where expressions may use:
         literals; list/tuple/set/dict displays; previously assigned variables; `+ - * / // %`;
         comparisons, `and`, `or`, `not`, `a if c else b`; indexing and slicing; list/set/dict
-        comprehensions (bounded to 1e6 iterations and 1e6 elements); the helpers
-        `range list tuple set dict len int float str bool abs min max sum sorted zip enumerate
-        round`; and NumPy scalar reprs such as `np.int64(3)` (unwrapped, not executed).
+        comprehensions (bounded to 1e6 iterations and 1e6 elements, elements traversed by
+        helpers and operators included); the helpers `range list tuple set dict len int float
+        str bool abs min max sum sorted zip enumerate round` (`str()` of scalars, numeric
+        `sum()`); and NumPy scalar reprs such as `np.int64(3)` (unwrapped, not executed).
+        Generator expressions and `%` string formatting are not supported.
         Anything else raises a `ValueError` with the file name and line number, so that no
         earlier definition is silently kept.
         If True, the file is run with `exec()`: **only use for trusted legacy files**, as it can

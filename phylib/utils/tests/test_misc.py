@@ -161,6 +161,8 @@ def test_read_python_probe_template(tempdir):
     "a = 2 ** 3",
     "a = range",
     "a = f'{1}'",
+    "a = (i for i in range(3))",
+    "a = sum(i for i in range(3))",
 ])
 def test_read_python_rejects(tempdir, code):
     path = tempdir.joinpath('bad.py')
@@ -182,11 +184,22 @@ def test_read_python_reassignment_not_skipped(tempdir):
     "a = 'x' * 100000000",
     "a = [i for i in range(1000) for j in range(1000) for k in range(2)]",
     "a = [[0] * 1000] * 1000\nb = [x for x in a for _ in range(2)] * 1000",
+    # Allocations are bounded before allocating.
+    "a = '%1000000000s' % ''",
+    "a = 'x' * 1000000\nb = str([a] * 1000000)",
+    "a = [[0] * 1000] * 1000\nb = sum(a, [])",
+    "a = 2\n" + "a = a * a\n" * 30,
+    # Elements traversed by helpers and operators count as iterations.
+    "a = [0] * 100000\nb = [sum(a) for _ in range(11)]",
+    "a = [0] * 100000\nb = [a + a for _ in range(11)]",
+    "a = [0] * 100000\nb = [1 in a for _ in range(11)]",
+    "a = [0] * 100000\nb = [a[:] for _ in range(11)]",
+    "a = [0] * 100000\nb = [sorted(a) for _ in range(11)]",
 ])
 def test_read_python_limits(tempdir, code):
     path = tempdir.joinpath('big.py')
     path.write_text(code)
-    with raises(ValueError, match='limit|iterations'):
+    with raises(ValueError, match='limit|iterations|not supported|only accepts'):
         read_python(path)
 
 
