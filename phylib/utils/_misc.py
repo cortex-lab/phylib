@@ -230,6 +230,10 @@ def load_pickle(path):
             return super().read(*args, **kwargs)
 
     class _RestrictedUnpickler(NumpyUnpickler):
+        def get_extension(self, code):
+            # Pickle's process-wide extension cache bypasses find_class on cache hits.
+            raise pickle.UnpicklingError("Loading pickle extensions is forbidden.")
+
         def find_class(self, module, name):
             if (module, name) not in _PICKLE_ALLOWED:
                 raise pickle.UnpicklingError(f"Loading {module}.{name} is forbidden.")
@@ -242,11 +246,16 @@ def load_pickle(path):
         compressor = _detect_compressor(f)
         if compressor != 'not-compressed':
             raise ValueError(f"Cannot load {path}: {compressor} compression is not supported.")
-        return _RestrictedUnpickler(str(path), f, True).load()
+        return _RestrictedUnpickler(str(path), f, ensure_native_byte_order=True).load()
 
 
 def save_pickle(path, data):
-    """Save data to a pickle file using joblib."""
+    """Save data using joblib, including formats that `load_pickle()` refuses.
+
+    For a `load_pickle()` round trip, use plain containers and non-object NumPy arrays
+    or scalars, and a filename without a compression suffix (for example, `.pkl`).
+    See the README for supported formats and migration guidance.
+    """
     from joblib import dump
     return dump(data, path)
 
@@ -286,9 +295,10 @@ class _SafeEvaluator:
     Generator expressions and `%` string formatting are not supported.
     NumPy scalar reprs (`np.int64(3)`, `np.True_`, also under `numpy`) are unwrapped to their
     literal argument, of the matching type, without calling NumPy (see `_NUMPY_SCALAR_LITERALS`).
-    Total iterations and container sizes are bounded by `MAX_ITERATIONS` and `MAX_SIZE`; the
-    elements traversed by helpers, comparisons, slicing and container operations count as
-    iterations.
+    A conservative work counter limits explicit iteration and selected builtin operations;
+    individual supported containers and integers have size limits. These are practical
+    safeguards, not a total memory or runtime bound: parsing, nested comparisons and builtin
+    implementation costs are not fully accounted for.
     Anything else raises a `ValueError`.
     """
 
@@ -297,7 +307,9 @@ class _SafeEvaluator:
         self.iterations = 0
 
     def _check_size(self, value):
-        if isinstance(value, _SIZED) and len(value) > MAX_SIZE:
+        size = value.bit_length() if isinstance(value, int) else (
+            len(value) if isinstance(value, _SIZED) else 0)
+        if size > MAX_SIZE:
             raise ValueError(f"Object larger than the {MAX_SIZE} elements limit.")
         return value
 
@@ -312,16 +324,41 @@ class _SafeEvaluator:
 
     def _iter(self, iterable):
         # Bound iteration over lazy objects (range, zip...) as well as sequences.
-        for x in iterable:
-            self._tick()
-            yield x
+        iterator = iter(iterable)  # validate now, even for a lazy helper
+
+        def counted():
+            for x in iterator:
+                self._tick()
+                yield x
+        return counted()
+
+    def _call(self, name, args):
+        # Wrap iterable inputs so lazy zip/enumerate objects cannot skip accounting.
+        # Each layer counts its own traversal; creating a lazy helper consumes nothing.
+        if name == 'zip':
+            args = [self._iter(arg) for arg in args]
+        elif name in ('list', 'tuple', 'set', 'dict', 'sorted', 'sum', 'enumerate') \
+                or (name in ('min', 'max') and len(args) == 1):
+            if args:
+                value = args[0]
+                if name == 'dict' and isinstance(value, dict):
+                    value = value.items()
+                value = self._iter(value)
+                if name == 'dict':
+                    # dict also consumes each key/value pair, which may itself be lazy.
+                    value = (self._iter(pair) for pair in value)
+                args = [value, *args[1:]]
+        elif name == 'range':
+            self._tick(len(range(*args)))  # conservative reservation; validates arguments
+        elif name != 'len':
+            self._tick_sizes(*args)
+        return self._check_size(_SAFE_CALLS[name](*args))
 
     def _bind(self, target, value, env):
         if isinstance(target, ast.Name):
             env[target.id] = value
         elif isinstance(target, (ast.Tuple, ast.List)):
-            self._tick_sizes(value)
-            value = list(value)
+            value = list(self._iter(value))
             if len(value) != len(target.elts):
                 raise ValueError("Cannot unpack: wrong number of values.")
             for t, v in zip(target.elts, value):
@@ -350,7 +387,7 @@ class _SafeEvaluator:
         env = self.variables if env is None else env
         ev = lambda n: self.eval(n, env)  # noqa: E731
         if isinstance(node, ast.Constant):
-            return node.value
+            return self._check_size(node.value)
         if isinstance(node, ast.Name):
             if node.id in env:  # `env` always includes the top-level variables
                 return env[node.id]
@@ -358,11 +395,15 @@ class _SafeEvaluator:
                 raise ValueError(f"`{node.id}` can only be called.")
             raise ValueError(f"Undefined name `{node.id}`.")
         if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+            if len(node.elts) > MAX_SIZE:
+                raise ValueError(f"Object larger than the {MAX_SIZE} elements limit.")
             if any(isinstance(e, ast.Starred) for e in node.elts):
                 raise ValueError("Starred expressions are not supported.")
             container = {ast.List: list, ast.Tuple: tuple, ast.Set: set}[type(node)]
             return self._check_size(container(ev(e) for e in node.elts))
         if isinstance(node, ast.Dict):
+            if len(node.keys) > MAX_SIZE:
+                raise ValueError(f"Object larger than the {MAX_SIZE} elements limit.")
             if any(k is None for k in node.keys):
                 raise ValueError("Dict unpacking is not supported.")
             return {ev(k): ev(v) for k, v in zip(node.keys, node.values)}
@@ -371,6 +412,9 @@ class _SafeEvaluator:
             # Check sizes *before* repeating or formatting, to avoid allocating huge objects.
             if isinstance(node.op, ast.Mod) and isinstance(a, (str, bytes)):
                 raise ValueError("String formatting with `%` is not supported.")
+            if isinstance(node.op, ast.Add) and isinstance(a, (str, bytes, list, tuple)) \
+                    and type(a) is type(b) and len(a) + len(b) > MAX_SIZE:
+                raise ValueError(f"Object larger than the {MAX_SIZE} elements limit.")
             if isinstance(node.op, ast.Mult):
                 for seq, n in ((a, b), (b, a)):
                     if not isinstance(n, int):
@@ -399,7 +443,9 @@ class _SafeEvaluator:
             for op, comp in zip(node.ops, node.comparators):
                 right = ev(comp)
                 self._tick_sizes(left, right)
-                if not _CMPOPS[type(op)](left, right):
+                compared = self._iter(right) if isinstance(op, (ast.In, ast.NotIn)) \
+                    and not isinstance(right, _SIZED) else right
+                if not _CMPOPS[type(op)](left, compared):
                     return False
                 left = right
             return True
@@ -423,7 +469,8 @@ class _SafeEvaluator:
         if isinstance(node, ast.DictComp):
             out = {}
             for e in self._comprehension(node, env):
-                out[self.eval(node.key, e)] = self.eval(node.value, e)
+                key = self.eval(node.key, e)
+                out[key] = self.eval(node.value, e)
                 self._check_size(out)
             return out
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
@@ -435,11 +482,7 @@ class _SafeEvaluator:
                 raise ValueError("`str()` only accepts str, int or float.")
             if name == 'sum' and len(args) > 1 and not isinstance(args[1], (int, float)):
                 raise ValueError("`sum()` only accepts a numeric start value.")
-            if name == 'range':
-                self._tick(len(range(*args)))  # also validates the arguments
-            elif name != 'len':
-                self._tick_sizes(*args)
-            return self._check_size(_SAFE_CALLS[name](*args))
+            return self._call(name, args)
         func = node.func if isinstance(node, ast.Call) else node
         if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name) \
                 and func.value.id in ('np', 'numpy'):
@@ -464,11 +507,16 @@ def read_python(path, *, allow_python_execution=False):
         `name = expression` assignments (and docstrings) are accepted, where expressions may use:
         literals; list/tuple/set/dict displays; previously assigned variables; `+ - * / // %`;
         comparisons, `and`, `or`, `not`, `a if c else b`; indexing and slicing; list/set/dict
-        comprehensions (bounded to 1e6 iterations and 1e6 elements, elements traversed by
-        helpers and operators included); the helpers `range list tuple set dict len int float
+        comprehensions; the helpers `range list tuple set dict len int float
         str bool abs min max sum sorted zip enumerate round` (`str()` of scalars, numeric
         `sum()`); and NumPy scalar reprs such as `np.int64(3)` (unwrapped, not executed).
         Generator expressions and `%` string formatting are not supported.
+        A conservative work counter limits iteration and selected operations to 1e6 units;
+        supported individual containers are limited to 1e6 elements (integers to 1e6 bits).
+        These safeguards are not a hard total memory or runtime bound. File reading and AST
+        parsing happen before evaluation; nested objects and builtin operation costs are
+        not fully accounted for. Use process isolation and external resource limits when
+        loading files from untrusted sources in a service.
         Anything else raises a `ValueError` with the file name and line number, so that no
         earlier definition is silently kept.
         If True, the file is run with `exec()`: **only use for trusted legacy files**, as it can

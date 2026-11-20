@@ -39,6 +39,25 @@ traces.prefetch(stop + lookahead)  # Forward navigation; does not wait.
 traces.cancel_prefetch()
 ```
 
+## Pickle data files
+
+`phylib.utils.load_pickle()` accepts uncompressed joblib files containing plain Python
+containers and NumPy arrays or scalars without object dtype. It requires joblib 1.5 or later.
+Custom objects and object-dtype arrays raise `pickle.UnpicklingError`; compressed files
+raise `ValueError`. This changes the previous behavior, which used unrestricted `joblib.load()`.
+
+`save_pickle()` still uses joblib's full writer: it can save custom objects and object arrays,
+and filenames ending in `.z`, `.gz`, `.bz2`, `.xz`, `.lzma`, or `.lz4` select compression
+(the latter requires joblib's optional lz4 dependency). Those files cannot be read back with
+`load_pickle()`. For round trips, use a filename such as `data.pkl` and supported data types.
+
+To migrate existing files, regenerate them from their original source as uncompressed files,
+converting object arrays to appropriate numeric arrays or plain containers. If regeneration
+is unavailable, only use joblib's unrestricted loader on files whose origin and contents you
+trust, then convert the data and save it under an uncompressed filename. Renaming a compressed
+file does not convert its contents. Files containing arbitrary custom objects need an explicit
+application-specific conversion; `load_pickle()` has no unrestricted loading option.
+
 ## Contribution
 
 - participation in phylib is governed by the project [Code of Conduct](CODE_OF_CONDUCT.md)

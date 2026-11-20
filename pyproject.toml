@@ -26,7 +26,7 @@ classifiers = [
   "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
-  "joblib",
+  "joblib>=1.5",
   "mtscomp",
   "numpy",
   "requests",

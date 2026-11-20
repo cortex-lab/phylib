@@ -100,6 +100,26 @@ def test_ephys_1(dataset):
     )
 
 
+def test_convert_trusted_configuration(dataset):
+    path = Path(dataset.tmp_dir)
+    (path / 'params.py').write_text(
+        f'pass\nsample_rate = 2000\nn_channels_dat = {dataset.nc}\n'
+        "dtype = 'int16'\ndat_path = None\n")
+    model = TemplateModel(
+        dir_path=path, dat_path=dataset.dat_path, sample_rate=2000, n_channels_dat=dataset.nc)
+    converted = None
+    try:
+        creator = EphysAlfCreator(model)
+        with raises(ValueError, match='Unsupported statement'):
+            creator.convert(path / 'default')
+        converted = creator.convert(path / 'trusted', allow_python_execution=True)
+        assert converted.n_channels == model.n_channels
+    finally:
+        if converted is not None:
+            converted.close()
+        model.close()
+
+
 def test_spike_depths(dataset):
     path = Path(dataset.tmp_dir)
     out_path = path / 'alf'
