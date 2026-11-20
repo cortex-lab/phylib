@@ -203,6 +203,107 @@ def test_read_python_limits(tempdir, code):
         read_python(path)
 
 
+@mark.parametrize('code', [
+    "a = 'xxxxxxxxxxx'",
+    "a = b'xxxxxxxxxxx'",
+    "a = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]",
+    "a = {0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9, 10: 10}",
+    "a = 1024",
+])
+def test_read_python_all_paths_bounded(tempdir, monkeypatch, code):
+    from .. import _misc
+    monkeypatch.setattr(_misc, 'MAX_ITERATIONS', 100)
+    monkeypatch.setattr(_misc, 'MAX_SIZE', 10)
+    path = tempdir / 'limited.py'
+    path.write_text(code)
+    with raises(ValueError, match=r'limited\.py:\d+'):
+        read_python(path)
+
+
+@mark.parametrize('literal', [
+    "'abcdef'", "b'abcdef'", '[0, 1, 2, 3, 4, 5]', '(0, 1, 2, 3, 4, 5)'])
+def test_read_python_checks_before_concatenation(tempdir, monkeypatch, literal):
+    from .. import _misc
+    monkeypatch.setattr(_misc, 'MAX_SIZE', 10)
+
+    def unexpected_allocation(a, b):
+        raise AssertionError('Concatenation ran before checking the size limit')
+
+    monkeypatch.setitem(_misc._BINOPS, ast.Add, unexpected_allocation)
+    path = tempdir / 'concat.py'
+    path.write_text(f'a = {literal}\nb = a + a\n')
+    with raises(ValueError, match=r'concat\.py:2: .*limit'):
+        read_python(path)
+
+
+def test_read_python_iterator_semantics(tempdir):
+    path = tempdir / 'iterators.py'
+    path.write_text(
+        'a = enumerate([10, 20, 30])\n'
+        'b = {sum([i for i, x in a]): list(a) for _ in [0]}\n'
+        'c = zip([1, 2], [3, 4])\n'
+        'd = list(c)\n'
+        'e = list(c)\n')
+    out = read_python(path)
+    assert out['b'] == {3: []}  # dict comprehension evaluates its key before its value
+    assert out['d'] == [(1, 3), (2, 4)]
+    assert out['e'] == []
+
+
+@mark.parametrize('expression', [
+    'list(items)', 'tuple(items)', 'set(items)', 'dict(items)', 'sorted(items)',
+    'min(items)', 'max(items)', 'sum(items)', 'list(enumerate(items))',
+    'list(zip(items))', '9 in items', '9 not in items',
+])
+def test_safe_eval_counts_iterator_consumption(monkeypatch, expression):
+    from .. import _misc
+    # Tiny inputs and a tiny budget verify lazy consumption without large allocations.
+    monkeypatch.setattr(_misc, 'MAX_ITERATIONS', 2)
+    evaluator = _SafeEvaluator()
+    values = [(1, 2), (3, 4), (5, 6)] if expression == 'dict(items)' else [1, 2, 3]
+    evaluator.variables['items'] = iter(values)
+    with raises(ValueError, match='iterations'):
+        evaluator.eval(ast.parse(expression, mode='eval').body)
+
+
+def test_safe_eval_unpacking_counts_iterator_consumption(monkeypatch):
+    from .. import _misc
+    monkeypatch.setattr(_misc, 'MAX_ITERATIONS', 2)
+    evaluator = _SafeEvaluator()
+    target = ast.parse('a, b, c = values').body[0].targets[0]
+    with raises(ValueError, match='iterations'):
+        evaluator._bind(target, iter([1, 2, 3]), evaluator.variables)
+
+
+def test_safe_eval_counts_dictionary_pair_consumption(monkeypatch):
+    from .. import _misc
+    monkeypatch.setattr(_misc, 'MAX_ITERATIONS', 2)
+    evaluator = _SafeEvaluator()
+    evaluator.variables['pairs'] = [iter([1, 2])]
+    with raises(ValueError, match='iterations'):
+        evaluator.eval(ast.parse('dict(pairs)', mode='eval').body)
+
+
+def test_read_python_helper_semantics(tempdir):
+    path = tempdir / 'helpers.py'
+    path.write_text(
+        "mapping = dict({1: 2, 3: 4})\n"
+        "smallest = min([3, 1, 2])\n"
+        "largest = max(3, 1, 2)\n"
+        "total = sum([1, 2], 3)\n"
+        "substring = 'bc' in 'abcd'\n"
+        "absent = b'xy' not in b'abcd'\n")
+    assert read_python(path) == {
+        'mapping': {1: 2, 3: 4}, 'smallest': 1, 'largest': 3, 'total': 6,
+        'substring': True, 'absent': True}
+
+
+@mark.parametrize('expression', ['zip(1)', 'enumerate(1)'])
+def test_safe_eval_lazy_helpers_validate_inputs(expression):
+    with raises(TypeError):
+        _SafeEvaluator().eval(ast.parse(expression, mode='eval').body)
+
+
 def test_read_python_allow_execution(tempdir, caplog):
     marker = tempdir.joinpath('ran')
     path = tempdir.joinpath('legacy.py')

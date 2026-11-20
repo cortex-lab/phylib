@@ -8,6 +8,7 @@
 #------------------------------------------------------------------------------
 
 import numpy as np
+from pytest import raises
 
 from ..merge import Merger
 from phylib.io.alf import EphysAlfCreator
@@ -31,8 +32,14 @@ def test_probe_merge_1(tempdir):
     subdirs = [tempdir / name for name in probe_names]
 
     # Merge them.
-    m = Merger(subdirs, out_dir)
     single = load_model(tempdir / probe_names[0] / 'params.py')
+    # A harmless legacy statement requires the explicit execution option.
+    for subdir in subdirs:
+        params = subdir / 'params.py'
+        params.write_text(params.read_text() + '\npass\n')
+    with raises(ValueError, match='Unsupported statement'):
+        Merger(subdirs, out_dir).write_params()
+    m = Merger(subdirs, out_dir, allow_python_execution=True)
 
     # Test the merged dataset.
     merged = m.merge()

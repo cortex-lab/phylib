@@ -76,6 +76,20 @@ def test_from_sparse():
         _test([19, 19], [[0, 0], [4, 4]])
 
 
+def test_model_trusted_configuration(stored_waveform_model):
+    params = stored_waveform_model.dir_path / 'params.py'
+    params.write_text(params.read_text() + '\npass\n')
+    for loader in (get_template_params, load_model):
+        with raises(ValueError, match='Unsupported statement'):
+            loader(params)
+    assert get_template_params(params, allow_python_execution=True)['n_channels_dat'] == 2
+    model = load_model(params, allow_python_execution=True)
+    try:
+        assert model.n_channels == stored_waveform_model.n_channels
+    finally:
+        model.close()
+
+
 @mark.parametrize('spike_ids,channel_ids', [([], [0, 1]), ([1, 3], [0, 1]), ([0, 2], [])])
 def test_model_features_without_available_waveforms(stored_waveform_model, spike_ids, channel_ids):
     model = stored_waveform_model
