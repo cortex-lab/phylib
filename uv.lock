@@ -856,7 +856,7 @@ requires-dist = [
     { name = "coverage", marker = "extra == 'dev'" },
     { name = "coveralls", marker = "extra == 'dev'" },
     { name = "flake8", marker = "extra == 'dev'" },
-    { name = "joblib" },
+    { name = "joblib", specifier = ">=1.5" },
     { name = "mtscomp" },
     { name = "numpy" },
     { name = "pytest", marker = "extra == 'dev'" },

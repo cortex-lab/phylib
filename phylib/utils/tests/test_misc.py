@@ -7,9 +7,12 @@
 #------------------------------------------------------------------------------
 
 import ast
+from collections import OrderedDict
+import copyreg
 import csv
 import json
 import os
+import pickle
 import re
 import stat
 
@@ -90,6 +93,103 @@ def test_json_numpy(tempdir, kind):
 
     ae(d['b'], d_bis['b'])
     ae(d['c'], d_bis['c'])
+
+
+def test_load_pickle_restricted(tempdir):
+    marker = tempdir.joinpath('pwned')
+
+    class Evil:
+        def __reduce__(self):
+            return (open, (str(marker), 'w'))
+
+    # plain containers and numpy data round-trip
+    data = {'a': np.arange(3), 'b': [1, 2.5, 'x', None, (1, 2)], 'c': {1, 2}, 'd': np.float32(1)}
+    path = tempdir.joinpath('ok.pkl')
+    save_pickle(path, data)
+    out = load_pickle(path)
+    ae(out['a'], data['a'])
+    assert out['b'] == data['b'] and out['c'] == data['c']
+
+    # arbitrary callables are refused, directly or nested, and so are (even harmless) object arrays
+    for obj in (Evil(), {'x': Evil()}, np.array([1, 'a'], dtype=object),
+                np.array([Evil()], dtype=object)):
+        save_pickle(path, obj)
+        with raises(pickle.UnpicklingError):
+            load_pickle(path)
+        assert not marker.exists()
+
+    # compressed files are refused with a clear error
+    path = tempdir.joinpath('ok.pkl.gz')
+    save_pickle(path, data)
+    with raises(ValueError, match='compression'):
+        load_pickle(path)
+
+
+@mark.parametrize('code', [42, 4242, 424242])
+def test_load_pickle_rejects_cached_extensions(tempdir, monkeypatch, code):
+    # EXT1/EXT2/EXT4 can retrieve cached globals without calling find_class().
+    marker = tempdir / 'extension-ran'
+
+    class Evil:
+        def __reduce__(self):
+            return (eval, (f"__import__('pathlib').Path({str(marker)!r}).write_text('x')",))
+
+    monkeypatch.setitem(copyreg._extension_registry, ('builtins', 'eval'), code)
+    monkeypatch.setitem(copyreg._inverted_registry, code, ('builtins', 'eval'))
+    monkeypatch.setitem(copyreg._extension_cache, code, eval)
+    path = tempdir / 'extension.pkl'
+    path.write_bytes(pickle.dumps(Evil(), protocol=2))
+    with raises(pickle.UnpicklingError):
+        load_pickle(path)
+    assert not marker.exists()
+
+
+@mark.parametrize('suffix', ['.z', '.gz', '.bz2', '.xz', '.lzma'])
+def test_load_pickle_rejects_compressed_formats(tempdir, suffix):
+    path = tempdir / ('compressed.pkl' + suffix)
+    save_pickle(path, {'array': np.arange(3)})
+    with raises(ValueError, match='compression'):
+        load_pickle(path)
+
+
+@mark.parametrize('array', [
+    np.asfortranarray(np.arange(12).reshape(3, 4)),
+    np.arange(5, dtype='>i4'), np.array(3), np.empty((0, 2)),
+    np.array([(1, 2.)], dtype=[('channel', 'i4'), ('position', 'f8')]),
+])
+def test_load_pickle_numeric_formats(tempdir, array):
+    path = tempdir / 'array.pkl'
+    save_pickle(path, array)
+    loaded = load_pickle(path)
+    ae(loaded, array)
+    assert loaded.shape == array.shape
+    assert loaded.dtype == array.dtype.newbyteorder('=')
+
+
+def test_load_pickle_plain_data(tempdir):
+    data = OrderedDict([
+        ('containers', [None, True, 2, 3.5, 'text', b'bytes', (1, 2), {3, 4},
+                        frozenset({5}), bytearray(b'data'), complex(1, 2),
+                        slice(1, 4, 2), range(3)]),
+        ('dtype', np.dtype('float32')),
+        ('scalar', np.float32(1.5)),
+    ])
+    path = tempdir / 'plain.pkl'
+    save_pickle(path, data)
+    loaded = load_pickle(path)
+    assert isinstance(loaded, OrderedDict)
+    assert loaded == data
+    assert type(loaded['scalar']) is np.float32
+
+
+def test_load_pickle_object_array_conversion(tempdir):
+    path = tempdir / 'objects.pkl'
+    data = np.array([1, 'text', None], dtype=object)
+    save_pickle(path, data)
+    with raises(pickle.UnpicklingError, match='object arrays'):
+        load_pickle(path)
+    save_pickle(path, data.tolist())
+    assert load_pickle(path) == [1, 'text', None]
 
 
 def test_read_python(tempdir):

@@ -17,6 +17,7 @@ import logging
 import operator
 import os
 from pathlib import Path
+import pickle
 import secrets
 import stat
 import subprocess
@@ -197,14 +198,64 @@ def save_json(path, data):
 # Other read/write functions
 #------------------------------------------------------------------------------
 
+# Globals that `load_pickle()` is allowed to instantiate: joblib's array wrapper, numpy arrays,
+# dtypes and scalars, and a few builtin containers. Anything else is refused.
+_PICKLE_ALLOWED = {
+    ('builtins', n) for n in (
+        'set', 'frozenset', 'slice', 'range', 'complex', 'bytearray')
+} | {
+    ('collections', 'OrderedDict'),
+    ('joblib.numpy_pickle', 'NumpyArrayWrapper'),
+    ('numpy', 'dtype'), ('numpy', 'ndarray'),
+    ('numpy.core.multiarray', 'scalar'), ('numpy._core.multiarray', 'scalar'),
+}
+
+
 def load_pickle(path):
-    """Load a pickle file using joblib."""
-    from joblib import load
-    return load(path)
+    """Load a pickle file saved with `save_pickle()`, refusing to run arbitrary code.
+
+    Only plain Python containers and numeric data (numpy arrays and scalars) can be loaded.
+    A pickle referencing any other object raises `pickle.UnpicklingError`, instead of being
+    executed. Object-dtype arrays are refused before being read, as they could hold arbitrary
+    objects. Compressed files (written by `save_pickle()` when the path ends with `.z`, `.gz`,
+    `.bz2`, `.xz`, `.lzma` or `.lz4`) are not supported and raise a `ValueError`.
+    """
+    from joblib.numpy_pickle import NumpyArrayWrapper, NumpyUnpickler
+    from joblib.numpy_pickle_utils import _detect_compressor
+
+    class _ArrayWrapper(NumpyArrayWrapper):
+        def read(self, *args, **kwargs):
+            if self.dtype.hasobject:
+                raise pickle.UnpicklingError("Loading object arrays is forbidden.")
+            return super().read(*args, **kwargs)
+
+    class _RestrictedUnpickler(NumpyUnpickler):
+        def get_extension(self, code):
+            # Pickle's process-wide extension cache bypasses find_class on cache hits.
+            raise pickle.UnpicklingError("Loading pickle extensions is forbidden.")
+
+        def find_class(self, module, name):
+            if (module, name) not in _PICKLE_ALLOWED:
+                raise pickle.UnpicklingError(f"Loading {module}.{name} is forbidden.")
+            if name == 'NumpyArrayWrapper':
+                return _ArrayWrapper
+            return super().find_class(module, name)
+
+    path = Path(path)
+    with open(path, 'rb') as f:
+        compressor = _detect_compressor(f)
+        if compressor != 'not-compressed':
+            raise ValueError(f"Cannot load {path}: {compressor} compression is not supported.")
+        return _RestrictedUnpickler(str(path), f, ensure_native_byte_order=True).load()
 
 
 def save_pickle(path, data):
-    """Save data to a pickle file using joblib."""
+    """Save data using joblib, including formats that `load_pickle()` refuses.
+
+    For a `load_pickle()` round trip, use plain containers and non-object NumPy arrays
+    or scalars, and a filename without a compression suffix (for example, `.pkl`).
+    See the README for supported formats and migration guidance.
+    """
     from joblib import dump
     return dump(data, path)
 
