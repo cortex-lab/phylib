@@ -105,3 +105,13 @@ def test_library(tempdir):
         f.write('')
     with raises(KeyError):
         load_probe(path)
+
+
+def test_load_probe_trusted_configuration(tempdir):
+    path = Path(tempdir) / 'legacy.prb'
+    path.write_text(
+        'pass\nchannel_groups = {0: {"channels": [0], "geometry": {0: (0, 0)}, '
+        '"graph": []}}\n')
+    with raises(ValueError, match='Unsupported statement'):
+        load_probe(path)
+    assert load_probe(path, allow_python_execution=True).channels == [0]

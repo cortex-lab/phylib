@@ -78,9 +78,12 @@ class Merger(object):
             * any other field, such as `model`, `serial_number`, etc.
 
         All fields will be saved in `probes.description.tsv`.
+    allow_python_execution : bool
+        Passed to `read_python()` and `load_model()`, only for trusted legacy `params.py` files.
 
     """
-    def __init__(self, subdirs, out_dir, probe_info=None):
+    def __init__(self, subdirs, out_dir, probe_info=None, *, allow_python_execution=False):
+        self.allow_python_execution = allow_python_execution
         assert subdirs
         self.subdirs = [Path(subdir) for subdir in subdirs]
 
@@ -98,7 +101,9 @@ class Merger(object):
 
     def write_params(self):
         """Write a params.py for the merged dataset."""
-        params_l = [read_python(subdir / 'params.py') for subdir in self.subdirs]
+        params_l = [
+            read_python(subdir / 'params.py', allow_python_execution=self.allow_python_execution)
+            for subdir in self.subdirs]
         n_channels_dat = sum(params['n_channels_dat'] for params in params_l)
 
         params_merged = params_l[0]
@@ -308,4 +313,5 @@ class Merger(object):
             self.write_misc()
             bar.update(10)
 
-        return load_model(self.out_dir / 'params.py')
+        return load_model(
+            self.out_dir / 'params.py', allow_python_execution=self.allow_python_execution)

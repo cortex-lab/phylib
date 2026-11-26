@@ -17,6 +17,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and closing a model shuts down its reader without retaining late prefetch results.
 
 ### Changed
+- Python configuration files (`params.py` and probe `.prb` files) now use a restricted
+  expression evaluator by default. Literal assignments, common helpers and comprehensions
+  remain supported; imports, function definitions and other unsupported Python raise an
+  error identifying the file and line. Convert legacy files to supported assignments, or,
+  only for files you trust, explicitly pass `allow_python_execution=True` to `read_python`,
+  `load_probe`, `get_template_params`, `load_model`, `Merger`, or
+  `EphysAlfCreator.convert`. This option executes the file as Python and logs a warning;
+  there is no automatic fallback. The default evaluator has practical per-object size and
+  work limits, not a hard total memory or runtime bound; services loading untrusted files
+  should also use process isolation and external resource limits.
 - Packaging moved from `setup.py` and `requirements*.txt` to `pyproject.toml` with the
   hatchling build backend. Development dependencies are installed with
   `pip install -e ".[dev]"` or `uv sync --extra dev`.

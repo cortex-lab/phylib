@@ -7,12 +7,14 @@
 # Imports
 #------------------------------------------------------------------------------
 
+import ast
 import base64
 from contextlib import contextmanager
 import csv
 from importlib import import_module
 import json
 import logging
+import operator
 import os
 from pathlib import Path
 import secrets
@@ -207,29 +209,304 @@ def save_pickle(path, data):
     return dump(data, path)
 
 
-def read_python(path):
-    """Read a Python file.
+MAX_ITERATIONS = 1_000_000  # total loop iterations allowed in comprehensions / helpers
+MAX_SIZE = 1_000_000  # maximum number of elements of any container created (bits of an int)
+_SIZED = (str, bytes, list, tuple, set, frozenset, dict, range)
+
+_SAFE_CALLS = {
+    'range': range, 'list': list, 'tuple': tuple, 'set': set, 'dict': dict, 'len': len,
+    'int': int, 'float': float, 'str': str, 'bool': bool, 'abs': abs, 'min': min, 'max': max,
+    'sum': sum, 'sorted': sorted, 'zip': zip, 'enumerate': enumerate, 'round': round}
+# NumPy >= 2 scalar reprs (e.g. `np.int64(3)`), unwrapped to their literal argument (never called)
+_NUMPY_SCALAR_LITERALS = {
+    'bool': (bool,), 'bool_': (bool,),
+    **{name: (int,) for name in (
+        'int8', 'int16', 'int32', 'int64', 'uint8', 'uint16', 'uint32', 'uint64')},
+    **{name: (int, float) for name in ('float16', 'float32', 'float64')},
+}
+_BINOPS = {
+    ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul,
+    ast.Div: operator.truediv, ast.FloorDiv: operator.floordiv, ast.Mod: operator.mod}
+_UNARYOPS = {ast.UAdd: operator.pos, ast.USub: operator.neg, ast.Not: operator.not_}
+_CMPOPS = {
+    ast.Eq: operator.eq, ast.NotEq: operator.ne, ast.Lt: operator.lt, ast.LtE: operator.le,
+    ast.Gt: operator.gt, ast.GtE: operator.ge, ast.In: lambda a, b: a in b,
+    ast.NotIn: lambda a, b: a not in b}
+
+
+class _SafeEvaluator:
+    """Evaluate AST expressions without executing arbitrary code.
+
+    Supported: literals, list/tuple/set/dict displays, references to previously assigned
+    variables, `+ - * / // %` and unary `+ - not`, comparisons, `and`/`or`, `a if c else b`,
+    indexing and slicing, list/set/dict comprehensions (with nested `for` and `if` clauses),
+    and calls to the helpers in `_SAFE_CALLS` (`str()` of scalars only, numeric `sum()` only).
+    Generator expressions and `%` string formatting are not supported.
+    NumPy scalar reprs (`np.int64(3)`, `np.True_`, also under `numpy`) are unwrapped to their
+    literal argument, of the matching type, without calling NumPy (see `_NUMPY_SCALAR_LITERALS`).
+    A conservative work counter limits explicit iteration and selected builtin operations;
+    individual supported containers and integers have size limits. These are practical
+    safeguards, not a total memory or runtime bound: parsing, nested comparisons and builtin
+    implementation costs are not fully accounted for.
+    Anything else raises a `ValueError`.
+    """
+
+    def __init__(self):
+        self.variables = {}
+        self.iterations = 0
+
+    def _check_size(self, value):
+        size = value.bit_length() if isinstance(value, int) else (
+            len(value) if isinstance(value, _SIZED) else 0)
+        if size > MAX_SIZE:
+            raise ValueError(f"Object larger than the {MAX_SIZE} elements limit.")
+        return value
+
+    def _tick(self, n=1):
+        self.iterations += n
+        if self.iterations > MAX_ITERATIONS:
+            raise ValueError(f"More than {MAX_ITERATIONS} iterations.")
+
+    def _tick_sizes(self, *values):
+        # Builtin operations traverse their sized operands: count their elements as iterations.
+        self._tick(sum(len(v) for v in values if isinstance(v, _SIZED)))
+
+    def _iter(self, iterable):
+        # Bound iteration over lazy objects (range, zip...) as well as sequences.
+        iterator = iter(iterable)  # validate now, even for a lazy helper
+
+        def counted():
+            for x in iterator:
+                self._tick()
+                yield x
+        return counted()
+
+    def _call(self, name, args):
+        # Wrap iterable inputs so lazy zip/enumerate objects cannot skip accounting.
+        # Each layer counts its own traversal; creating a lazy helper consumes nothing.
+        if name == 'zip':
+            args = [self._iter(arg) for arg in args]
+        elif name in ('list', 'tuple', 'set', 'dict', 'sorted', 'sum', 'enumerate') \
+                or (name in ('min', 'max') and len(args) == 1):
+            if args:
+                value = args[0]
+                if name == 'dict' and isinstance(value, dict):
+                    value = value.items()
+                value = self._iter(value)
+                if name == 'dict':
+                    # dict also consumes each key/value pair, which may itself be lazy.
+                    value = (self._iter(pair) for pair in value)
+                args = [value, *args[1:]]
+        elif name == 'range':
+            self._tick(len(range(*args)))  # conservative reservation; validates arguments
+        elif name != 'len':
+            self._tick_sizes(*args)
+        return self._check_size(_SAFE_CALLS[name](*args))
+
+    def _bind(self, target, value, env):
+        if isinstance(target, ast.Name):
+            env[target.id] = value
+        elif isinstance(target, (ast.Tuple, ast.List)):
+            value = list(self._iter(value))
+            if len(value) != len(target.elts):
+                raise ValueError("Cannot unpack: wrong number of values.")
+            for t, v in zip(target.elts, value):
+                self._bind(t, v, env)
+        else:
+            raise ValueError("Unsupported assignment target.")
+
+    def _comprehension(self, node, env):
+        """Yield the local namespace of each innermost iteration of a comprehension."""
+        def rec(i, env):
+            if i == len(node.generators):
+                yield env
+                return
+            gen = node.generators[i]
+            if gen.is_async:
+                raise ValueError("Async comprehensions are not supported.")
+            for x in self._iter(self.eval(gen.iter, env)):
+                inner = dict(env)
+                self._bind(gen.target, x, inner)
+                if all(self.eval(cond, inner) for cond in gen.ifs):
+                    yield from rec(i + 1, inner)
+        return rec(0, env)
+
+    def eval(self, node, env=None):  # noqa: C901
+        """Evaluate an expression node, with `env` holding the comprehension-local names."""
+        env = self.variables if env is None else env
+        ev = lambda n: self.eval(n, env)  # noqa: E731
+        if isinstance(node, ast.Constant):
+            return self._check_size(node.value)
+        if isinstance(node, ast.Name):
+            if node.id in env:  # `env` always includes the top-level variables
+                return env[node.id]
+            if node.id in _SAFE_CALLS:
+                raise ValueError(f"`{node.id}` can only be called.")
+            raise ValueError(f"Undefined name `{node.id}`.")
+        if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+            if len(node.elts) > MAX_SIZE:
+                raise ValueError(f"Object larger than the {MAX_SIZE} elements limit.")
+            if any(isinstance(e, ast.Starred) for e in node.elts):
+                raise ValueError("Starred expressions are not supported.")
+            container = {ast.List: list, ast.Tuple: tuple, ast.Set: set}[type(node)]
+            return self._check_size(container(ev(e) for e in node.elts))
+        if isinstance(node, ast.Dict):
+            if len(node.keys) > MAX_SIZE:
+                raise ValueError(f"Object larger than the {MAX_SIZE} elements limit.")
+            if any(k is None for k in node.keys):
+                raise ValueError("Dict unpacking is not supported.")
+            return {ev(k): ev(v) for k, v in zip(node.keys, node.values)}
+        if isinstance(node, ast.BinOp) and type(node.op) in _BINOPS:
+            a, b = ev(node.left), ev(node.right)
+            # Check sizes *before* repeating or formatting, to avoid allocating huge objects.
+            if isinstance(node.op, ast.Mod) and isinstance(a, (str, bytes)):
+                raise ValueError("String formatting with `%` is not supported.")
+            if isinstance(node.op, ast.Add) and isinstance(a, (str, bytes, list, tuple)) \
+                    and type(a) is type(b) and len(a) + len(b) > MAX_SIZE:
+                raise ValueError(f"Object larger than the {MAX_SIZE} elements limit.")
+            if isinstance(node.op, ast.Mult):
+                for seq, n in ((a, b), (b, a)):
+                    if not isinstance(n, int):
+                        continue
+                    if isinstance(seq, (str, bytes, list, tuple)):
+                        size = len(seq) * n
+                    elif isinstance(seq, int):  # product of large ints: bound its bit length
+                        size = seq.bit_length() + n.bit_length()
+                    else:
+                        continue
+                    if size > MAX_SIZE:
+                        raise ValueError(f"Object larger than the {MAX_SIZE} elements limit.")
+            out = self._check_size(_BINOPS[type(node.op)](a, b))
+            self._tick_sizes(out)
+            return out
+        if isinstance(node, ast.UnaryOp) and type(node.op) in _UNARYOPS:
+            return _UNARYOPS[type(node.op)](ev(node.operand))
+        if isinstance(node, ast.BoolOp):
+            for v in node.values:  # short-circuit and return the operand, as in Python
+                value = ev(v)
+                if bool(value) == isinstance(node.op, ast.Or):
+                    break
+            return value
+        if isinstance(node, ast.Compare) and all(type(o) in _CMPOPS for o in node.ops):
+            left = ev(node.left)
+            for op, comp in zip(node.ops, node.comparators):
+                right = ev(comp)
+                self._tick_sizes(left, right)
+                compared = self._iter(right) if isinstance(op, (ast.In, ast.NotIn)) \
+                    and not isinstance(right, _SIZED) else right
+                if not _CMPOPS[type(op)](left, compared):
+                    return False
+                left = right
+            return True
+        if isinstance(node, ast.IfExp):
+            return ev(node.body) if ev(node.test) else ev(node.orelse)
+        if isinstance(node, ast.Subscript):
+            out = ev(node.value)[ev(node.slice)]
+            if isinstance(node.slice, ast.Slice):
+                self._tick_sizes(out)
+            return out
+        if isinstance(node, ast.Slice):
+            return slice(*(ev(x) if x is not None else None
+                           for x in (node.lower, node.upper, node.step)))
+        if isinstance(node, (ast.ListComp, ast.SetComp)):
+            out = set() if isinstance(node, ast.SetComp) else []
+            add = out.add if isinstance(out, set) else out.append
+            for e in self._comprehension(node, env):
+                add(self.eval(node.elt, e))
+                self._check_size(out)
+            return out
+        if isinstance(node, ast.DictComp):
+            out = {}
+            for e in self._comprehension(node, env):
+                key = self.eval(node.key, e)
+                out[key] = self.eval(node.value, e)
+                self._check_size(out)
+            return out
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
+                and node.func.id in _SAFE_CALLS and node.func.id not in env \
+                and not node.keywords \
+                and not any(isinstance(a, ast.Starred) for a in node.args):
+            name, args = node.func.id, [ev(a) for a in node.args]
+            if name == 'str' and not isinstance(args[0] if args else '', (str, int, float)):
+                raise ValueError("`str()` only accepts str, int or float.")
+            if name == 'sum' and len(args) > 1 and not isinstance(args[1], (int, float)):
+                raise ValueError("`sum()` only accepts a numeric start value.")
+            return self._call(name, args)
+        func = node.func if isinstance(node, ast.Call) else node
+        if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name) \
+                and func.value.id in ('np', 'numpy'):
+            if func is node and func.attr in ('True_', 'False_'):
+                return func.attr == 'True_'
+            if func is not node and func.attr in _NUMPY_SCALAR_LITERALS \
+                    and len(node.args) == 1 and not node.keywords:
+                value = ast.literal_eval(node.args[0])
+                if type(value) in _NUMPY_SCALAR_LITERALS[func.attr]:
+                    return value
+        raise ValueError(f"Unsupported expression `{type(node).__name__}`.")
+
+
+def read_python(path, *, allow_python_execution=False):
+    """Read a Python file (parameters, probe geometry...) and return its variables.
 
     Parameters
     ----------
-
     path : str or Path
+    allow_python_execution : bool
+        If False (default), the file is parsed but never executed. Only top-level
+        `name = expression` assignments (and docstrings) are accepted, where expressions may use:
+        literals; list/tuple/set/dict displays; previously assigned variables; `+ - * / // %`;
+        comparisons, `and`, `or`, `not`, `a if c else b`; indexing and slicing; list/set/dict
+        comprehensions; the helpers `range list tuple set dict len int float
+        str bool abs min max sum sorted zip enumerate round` (`str()` of scalars, numeric
+        `sum()`); and NumPy scalar reprs such as `np.int64(3)` (unwrapped, not executed).
+        Generator expressions and `%` string formatting are not supported.
+        A conservative work counter limits iteration and selected operations to 1e6 units;
+        supported individual containers are limited to 1e6 elements (integers to 1e6 bits).
+        These safeguards are not a hard total memory or runtime bound. File reading and AST
+        parsing happen before evaluation; nested objects and builtin operation costs are
+        not fully accounted for. Use process isolation and external resource limits when
+        loading files from untrusted sources in a service.
+        Anything else raises a `ValueError` with the file name and line number, so that no
+        earlier definition is silently kept.
+        If True, the file is run with `exec()`: **only use for trusted legacy files**, as it can
+        execute arbitrary code. There is no automatic fallback between the two modes.
 
     Returns
     -------
-
     metadata : dict
-        A dictionary containing all variables defined in the Python file (with `exec()`).
+        The variables defined in the file, with lower-cased keys.
 
+    Raises
+    ------
+    ValueError
+        If the file contains an unsupported construct (and `allow_python_execution` is False).
     """
     path = Path(path)
     if not path.exists():  # pragma: no cover
-        raise IOError("Path %s does not exist.", path)
+        raise IOError(f"Path {path} does not exist.")
     contents = path.read_text()
-    metadata = {}
-    exec(contents, {}, metadata)
-    metadata = {k.lower(): v for (k, v) in metadata.items()}
-    return metadata
+    if allow_python_execution:
+        logger.warning(f"Executing {path} with allow_python_execution=True: "
+                       "this file can run arbitrary Python code.")
+        metadata = {}
+        exec(compile(contents, str(path), 'exec'), {}, metadata)
+        return {k.lower(): v for (k, v) in metadata.items()}
+    evaluator = _SafeEvaluator()
+    for node in ast.parse(contents, filename=str(path)).body:
+        try:
+            if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant) \
+                    and isinstance(node.value.value, str):
+                continue  # docstring
+            if not isinstance(node, ast.Assign):
+                raise ValueError(f"Unsupported statement `{type(node).__name__}`.")
+            value = evaluator.eval(node.value)
+            for target in node.targets:
+                evaluator._bind(target, value, evaluator.variables)
+        except (ValueError, TypeError, KeyError, IndexError, ZeroDivisionError,
+                OverflowError, AttributeError) as e:
+            raise ValueError(f"{path}:{node.lineno}: {e} Use `allow_python_execution=True` "
+                             "for trusted files.") from e
+    return {k.lower(): v for (k, v) in evaluator.variables.items()}
 
 
 def write_python(path, data):
