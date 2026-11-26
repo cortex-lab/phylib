@@ -230,6 +230,10 @@ def load_pickle(path):
             return super().read(*args, **kwargs)
 
     class _RestrictedUnpickler(NumpyUnpickler):
+        def get_extension(self, code):
+            # Pickle's process-wide extension cache bypasses find_class on cache hits.
+            raise pickle.UnpicklingError("Loading pickle extensions is forbidden.")
+
         def find_class(self, module, name):
             if (module, name) not in _PICKLE_ALLOWED:
                 raise pickle.UnpicklingError(f"Loading {module}.{name} is forbidden.")
@@ -242,11 +246,16 @@ def load_pickle(path):
         compressor = _detect_compressor(f)
         if compressor != 'not-compressed':
             raise ValueError(f"Cannot load {path}: {compressor} compression is not supported.")
-        return _RestrictedUnpickler(str(path), f, True).load()
+        return _RestrictedUnpickler(str(path), f, ensure_native_byte_order=True).load()
 
 
 def save_pickle(path, data):
-    """Save data to a pickle file using joblib."""
+    """Save data using joblib, including formats that `load_pickle()` refuses.
+
+    For a `load_pickle()` round trip, use plain containers and non-object NumPy arrays
+    or scalars, and a filename without a compression suffix (for example, `.pkl`).
+    See the README for supported formats and migration guidance.
+    """
     from joblib import dump
     return dump(data, path)
 

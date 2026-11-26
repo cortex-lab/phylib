@@ -31,6 +31,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   hatchling build backend. Development dependencies are installed with
   `pip install -e ".[dev]"` or `uv sync --extra dev`.
 - Python 3.10 or later is now required.
+- joblib 1.5 or later is required for restricted pickle loading. `load_pickle()` now accepts
+  only uncompressed files containing plain containers and NumPy data without object dtype;
+  compressed files and custom objects are refused. `save_pickle()` retains joblib's full
+  writer behavior. See the README for migration guidance.
 
 ### Removed
 - Unused `dask` and `toolz` dependencies.
